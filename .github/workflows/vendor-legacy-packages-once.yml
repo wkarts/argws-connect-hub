@@ -1,0 +1,121 @@
+name: HUB - Vendor legacy packages once
+
+on:
+  push:
+    branches:
+      - hub/remove-external-git-dependencies
+
+permissions:
+  contents: write
+
+jobs:
+  vendor:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout migration branch
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          ref: hub/remove-external-git-dependencies
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3.10'
+          bundler-cache: false
+
+      - name: Refresh Ruby lock without vendor Git sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          gem install bundler -v 2.5.16 --no-document
+          bundle _2.5.16_ lock --update azure-blob devise-secure_password html2text
+          if grep -Fq 'github.com/chatwoot' Gemfile Gemfile.lock; then
+            echo 'Chatwoot Git dependency still present in Ruby manifests.' >&2
+            exit 1
+          fi
+
+      - name: Set up Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: '20.x'
+          cache: yarn
+
+      - name: Install Yarn 1
+        run: npm install --global yarn@1.22.22
+
+      - name: Vendor compatibility packages into HUB
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf vendor/javascript/hub-prosemirror-schema vendor/javascript/hub-utils
+          mkdir -p vendor/javascript/hub-prosemirror-schema vendor/javascript/hub-utils /tmp/hub-vendor/pm /tmp/hub-vendor/utils
+
+          npm pack @chatwoot/prosemirror-schema@1.0.11 --pack-destination /tmp/hub-vendor >/tmp/hub-vendor/pm-name.txt
+          npm pack @chatwoot/utils@0.0.25 --pack-destination /tmp/hub-vendor >/tmp/hub-vendor/utils-name.txt
+
+          PM_TGZ="/tmp/hub-vendor/$(tail -n1 /tmp/hub-vendor/pm-name.txt)"
+          UTILS_TGZ="/tmp/hub-vendor/$(tail -n1 /tmp/hub-vendor/utils-name.txt)"
+          tar -xzf "$PM_TGZ" -C /tmp/hub-vendor/pm
+          tar -xzf "$UTILS_TGZ" -C /tmp/hub-vendor/utils
+          cp -a /tmp/hub-vendor/pm/package/. vendor/javascript/hub-prosemirror-schema/
+          cp -a /tmp/hub-vendor/utils/package/. vendor/javascript/hub-utils/
+
+          node <<'NODE'
+          const fs = require('fs');
+          const path = require('path');
+
+          function normalize(dir, name, sourceName, sourceVersion) {
+            const file = path.join(dir, 'package.json');
+            const pkg = JSON.parse(fs.readFileSync(file, 'utf8'));
+            pkg.name = name;
+            pkg.private = true;
+            pkg.description = `HUB vendored compatibility package (${sourceVersion})`;
+            delete pkg.repository;
+            delete pkg.bugs;
+            delete pkg.homepage;
+            delete pkg.author;
+            delete pkg.contributors;
+            delete pkg.publishConfig;
+            delete pkg.scripts;
+            delete pkg.devDependencies;
+            fs.writeFileSync(file, `${JSON.stringify(pkg, null, 2)}\n`);
+            fs.writeFileSync(
+              path.join(dir, 'NOTICE-HUB.md'),
+              `# Vendored dependency\n\nThis directory is embedded in HUB to remove build/runtime dependency on the original package registry namespace.\n\nSource package: ${sourceName}@${sourceVersion}.\nLicense: MIT. The original LICENSE file is retained as required by the license.\n`
+            );
+          }
+
+          normalize('vendor/javascript/hub-prosemirror-schema', '@hub/prosemirror-schema', '@chatwoot/prosemirror-schema', '1.0.11');
+          normalize('vendor/javascript/hub-utils', '@hub/utils', '@chatwoot/utils', '0.0.25');
+          NODE
+
+          test -f vendor/javascript/hub-prosemirror-schema/LICENSE
+          test -f vendor/javascript/hub-utils/LICENSE
+          test -f vendor/javascript/hub-prosemirror-schema/package.json
+          test -f vendor/javascript/hub-utils/package.json
+
+      - name: Refresh Yarn lock using local HUB packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          yarn install --ignore-scripts --network-concurrency 1 --network-timeout 600000
+          rm -rf node_modules
+          if grep -Eq '(@chatwoot/|registry[^ ]*chatwoot)' package.json yarn.lock; then
+            echo 'Chatwoot package dependency still present in Node manifests.' >&2
+            exit 1
+          fi
+
+      - name: Remove one-time migration workflow and commit result
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/vendor-legacy-packages-once.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git diff --cached --check
+          git commit -m 'chore(deps): vendor required compatibility packages and refresh locks'
+          git push origin HEAD:hub/remove-external-git-dependencies
