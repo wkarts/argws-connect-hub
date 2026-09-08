@@ -2,7 +2,7 @@
   "product": "HUB",
   "display_name": "🅷🆄🅱",
   "version": "1.0.0",
-  "release_channel": "develop",
+  "release_channel": "stable",
   "repository": "wkarts/argws-connect-hub",
   "image": "ghcr.io/wkarts/argws-connect-hub",
   "architecture": "linux/amd64",
