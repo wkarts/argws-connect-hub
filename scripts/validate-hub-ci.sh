@@ -57,6 +57,7 @@ fi
 validate_stack() {
   local dir="$1"
   local channel="$2"
+  local embedded="${3:-false}"
   local compose="$dir/compose.yaml"
   local env_example="$dir/.env.example"
   local env_file="$dir/.env"
@@ -73,22 +74,51 @@ validate_stack() {
   local services
   services="$(docker compose --env-file "$env_file" --profile '*' -f "$compose" config --services)"
 
-  local suffix="-connec-hub"
-  [[ "$channel" == development ]] && suffix="-connec-hub-develop"
+  local hub_suffix="-connec-hub"
+  local connect_suffix="-connect-api-hub"
+  if [[ "$channel" == development ]]; then
+    hub_suffix="-connec-hub-develop"
+    connect_suffix="-connect-api-hub-develop"
+  fi
 
   for role in rails sidekiq migrate postgres redis; do
-    grep -qx "${role}${suffix}" <<<"$services" \
-      || fail "$dir: required HUB service ${role}${suffix} is missing"
+    grep -qx "${role}${hub_suffix}" <<<"$services" \
+      || fail "$dir: required HUB service ${role}${hub_suffix} is missing"
   done
 
-  python3 - "$compose" "$env_file" "$channel" <<'PY'
+  if [[ "$embedded" == true ]]; then
+    local connect_api="connect-api-hub"
+    [[ "$channel" == development ]] && connect_api="connect-api-hub-develop"
+
+    grep -qx "$connect_api" <<<"$services" \
+      || fail "$dir: required Connect|API service $connect_api is missing"
+
+    for role in docs postgres redis rabbitmq minio nats zookeeper kafka; do
+      grep -qx "${role}${connect_suffix}" <<<"$services" \
+        || fail "$dir: required embedded Connect|API service ${role}${connect_suffix} is missing"
+    done
+
+    for legacy in connect-api connect-docs connect-postgres connect-redis connect-rabbitmq connect-minio connect-nats connect-zookeeper connect-kafka; do
+      if grep -qx "$legacy" <<<"$services"; then
+        fail "$dir: legacy unnamespaced embedded service $legacy must not exist"
+      fi
+    done
+  fi
+
+  python3 - "$compose" "$env_file" "$channel" "$embedded" <<'PY'
 import json
 import subprocess
 import sys
 
-compose, env_file, channel = sys.argv[1:]
-suffix = '-connec-hub-develop' if channel == 'development' else '-connec-hub'
-expected = {f'{role}{suffix}' for role in ('rails', 'sidekiq', 'migrate', 'postgres', 'redis')}
+compose, env_file, channel, embedded = sys.argv[1:]
+hub_suffix = '-connec-hub-develop' if channel == 'development' else '-connec-hub'
+connect_suffix = '-connect-api-hub-develop' if channel == 'development' else '-connect-api-hub'
+expected = {f'{role}{hub_suffix}' for role in ('rails', 'sidekiq', 'migrate', 'postgres', 'redis')}
+
+if embedded == 'true':
+    expected.add('connect-api-hub-develop' if channel == 'development' else 'connect-api-hub')
+    expected.update({f'{role}{connect_suffix}' for role in ('docs', 'postgres', 'redis', 'rabbitmq', 'minio', 'nats', 'zookeeper', 'kafka')})
+
 raw = subprocess.check_output(
     ['docker', 'compose', '--env-file', env_file, '--profile', '*', '-f', compose, 'config', '--format', 'json'],
     text=True,
@@ -107,9 +137,9 @@ PY
   trap - RETURN
 }
 
-validate_stack deployment/production/standalone production
-validate_stack deployment/production/embedded-connect-api production
-validate_stack deployment/development/standalone development
-validate_stack deployment/development/embedded-connect-api development
+validate_stack deployment/production/standalone production false
+validate_stack deployment/production/embedded-connect-api production true
+validate_stack deployment/development/standalone development false
+validate_stack deployment/development/embedded-connect-api development true
 
 echo "HUB CI validation: OK"
