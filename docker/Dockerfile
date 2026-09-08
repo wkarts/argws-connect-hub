@@ -1,7 +1,9 @@
-# HUB build/runtime base. GHCR-only and AMD64 at workflow level.
-# Alpine 3.20 provides the Ruby 3.3 line used by HUB.
-ARG HUB_RUBY_BASE_IMAGE=ghcr.io/linuxcontainers/alpine:3.20
-FROM ${HUB_RUBY_BASE_IMAGE} AS pre-builder
+# HUB application image.
+# Build/runtime operating-system dependencies live in immutable, independently versioned HUB base images.
+ARG HUB_BUILD_BASE_IMAGE=ghcr.io/wkarts/argws-connect-hub-build-base:1.0.0
+ARG HUB_RUNTIME_BASE_IMAGE=ghcr.io/wkarts/argws-connect-hub-runtime-base:1.0.0
+
+FROM ${HUB_BUILD_BASE_IMAGE} AS pre-builder
 
 ARG BUNDLE_WITHOUT="development:test"
 ENV BUNDLE_WITHOUT=${BUNDLE_WITHOUT}
@@ -17,18 +19,12 @@ ARG NODE_OPTIONS="--openssl-legacy-provider"
 ENV NODE_OPTIONS=${NODE_OPTIONS}
 ENV BUNDLE_PATH="/gems"
 
-RUN apk update && apk add --no-cache \
-  ruby ruby-dev openssl tar build-base tzdata postgresql-dev postgresql-client \
-  nodejs yarn git musl gcc make musl-dev openssl-dev g++ linux-headers xz vips-dev \
-  && ruby --version \
-  && mkdir -p /var/app \
-  && gem install bundler -v "$BUNDLER_VERSION"
-
 WORKDIR /app
 
+# Dependency layers are intentionally isolated from application source changes.
 COPY Gemfile Gemfile.lock ./
 RUN bundle config set --local force_ruby_platform true
-# Resolve the protobuf patch release explicitly so Alpine/musl never falls back to 3.25.3.
+# Preserve the existing HUB protobuf compatibility rule.
 RUN bundle lock --update google-protobuf
 RUN if [ "$RAILS_ENV" = "production" ]; then \
       bundle config set without 'development test'; bundle install -j "$(nproc)" -r 3; \
@@ -42,7 +38,7 @@ RUN yarn install --frozen-lockfile --network-concurrency 1 --network-timeout 600
 COPY . /app
 RUN mkdir -p /app/log
 
-# Compile the actual production bundle. This is a required CI gate, never bypassed.
+# Production assets are compiled only for the image that will actually be distributed.
 RUN if [ "$RAILS_ENV" = "production" ]; then \
       SECRET_KEY_BASE=precompile_placeholder \
       RAILS_LOG_TO_STDOUT=enabled \
@@ -54,14 +50,13 @@ RUN if [ "$RAILS_ENV" = "production" ]; then \
 ARG GIT_SHA=release
 RUN printf '%s\n' "${GIT_SHA}" > /app/.git_sha
 
-RUN apk del --no-cache build-base musl gcc musl-dev openssl-dev g++ linux-headers xz vips-dev \
-  && rm -rf /var/cache/apk/* \
-  && rm -rf /gems/ruby/3.3.0/cache/*.gem \
+# Clean only artifacts copied into the runtime image. Build packages stay in the immutable build base.
+RUN rm -rf /gems/ruby/3.3.0/cache/*.gem \
   && find /gems/ruby/3.3.0/gems/ \( -name "*.c" -o -name "*.o" \) -delete \
   && rm -rf .git \
   && rm -f .gitignore
 
-FROM ${HUB_RUBY_BASE_IMAGE}
+FROM ${HUB_RUNTIME_BASE_IMAGE}
 
 ARG BUNDLE_WITHOUT="development:test"
 ENV BUNDLE_WITHOUT=${BUNDLE_WITHOUT}
@@ -75,13 +70,6 @@ ENV BUNDLE_FORCE_RUBY_PLATFORM=${BUNDLE_FORCE_RUBY_PLATFORM}
 ARG RAILS_ENV=production
 ENV RAILS_ENV=${RAILS_ENV}
 ENV BUNDLE_PATH="/gems"
-
-RUN apk update && apk add --no-cache \
-  ruby openssl tzdata postgresql-client imagemagick git vips \
-  && ruby --version \
-  && gem install bundler -v "$BUNDLER_VERSION"
-
-RUN if [ "$RAILS_ENV" != "production" ]; then apk add --no-cache nodejs yarn; fi
 
 COPY --from=pre-builder /gems/ /gems/
 COPY --from=pre-builder /app /app

@@ -1,4 +1,4 @@
-name: ${COMPOSE_PROJECT_NAME:-hub}
+name: ${COMPOSE_PROJECT_NAME:-connec-hub-develop}
 
 x-logging: &default-logging
   driver: json-file
@@ -13,19 +13,23 @@ x-hub-base: &hub-base
   env_file: .env
   restart: unless-stopped
   volumes:
-    - hub_storage:/app/storage
+    - storage-connec-hub-develop:/app/storage
   networks:
-    - hub-net
+    - network-connec-hub-develop
   logging: *default-logging
 
 services:
-  hub-migrate:
+  # ---------------------------------------------------------------------------
+  # HUB-owned services
+  # ---------------------------------------------------------------------------
+  migrate-connec-hub-develop:
     <<: *hub-base
+    container_name: migrate-connec-hub-develop
     restart: "no"
     depends_on:
-      hub-postgres:
+      postgres-connec-hub-develop:
         condition: service_healthy
-      hub-redis:
+      redis-connec-hub-develop:
         condition: service_healthy
     environment:
       NODE_ENV: production
@@ -35,13 +39,14 @@ services:
     entrypoint: docker/entrypoints/rails.sh
     command: ['bundle', 'exec', 'rails', 'db:prepare']
 
-  hub:
+  rails-connec-hub-develop:
     <<: *hub-base
+    container_name: rails-connec-hub-develop
     depends_on:
-      hub-migrate:
+      migrate-connec-hub-develop:
         condition: service_completed_successfully
     ports:
-      - '${HUB_BIND_ADDRESS:-127.0.0.1}:${HUB_PORT:-3000}:3000'
+      - '${HUB_BIND_ADDRESS:-127.0.0.1}:${HUB_PORT:-33000}:3000'
     environment:
       NODE_ENV: production
       RAILS_ENV: production
@@ -50,10 +55,11 @@ services:
     entrypoint: docker/entrypoints/rails.sh
     command: ['bundle', 'exec', 'rails', 's', '-p', '3000', '-b', '0.0.0.0']
 
-  hub-sidekiq:
+  sidekiq-connec-hub-develop:
     <<: *hub-base
+    container_name: sidekiq-connec-hub-develop
     depends_on:
-      hub-migrate:
+      migrate-connec-hub-develop:
         condition: service_completed_successfully
     environment:
       NODE_ENV: production
@@ -62,8 +68,9 @@ services:
       CONNECT_API_BASE_URL: http://connect-api:8080
     command: ['bundle', 'exec', 'sidekiq', '-C', 'config/sidekiq.yml']
 
-  hub-postgres:
+  postgres-connec-hub-develop:
     image: ${HUB_POSTGRES_IMAGE:-ghcr.io/wkarts/hub-postgres:16-alpine}
+    container_name: postgres-connec-hub-develop
     platform: linux/amd64
     restart: unless-stopped
     environment:
@@ -71,9 +78,9 @@ services:
       POSTGRES_USER: ${POSTGRES_USERNAME}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
-      - hub_postgres:/var/lib/postgresql/data
+      - postgres-data-connec-hub-develop:/var/lib/postgresql/data
     networks:
-      - hub-net
+      - network-connec-hub-develop
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USERNAME} -d ${POSTGRES_DATABASE}']
       interval: 10s
@@ -81,17 +88,18 @@ services:
       retries: 15
     logging: *default-logging
 
-  hub-redis:
+  redis-connec-hub-develop:
     image: ${HUB_REDIS_IMAGE:-ghcr.io/wkarts/hub-redis:7-alpine}
+    container_name: redis-connec-hub-develop
     platform: linux/amd64
     restart: unless-stopped
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD}
     command: ['sh', '-c', 'redis-server --appendonly yes --requirepass "$$REDIS_PASSWORD"']
     volumes:
-      - hub_redis:/data
+      - redis-data-connec-hub-develop:/data
     networks:
-      - hub-net
+      - network-connec-hub-develop
     healthcheck:
       test: ['CMD-SHELL', 'redis-cli -a "$$REDIS_PASSWORD" ping | grep PONG']
       interval: 10s
@@ -99,6 +107,9 @@ services:
       retries: 15
     logging: *default-logging
 
+  # ---------------------------------------------------------------------------
+  # Connect|API services. Separate platform, colocated only by this deployment.
+  # ---------------------------------------------------------------------------
   connect-api:
     image: ${ARGWS_CONNECT_API_IMAGE}
     pull_policy: always
@@ -135,19 +146,19 @@ services:
       DATABASE_DELETE_MESSAGE: ${CONNECT_DATABASE_DELETE_MESSAGE:-true}
       CACHE_REDIS_ENABLED: "true"
       CACHE_REDIS_URI: redis://:${CONNECT_REDIS_PASSWORD}@connect-redis:6379/0
-      CACHE_REDIS_PREFIX_KEY: ${CONNECT_REDIS_PREFIX_KEY:-hub-connect}
+      CACHE_REDIS_PREFIX_KEY: ${CONNECT_REDIS_PREFIX_KEY:-hub-connect-dev}
       CACHE_REDIS_TTL: ${CONNECT_CACHE_REDIS_TTL:-604800}
       CACHE_REDIS_SAVE_INSTANCES: ${CONNECT_CACHE_REDIS_SAVE_INSTANCES:-false}
       CACHE_LOCAL_ENABLED: ${CONNECT_CACHE_LOCAL_ENABLED:-false}
       RABBITMQ_ENABLED: "true"
       RABBITMQ_URI: amqp://${CONNECT_RABBITMQ_USER}:${CONNECT_RABBITMQ_PASSWORD}@connect-rabbitmq:5672/${CONNECT_RABBITMQ_VHOST}
-      RABBITMQ_EXCHANGE_NAME: ${CONNECT_RABBITMQ_EXCHANGE_NAME:-hub_connect}
+      RABBITMQ_EXCHANGE_NAME: ${CONNECT_RABBITMQ_EXCHANGE_NAME:-hub_connect_dev}
       RABBITMQ_GLOBAL_ENABLED: ${CONNECT_RABBITMQ_GLOBAL_ENABLED:-true}
       RABBITMQ_EVENTS_CALL: "true"
       S3_ENABLED: "true"
       S3_ACCESS_KEY: ${CONNECT_MINIO_USER}
       S3_SECRET_KEY: ${CONNECT_MINIO_PASSWORD}
-      S3_BUCKET: ${CONNECT_S3_BUCKET:-hub-connect}
+      S3_BUCKET: ${CONNECT_S3_BUCKET:-hub-connect-dev}
       S3_PORT: "9000"
       S3_ENDPOINT: connect-minio
       S3_REGION: ${CONNECT_S3_REGION:-us-east-1}
@@ -177,11 +188,11 @@ services:
       connect-minio:
         condition: service_healthy
     ports:
-      - '${CONNECT_API_BIND_ADDRESS:-127.0.0.1}:${CONNECT_API_PORT:-38080}:8080'
+      - '${CONNECT_API_BIND_ADDRESS:-127.0.0.1}:${CONNECT_API_PORT:-39080}:8080'
     volumes:
       - connect_instances:/argws-connect/instances
     networks:
-      - hub-net
+      - network-connec-hub-develop
     healthcheck:
       test: ['CMD', 'curl', '-fsS', 'http://127.0.0.1:8080/health']
       interval: 30s
@@ -191,15 +202,15 @@ services:
     logging: *default-logging
 
   connect-docs:
-    image: ${ARGWS_CONNECT_DOCS_IMAGE:-ghcr.io/wkarts/argws-connect-docs:latest}
+    image: ${ARGWS_CONNECT_DOCS_IMAGE:-ghcr.io/wkarts/argws-connect-docs:develop}
     pull_policy: always
     restart: unless-stopped
     environment:
       SERVER_URL: ${CONNECT_API_PUBLIC_URL}
     ports:
-      - '${CONNECT_DOCS_BIND_ADDRESS:-127.0.0.1}:${CONNECT_DOCS_PORT:-38082}:8080'
+      - '${CONNECT_DOCS_BIND_ADDRESS:-127.0.0.1}:${CONNECT_DOCS_PORT:-39082}:8080'
     networks:
-      - hub-net
+      - network-connec-hub-develop
     logging: *default-logging
 
   connect-postgres:
@@ -215,7 +226,7 @@ services:
     volumes:
       - connect_postgres:/var/lib/postgresql/data
     networks:
-      - hub-net
+      - network-connec-hub-develop
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U ${CONNECT_POSTGRES_USERNAME} -d ${CONNECT_POSTGRES_DATABASE}']
       interval: 10s
@@ -233,7 +244,7 @@ services:
     volumes:
       - connect_redis:/data
     networks:
-      - hub-net
+      - network-connec-hub-develop
     healthcheck:
       test: ['CMD-SHELL', 'redis-cli -a "$$REDIS_PASSWORD" ping | grep PONG']
       interval: 10s
@@ -252,7 +263,7 @@ services:
     volumes:
       - connect_rabbitmq:/var/lib/rabbitmq
     networks:
-      - hub-net
+      - network-connec-hub-develop
     healthcheck:
       test: ['CMD', 'rabbitmq-diagnostics', '-q', 'ping']
       interval: 15s
@@ -272,7 +283,7 @@ services:
     volumes:
       - connect_minio:/data
     networks:
-      - hub-net
+      - network-connec-hub-develop
     healthcheck:
       test: ['CMD', 'curl', '-fsS', 'http://127.0.0.1:9000/minio/health/live']
       interval: 15s
@@ -290,7 +301,7 @@ services:
     volumes:
       - connect_nats:/data
     networks:
-      - hub-net
+      - network-connec-hub-develop
     logging: *default-logging
 
   connect-zookeeper:
@@ -305,7 +316,7 @@ services:
       - connect_zookeeper_data:/var/lib/zookeeper/data
       - connect_zookeeper_log:/var/lib/zookeeper/log
     networks:
-      - hub-net
+      - network-connec-hub-develop
     logging: *default-logging
 
   connect-kafka:
@@ -327,13 +338,16 @@ services:
     volumes:
       - connect_kafka:/var/lib/kafka/data
     networks:
-      - hub-net
+      - network-connec-hub-develop
     logging: *default-logging
 
 volumes:
-  hub_storage:
-  hub_postgres:
-  hub_redis:
+  storage-connec-hub-develop:
+    name: ${HUB_STORAGE_VOLUME_NAME:-storage-connec-hub-develop}
+  postgres-data-connec-hub-develop:
+    name: ${HUB_POSTGRES_VOLUME_NAME:-postgres-data-connec-hub-develop}
+  redis-data-connec-hub-develop:
+    name: ${HUB_REDIS_VOLUME_NAME:-redis-data-connec-hub-develop}
   connect_instances:
   connect_postgres:
   connect_redis:
@@ -345,6 +359,6 @@ volumes:
   connect_kafka:
 
 networks:
-  hub-net:
-    name: ${HUB_NETWORK_NAME:-hub-net}
+  network-connec-hub-develop:
+    name: ${HUB_NETWORK_NAME:-network-connec-hub-develop}
     driver: bridge

@@ -14,29 +14,98 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  validate:
+    name: Validate develop source - no image build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Guard develop channel
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "${GITHUB_REF}" == "refs/heads/develop" ]] || {
+            echo "Development publisher accepts only refs/heads/develop (got ${GITHUB_REF})." >&2
+            exit 1
+          }
+
+      - name: Checkout exact develop revision
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Install Ruby 3.3.10
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3.10'
+          bundler-cache: false
+
+      - name: Install Node for release-script syntax
+        uses: actions/setup-node@v5
+        with:
+          node-version: '24.x'
+
+      - name: Validate source and deployments
+        run: bash ./scripts/validate-hub-ci.sh
+
   build:
-    name: Build HUB develop / amd64
+    name: Build and publish HUB develop / amd64
+    needs: validate
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
-      - name: Checkout develop
+      - name: Checkout validated revision
         uses: actions/checkout@v5
         with:
-          ref: develop
+          ref: ${{ github.sha }}
           fetch-depth: 0
-      - name: Audit HUB
-        run: bash ./scripts/audit-hub.sh
-      - name: Resolve version
-        id: version
-        run: echo "value=$(cat VERSION)" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve application and base versions
+        id: versions
+        shell: bash
+        run: |
+          set -euo pipefail
+          app_version="$(tr -d '[:space:]' < VERSION)"
+          base_version="$(tr -d '[:space:]' < docker/base/VERSION)"
+          [[ "$base_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          echo "app=$app_version" >> "$GITHUB_OUTPUT"
+          echo "base=$base_version" >> "$GITHUB_OUTPUT"
+          echo "build_base=ghcr.io/${{ github.repository_owner }}/argws-connect-hub-build-base:${base_version}" >> "$GITHUB_OUTPUT"
+          echo "runtime_base=ghcr.io/${{ github.repository_owner }}/argws-connect-hub-runtime-base:${base_version}" >> "$GITHUB_OUTPUT"
+
       - name: Set up Buildx
         uses: docker/setup-buildx-action@v4.3.0
+
       - name: Login GHCR
         uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Wait for immutable HUB bases
+        shell: bash
+        env:
+          BUILD_BASE: ${{ steps.versions.outputs.build_base }}
+          RUNTIME_BASE: ${{ steps.versions.outputs.runtime_base }}
+        run: |
+          set -euo pipefail
+          for image in "$BUILD_BASE" "$RUNTIME_BASE"; do
+            ready=false
+            for attempt in $(seq 1 60); do
+              if docker buildx imagetools inspect "$image" >/dev/null 2>&1; then
+                ready=true
+                break
+              fi
+              echo "Waiting for $image ($attempt/60)..."
+              sleep 10
+            done
+            [[ "$ready" == true ]] || {
+              echo "Required immutable HUB base is unavailable: $image" >&2
+              exit 1
+            }
+          done
+
       - name: Build and publish develop image
         uses: docker/build-push-action@v7.3.0
         with:
@@ -46,14 +115,17 @@ jobs:
           push: true
           build-args: |
             GIT_SHA=${{ github.sha }}
+            HUB_BUILD_BASE_IMAGE=${{ steps.versions.outputs.build_base }}
+            HUB_RUNTIME_BASE_IMAGE=${{ steps.versions.outputs.runtime_base }}
           tags: |
             ghcr.io/${{ github.repository_owner }}/argws-connect-hub:develop
             ghcr.io/${{ github.repository_owner }}/argws-connect-hub:sha-${{ github.sha }}
           labels: |
             org.opencontainers.image.title=HUB
-            org.opencontainers.image.version=${{ steps.version.outputs.value }}-develop
+            org.opencontainers.image.version=${{ steps.versions.outputs.app }}-develop
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.argws.hub.base.version=${{ steps.versions.outputs.base }}
           cache-from: type=gha,scope=hub-develop-amd64
           cache-to: type=gha,mode=max,scope=hub-develop-amd64
           provenance: true
