@@ -2,6 +2,7 @@ name: HUB Quality
 
 on:
   pull_request:
+    branches: [develop, main]
   workflow_dispatch:
 
 permissions:
@@ -11,9 +12,9 @@ jobs:
   static:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Audit product/privacy/deploy
-        run: ./scripts/audit-hub.sh
+        run: bash ./scripts/audit-hub.sh
       - name: Ruby syntax
         run: |
           docker run --rm -v "$PWD:/workspace" -w /workspace ghcr.io/wkarts/hub-ruby:3.3.8-alpine3.19 \
