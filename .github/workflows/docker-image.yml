@@ -37,7 +37,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if grep -q 'docker/build-push-action' .github/workflows/docker-image.yml; then
+          if grep -Eq '^[[:space:]]*uses:[[:space:]]+docker/build-push-action@' .github/workflows/docker-image.yml; then
             echo 'PR container validation must not build a disposable Docker image.' >&2
             exit 1
           fi
