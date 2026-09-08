@@ -27,29 +27,9 @@ jobs:
             exit 1
           fi
 
-  prepare-build-base:
-    name: Prepare GHCR Ruby base
-    needs: guard
-    runs-on: ubuntu-latest
-    steps:
-      - name: Install skopeo
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y skopeo
-      - name: Login GHCR
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | skopeo login ghcr.io -u "${{ github.actor }}" --password-stdin
-      - name: Ensure AMD64 Ruby base exists in GHCR
-        env:
-          OWNER: ${{ github.repository_owner }}
-        run: |
-          set -euo pipefail
-          skopeo copy --override-arch amd64 \
-            docker://docker.io/library/ruby:3.3.8-alpine3.19 \
-            docker://ghcr.io/${OWNER}/hub-ruby:3.3.8-alpine3.19
-
   build:
     name: Build HUB develop / amd64
-    needs: prepare-build-base
+    needs: guard
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout develop
