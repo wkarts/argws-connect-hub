@@ -1,4 +1,4 @@
-name: Validate HUB Docker AMD64
+name: Validate HUB Containers - No Image Build
 
 on:
   pull_request:
@@ -9,25 +9,35 @@ permissions:
   contents: read
 
 jobs:
-  build:
+  validate:
+    name: Static, deployment and container definition checks
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v5
-      - name: Set up Buildx
-        uses: docker/setup-buildx-action@v4.3.0
-      - name: Audit HUB
-        run: bash ./scripts/audit-hub.sh
-      - name: Validate AMD64 image and load result
-        uses: docker/build-push-action@v7.3.0
+      - name: Checkout
+        uses: actions/checkout@v5
         with:
-          context: .
-          file: docker/Dockerfile
-          platforms: linux/amd64
-          build-args: |
-            GIT_SHA=${{ github.sha }}
-          push: false
-          load: true
-          tags: hub:ci-${{ github.sha }}
-          cache-from: type=gha,scope=hub-pr-amd64
-          cache-to: type=gha,mode=max,scope=hub-pr-amd64
+          fetch-depth: 0
+
+      - name: Install Ruby 3.3.10
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3.10'
+          bundler-cache: false
+
+      - name: Install Node for release-script syntax
+        uses: actions/setup-node@v5
+        with:
+          node-version: '24.x'
+
+      - name: Validate HUB without building an image
+        run: bash ./scripts/validate-hub-ci.sh
+
+      - name: Assert PR validation does not invoke Docker image builds
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -Eq '^[[:space:]]*uses:[[:space:]]+docker/build-push-action@' .github/workflows/docker-image.yml; then
+            echo 'PR container validation must not build a disposable Docker image.' >&2
+            exit 1
+          fi

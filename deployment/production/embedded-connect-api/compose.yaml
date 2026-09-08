@@ -1,4 +1,4 @@
-name: ${COMPOSE_PROJECT_NAME:-hub}
+name: ${COMPOSE_PROJECT_NAME:-connec-hub}
 
 x-logging: &default-logging
   driver: json-file
@@ -13,32 +13,37 @@ x-hub-base: &hub-base
   env_file: .env
   restart: unless-stopped
   volumes:
-    - hub_storage:/app/storage
+    - storage-connec-hub:/app/storage
   networks:
-    - hub-net
+    - network-connec-hub
   logging: *default-logging
 
 services:
-  hub-migrate:
+  # ---------------------------------------------------------------------------
+  # HUB-owned services
+  # ---------------------------------------------------------------------------
+  migrate-connec-hub:
     <<: *hub-base
+    container_name: migrate-connec-hub
     restart: "no"
     depends_on:
-      hub-postgres:
+      postgres-connec-hub:
         condition: service_healthy
-      hub-redis:
+      redis-connec-hub:
         condition: service_healthy
     environment:
       NODE_ENV: production
       RAILS_ENV: production
       INSTALLATION_ENV: docker
-      CONNECT_API_BASE_URL: http://connect-api:8080
+      CONNECT_API_BASE_URL: http://connect-api-hub:8080
     entrypoint: docker/entrypoints/rails.sh
     command: ['bundle', 'exec', 'rails', 'db:prepare']
 
-  hub:
+  rails-connec-hub:
     <<: *hub-base
+    container_name: rails-connec-hub
     depends_on:
-      hub-migrate:
+      migrate-connec-hub:
         condition: service_completed_successfully
     ports:
       - '${HUB_BIND_ADDRESS:-127.0.0.1}:${HUB_PORT:-3000}:3000'
@@ -46,24 +51,26 @@ services:
       NODE_ENV: production
       RAILS_ENV: production
       INSTALLATION_ENV: docker
-      CONNECT_API_BASE_URL: http://connect-api:8080
+      CONNECT_API_BASE_URL: http://connect-api-hub:8080
     entrypoint: docker/entrypoints/rails.sh
     command: ['bundle', 'exec', 'rails', 's', '-p', '3000', '-b', '0.0.0.0']
 
-  hub-sidekiq:
+  sidekiq-connec-hub:
     <<: *hub-base
+    container_name: sidekiq-connec-hub
     depends_on:
-      hub-migrate:
+      migrate-connec-hub:
         condition: service_completed_successfully
     environment:
       NODE_ENV: production
       RAILS_ENV: production
       INSTALLATION_ENV: docker
-      CONNECT_API_BASE_URL: http://connect-api:8080
+      CONNECT_API_BASE_URL: http://connect-api-hub:8080
     command: ['bundle', 'exec', 'sidekiq', '-C', 'config/sidekiq.yml']
 
-  hub-postgres:
+  postgres-connec-hub:
     image: ${HUB_POSTGRES_IMAGE:-ghcr.io/wkarts/hub-postgres:16-alpine}
+    container_name: postgres-connec-hub
     platform: linux/amd64
     restart: unless-stopped
     environment:
@@ -71,9 +78,9 @@ services:
       POSTGRES_USER: ${POSTGRES_USERNAME}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
-      - hub_postgres:/var/lib/postgresql/data
+      - postgres-data-connec-hub:/var/lib/postgresql/data
     networks:
-      - hub-net
+      - network-connec-hub
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USERNAME} -d ${POSTGRES_DATABASE}']
       interval: 10s
@@ -81,17 +88,18 @@ services:
       retries: 15
     logging: *default-logging
 
-  hub-redis:
+  redis-connec-hub:
     image: ${HUB_REDIS_IMAGE:-ghcr.io/wkarts/hub-redis:7-alpine}
+    container_name: redis-connec-hub
     platform: linux/amd64
     restart: unless-stopped
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD}
     command: ['sh', '-c', 'redis-server --appendonly yes --requirepass "$$REDIS_PASSWORD"']
     volumes:
-      - hub_redis:/data
+      - redis-data-connec-hub:/data
     networks:
-      - hub-net
+      - network-connec-hub
     healthcheck:
       test: ['CMD-SHELL', 'redis-cli -a "$$REDIS_PASSWORD" ping | grep PONG']
       interval: 10s
@@ -99,8 +107,12 @@ services:
       retries: 15
     logging: *default-logging
 
-  connect-api:
+  # ---------------------------------------------------------------------------
+  # Connect|API services. Separate platform, colocated only by this deployment.
+  # ---------------------------------------------------------------------------
+  connect-api-hub:
     image: ${ARGWS_CONNECT_API_IMAGE}
+    container_name: connect-api-hub
     pull_policy: always
     restart: unless-stopped
     env_file: .env
@@ -122,7 +134,7 @@ services:
       DATABASE_PROVIDER: postgresql
       DATABASE_MIGRATION_MAX_ATTEMPTS: ${CONNECT_DATABASE_MIGRATION_MAX_ATTEMPTS:-60}
       DATABASE_MIGRATION_RETRY_SECONDS: ${CONNECT_DATABASE_MIGRATION_RETRY_SECONDS:-2}
-      DATABASE_CONNECTION_URI: postgresql://${CONNECT_POSTGRES_USERNAME}:${CONNECT_POSTGRES_PASSWORD}@connect-postgres:5432/${CONNECT_POSTGRES_DATABASE}?schema=public
+      DATABASE_CONNECTION_URI: postgresql://${CONNECT_POSTGRES_USERNAME}:${CONNECT_POSTGRES_PASSWORD}@postgres-connect-api-hub:5432/${CONNECT_POSTGRES_DATABASE}?schema=public
       DATABASE_SAVE_DATA_INSTANCE: ${CONNECT_DATABASE_SAVE_DATA_INSTANCE:-true}
       DATABASE_SAVE_DATA_NEW_MESSAGE: ${CONNECT_DATABASE_SAVE_DATA_NEW_MESSAGE:-true}
       DATABASE_SAVE_MESSAGE_UPDATE: ${CONNECT_DATABASE_SAVE_MESSAGE_UPDATE:-true}
@@ -134,13 +146,13 @@ services:
       DATABASE_SAVE_IS_ON_WHATSAPP_DAYS: ${CONNECT_DATABASE_SAVE_IS_ON_WHATSAPP_DAYS:-7}
       DATABASE_DELETE_MESSAGE: ${CONNECT_DATABASE_DELETE_MESSAGE:-true}
       CACHE_REDIS_ENABLED: "true"
-      CACHE_REDIS_URI: redis://:${CONNECT_REDIS_PASSWORD}@connect-redis:6379/0
+      CACHE_REDIS_URI: redis://:${CONNECT_REDIS_PASSWORD}@redis-connect-api-hub:6379/0
       CACHE_REDIS_PREFIX_KEY: ${CONNECT_REDIS_PREFIX_KEY:-hub-connect}
       CACHE_REDIS_TTL: ${CONNECT_CACHE_REDIS_TTL:-604800}
       CACHE_REDIS_SAVE_INSTANCES: ${CONNECT_CACHE_REDIS_SAVE_INSTANCES:-false}
       CACHE_LOCAL_ENABLED: ${CONNECT_CACHE_LOCAL_ENABLED:-false}
       RABBITMQ_ENABLED: "true"
-      RABBITMQ_URI: amqp://${CONNECT_RABBITMQ_USER}:${CONNECT_RABBITMQ_PASSWORD}@connect-rabbitmq:5672/${CONNECT_RABBITMQ_VHOST}
+      RABBITMQ_URI: amqp://${CONNECT_RABBITMQ_USER}:${CONNECT_RABBITMQ_PASSWORD}@rabbitmq-connect-api-hub:5672/${CONNECT_RABBITMQ_VHOST}
       RABBITMQ_EXCHANGE_NAME: ${CONNECT_RABBITMQ_EXCHANGE_NAME:-hub_connect}
       RABBITMQ_GLOBAL_ENABLED: ${CONNECT_RABBITMQ_GLOBAL_ENABLED:-true}
       RABBITMQ_EVENTS_CALL: "true"
@@ -149,7 +161,7 @@ services:
       S3_SECRET_KEY: ${CONNECT_MINIO_PASSWORD}
       S3_BUCKET: ${CONNECT_S3_BUCKET:-hub-connect}
       S3_PORT: "9000"
-      S3_ENDPOINT: connect-minio
+      S3_ENDPOINT: minio-connect-api-hub
       S3_REGION: ${CONNECT_S3_REGION:-us-east-1}
       S3_USE_SSL: "false"
       S3_SKIP_POLICY: "true"
@@ -161,27 +173,27 @@ services:
       ZAPO_VOIP_ENABLED: "true"
       ZAPO_VOIP_MAX_CONCURRENT_CALLS: ${ZAPO_VOIP_MAX_CONCURRENT_CALLS:-4}
       NATS_ENABLED: ${CONNECT_NATS_ENABLED:-false}
-      NATS_URI: nats://connect-nats:4222
+      NATS_URI: nats://nats-connect-api-hub:4222
       NATS_EVENTS_CALL: ${CONNECT_NATS_EVENTS_CALL:-false}
       KAFKA_ENABLED: ${CONNECT_KAFKA_ENABLED:-false}
-      KAFKA_BROKERS: connect-kafka:9092
+      KAFKA_BROKERS: kafka-connect-api-hub:9092
       KAFKA_EVENTS_CALL: ${CONNECT_KAFKA_EVENTS_CALL:-false}
       WEBHOOK_REQUEST_TIMEOUT_MS: ${CONNECT_WEBHOOK_REQUEST_TIMEOUT_MS:-60000}
     depends_on:
-      connect-postgres:
+      postgres-connect-api-hub:
         condition: service_healthy
-      connect-redis:
+      redis-connect-api-hub:
         condition: service_healthy
-      connect-rabbitmq:
+      rabbitmq-connect-api-hub:
         condition: service_healthy
-      connect-minio:
+      minio-connect-api-hub:
         condition: service_healthy
     ports:
       - '${CONNECT_API_BIND_ADDRESS:-127.0.0.1}:${CONNECT_API_PORT:-38080}:8080'
     volumes:
       - connect_instances:/argws-connect/instances
     networks:
-      - hub-net
+      - network-connec-hub
     healthcheck:
       test: ['CMD', 'curl', '-fsS', 'http://127.0.0.1:8080/health']
       interval: 30s
@@ -190,8 +202,9 @@ services:
       start_period: 60s
     logging: *default-logging
 
-  connect-docs:
+  docs-connect-api-hub:
     image: ${ARGWS_CONNECT_DOCS_IMAGE:-ghcr.io/wkarts/argws-connect-docs:latest}
+    container_name: docs-connect-api-hub
     pull_policy: always
     restart: unless-stopped
     environment:
@@ -199,11 +212,12 @@ services:
     ports:
       - '${CONNECT_DOCS_BIND_ADDRESS:-127.0.0.1}:${CONNECT_DOCS_PORT:-38082}:8080'
     networks:
-      - hub-net
+      - network-connec-hub
     logging: *default-logging
 
-  connect-postgres:
+  postgres-connect-api-hub:
     image: ${ARGWS_CONNECT_POSTGRES_IMAGE:-ghcr.io/wkarts/argws-connect-postgres:15}
+    container_name: postgres-connect-api-hub
     pull_policy: always
     restart: unless-stopped
     command: ["postgres", "-c", "max_connections=${CONNECT_POSTGRES_MAX_CONNECTIONS:-300}", "-c", "listen_addresses=*"]
@@ -215,7 +229,7 @@ services:
     volumes:
       - connect_postgres:/var/lib/postgresql/data
     networks:
-      - hub-net
+      - network-connec-hub
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U ${CONNECT_POSTGRES_USERNAME} -d ${CONNECT_POSTGRES_DATABASE}']
       interval: 10s
@@ -223,8 +237,9 @@ services:
       retries: 20
     logging: *default-logging
 
-  connect-redis:
+  redis-connect-api-hub:
     image: ${ARGWS_CONNECT_REDIS_IMAGE:-ghcr.io/wkarts/argws-connect-redis:latest}
+    container_name: redis-connect-api-hub
     pull_policy: always
     restart: unless-stopped
     environment:
@@ -233,7 +248,7 @@ services:
     volumes:
       - connect_redis:/data
     networks:
-      - hub-net
+      - network-connec-hub
     healthcheck:
       test: ['CMD-SHELL', 'redis-cli -a "$$REDIS_PASSWORD" ping | grep PONG']
       interval: 10s
@@ -241,8 +256,9 @@ services:
       retries: 20
     logging: *default-logging
 
-  connect-rabbitmq:
+  rabbitmq-connect-api-hub:
     image: ${ARGWS_CONNECT_RABBITMQ_IMAGE:-ghcr.io/wkarts/argws-connect-rabbitmq:management}
+    container_name: rabbitmq-connect-api-hub
     pull_policy: always
     restart: unless-stopped
     environment:
@@ -252,7 +268,7 @@ services:
     volumes:
       - connect_rabbitmq:/var/lib/rabbitmq
     networks:
-      - hub-net
+      - network-connec-hub
     healthcheck:
       test: ['CMD', 'rabbitmq-diagnostics', '-q', 'ping']
       interval: 15s
@@ -261,8 +277,9 @@ services:
       start_period: 30s
     logging: *default-logging
 
-  connect-minio:
+  minio-connect-api-hub:
     image: ${ARGWS_CONNECT_MINIO_IMAGE:-ghcr.io/wkarts/argws-connect-minio:latest}
+    container_name: minio-connect-api-hub
     pull_policy: always
     restart: unless-stopped
     command: server /data --console-address ':9001'
@@ -272,7 +289,7 @@ services:
     volumes:
       - connect_minio:/data
     networks:
-      - hub-net
+      - network-connec-hub
     healthcheck:
       test: ['CMD', 'curl', '-fsS', 'http://127.0.0.1:9000/minio/health/live']
       interval: 15s
@@ -281,21 +298,23 @@ services:
       start_period: 30s
     logging: *default-logging
 
-  connect-nats:
+  nats-connect-api-hub:
     profiles: ['nats', 'extended']
     image: ${ARGWS_CONNECT_NATS_IMAGE:-ghcr.io/wkarts/argws-connect-nats:2.10-alpine}
+    container_name: nats-connect-api-hub
     pull_policy: always
     restart: unless-stopped
     command: ['-js', '-m', '8222', '--store_dir', '/data']
     volumes:
       - connect_nats:/data
     networks:
-      - hub-net
+      - network-connec-hub
     logging: *default-logging
 
-  connect-zookeeper:
+  zookeeper-connect-api-hub:
     profiles: ['kafka', 'extended']
     image: ${ARGWS_CONNECT_ZOOKEEPER_IMAGE:-ghcr.io/wkarts/argws-connect-zookeeper:7.5.0}
+    container_name: zookeeper-connect-api-hub
     pull_policy: always
     restart: unless-stopped
     environment:
@@ -305,21 +324,22 @@ services:
       - connect_zookeeper_data:/var/lib/zookeeper/data
       - connect_zookeeper_log:/var/lib/zookeeper/log
     networks:
-      - hub-net
+      - network-connec-hub
     logging: *default-logging
 
-  connect-kafka:
+  kafka-connect-api-hub:
     profiles: ['kafka', 'extended']
     image: ${ARGWS_CONNECT_KAFKA_IMAGE:-ghcr.io/wkarts/argws-connect-kafka:7.5.0}
+    container_name: kafka-connect-api-hub
     pull_policy: always
     restart: unless-stopped
     depends_on:
-      - connect-zookeeper
+      - zookeeper-connect-api-hub
     environment:
       KAFKA_BROKER_ID: 1
-      KAFKA_ZOOKEEPER_CONNECT: connect-zookeeper:2181
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper-connect-api-hub:2181
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://connect-kafka:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-connect-api-hub:9092
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
@@ -327,13 +347,16 @@ services:
     volumes:
       - connect_kafka:/var/lib/kafka/data
     networks:
-      - hub-net
+      - network-connec-hub
     logging: *default-logging
 
 volumes:
-  hub_storage:
-  hub_postgres:
-  hub_redis:
+  storage-connec-hub:
+    name: ${HUB_STORAGE_VOLUME_NAME:-storage-connec-hub}
+  postgres-data-connec-hub:
+    name: ${HUB_POSTGRES_VOLUME_NAME:-postgres-data-connec-hub}
+  redis-data-connec-hub:
+    name: ${HUB_REDIS_VOLUME_NAME:-redis-data-connec-hub}
   connect_instances:
   connect_postgres:
   connect_redis:
@@ -345,6 +368,6 @@ volumes:
   connect_kafka:
 
 networks:
-  hub-net:
-    name: ${HUB_NETWORK_NAME:-hub-net}
+  network-connec-hub:
+    name: ${HUB_NETWORK_NAME:-network-connec-hub}
     driver: bridge

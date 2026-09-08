@@ -1,0 +1,48 @@
+name: HUB - Full Source Package
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - hub/ci-base-images-release-hardening
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: Package complete HUB source
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout complete source
+        uses: actions/checkout@v5
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Build source ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          staging="$(mktemp -d)"
+          mkdir -p "$staging/HUB"
+          rsync -a \
+            --exclude='.git/' \
+            --exclude='dist/' \
+            --exclude='node_modules/' \
+            --exclude='vendor/bundle/' \
+            --exclude='tmp/cache/' \
+            ./ "$staging/HUB/"
+          short_sha="${GITHUB_SHA:0:12}"
+          archive="HUB-completo-${short_sha}.zip"
+          (cd "$staging" && zip -qr "$GITHUB_WORKSPACE/dist/$archive" HUB)
+          sha256sum "dist/$archive" | tee "dist/$archive.sha256"
+
+      - name: Upload complete source package
+        uses: actions/upload-artifact@v4
+        with:
+          name: hub-complete-source-${{ github.sha }}
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 14
