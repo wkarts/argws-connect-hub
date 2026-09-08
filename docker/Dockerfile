@@ -32,7 +32,10 @@ RUN if [ "$RAILS_ENV" = "production" ]; then \
       bundle install -j "$(nproc)" -r 3; \
     fi
 
+# Local HUB-owned/vendored packages must be available before yarn resolves file: dependencies.
 COPY package.json yarn.lock ./
+COPY vendor/javascript/hub-prosemirror-schema ./vendor/javascript/hub-prosemirror-schema
+COPY vendor/javascript/hub-utils ./vendor/javascript/hub-utils
 RUN yarn install --frozen-lockfile --network-concurrency 1 --network-timeout 600000
 
 COPY . /app
