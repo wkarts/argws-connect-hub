@@ -19,7 +19,11 @@ module ConversationReplyMailerHelper
 
     Rails.logger.info("Email sent from #{email_from} to #{to_emails} with subject #{mail_subject}")
 
-    mail(@options)
+    message = mail(@options)
+    # Internal-only context for the post-delivery IMAP observer. This is not an
+    # RFC822 header and therefore is never exposed to the recipient.
+    message.instance_variable_set(:@hub_inbox_id, @inbox.id) if @inbox&.email?
+    message
   end
 
   private
