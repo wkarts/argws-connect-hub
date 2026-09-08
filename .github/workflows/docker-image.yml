@@ -1,17 +1,23 @@
 name: Validate HUB Docker AMD64
+
 on:
   pull_request:
+    branches: [develop, main]
   workflow_dispatch:
+
 permissions:
   contents: read
+
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: docker/setup-buildx-action@v3
-      - run: ./scripts/audit-hub.sh
-      - uses: docker/build-push-action@v6
+      - name: Audit HUB
+        run: bash ./scripts/audit-hub.sh
+      - name: Validate AMD64 image
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: docker/Dockerfile
