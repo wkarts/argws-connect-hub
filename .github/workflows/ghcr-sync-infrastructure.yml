@@ -1,4 +1,4 @@
-name: GHCR - Sync HUB Infrastructure Images
+name: GHCR - Verify HUB Infrastructure Images
 
 on:
   workflow_dispatch:
@@ -7,15 +7,15 @@ on:
 
 permissions:
   contents: read
-  packages: write
+  packages: read
 
 concurrency:
-  group: argws-connect-hub-infrastructure-sync
+  group: argws-connect-hub-infrastructure-verify
   cancel-in-progress: false
 
 jobs:
-  sync:
-    name: Sync AMD64 base images to GHCR
+  verify:
+    name: Verify required AMD64 GHCR images
     runs-on: ubuntu-latest
     steps:
       - name: Install skopeo
@@ -24,27 +24,13 @@ jobs:
           sudo apt-get install -y skopeo
       - name: Login GHCR
         run: echo "${{ secrets.GITHUB_TOKEN }}" | skopeo login ghcr.io -u "${{ github.actor }}" --password-stdin
-      - name: Mirror runtime/build dependencies
+      - name: Verify runtime/build dependencies are available only in GHCR
         env:
           OWNER: ${{ github.repository_owner }}
         shell: bash
         run: |
           set -euo pipefail
-          skopeo copy --override-arch amd64 \
-            docker://docker.io/library/ruby:3.3.8-alpine3.19 \
-            docker://ghcr.io/${OWNER}/hub-ruby:3.3.8-alpine3.19
-          skopeo copy --override-arch amd64 \
-            docker://docker.io/library/postgres:16-alpine \
-            docker://ghcr.io/${OWNER}/hub-postgres:16-alpine
-          skopeo copy --override-arch amd64 \
-            docker://docker.io/library/redis:7-alpine \
-            docker://ghcr.io/${OWNER}/hub-redis:7-alpine
-      - name: Verify mirrored images
-        env:
-          OWNER: ${{ github.repository_owner }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          skopeo inspect docker://ghcr.io/${OWNER}/hub-ruby:3.3.8-alpine3.19 >/dev/null
-          skopeo inspect docker://ghcr.io/${OWNER}/hub-postgres:16-alpine >/dev/null
-          skopeo inspect docker://ghcr.io/${OWNER}/hub-redis:7-alpine >/dev/null
+          skopeo inspect --override-arch amd64 docker://ghcr.io/${OWNER}/hub-ruby:3.3.8-alpine3.19 >/dev/null
+          skopeo inspect --override-arch amd64 docker://ghcr.io/${OWNER}/hub-postgres:16-alpine >/dev/null
+          skopeo inspect --override-arch amd64 docker://ghcr.io/${OWNER}/hub-redis:7-alpine >/dev/null
+          echo "Required HUB infrastructure images are available in GHCR."
