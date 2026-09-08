@@ -99,6 +99,8 @@ gem 'slack-ruby-client', '~> 2.2.0'
 # for dialogflow integrations
 gem 'google-cloud-dialogflow-v2', '>= 0.24.0'
 gem 'grpc'
+# Keep the protobuf line compatible with grpc 1.x while using the Alpine/Ruby 3.3 build fix.
+gem 'google-protobuf', '3.25.8'
 # Translate integrations
 # 'google-cloud-translate' gem depends on faraday 2.0 version
 # this dependency breaks the slack-ruby-client gem
