@@ -1,0 +1,12 @@
+import fs from 'node:fs';
+const version = process.argv[2];
+if (!/^\d+\.\d+\.\d+$/.test(version || '')) throw new Error('Expected SemVer X.Y.Z');
+fs.writeFileSync('VERSION', `${version}\n`);
+const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+pkg.version = version;
+fs.writeFileSync('package.json', `${JSON.stringify(pkg, null, 2)}\n`);
+const manifest = JSON.parse(fs.readFileSync('RELEASE-MANIFEST.json', 'utf8'));
+manifest.version = version;
+manifest.release_channel = 'stable';
+manifest.revision_date = new Date().toISOString().slice(0, 10);
+fs.writeFileSync('RELEASE-MANIFEST.json', `${JSON.stringify(manifest, null, 2)}\n`);

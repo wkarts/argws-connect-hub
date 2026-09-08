@@ -1,0 +1,24 @@
+name: HUB Quality
+
+on:
+  pull_request:
+    branches: [develop, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  static:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - name: Audit product/privacy/deploy
+        run: bash ./scripts/audit-hub.sh
+      - name: Install Ruby 3.3.10
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3.10'
+          bundler-cache: false
+      - name: Ruby syntax
+        run: find app config lib db/migrate -type f -name '*.rb' -print0 | xargs -0 -n1 ruby -c >/dev/null

@@ -1,0 +1,27 @@
+{
+  "LOGIN": {
+    "TITLE": "Entrar no 🅷🆄🅱",
+    "EMAIL": {
+      "LABEL": "e-mail",
+      "PLACEHOLDER": "exemplo@nomedaempresa.com",
+      "ERROR": "Digite um endereço de e-mail válido"
+    },
+    "PASSWORD": {
+      "LABEL": "Senha",
+      "PLACEHOLDER": "Senha"
+    },
+    "API": {
+      "SUCCESS_MESSAGE": "Acesso bem-sucedido",
+      "ERROR_MESSAGE": "Não foi possível conectar ao servidor 🅷🆄🅱. Por favor, tente novamente.",
+      "UNAUTH": "Usuário ou senha incorretos. Por favor, tente novamente."
+    },
+    "OAUTH": {
+      "GOOGLE_LOGIN": "Entrar com o Google",
+      "BUSINESS_ACCOUNTS_ONLY": "Por favor, use seu endereço de e-mail corporativo para entrar",
+      "NO_ACCOUNT_FOUND": "Não encontramos uma conta para seu endereço de e-mail."
+    },
+    "FORGOT_PASSWORD": "Esqueceu-se da sua senha?",
+    "CREATE_NEW_ACCOUNT": "Criar nova conta",
+    "SUBMIT": "Entrar"
+  }
+}

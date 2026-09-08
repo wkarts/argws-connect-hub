@@ -1,0 +1,108 @@
+{
+  "SLA": {
+    "HEADER": "SLA",
+    "HEADER_BTN_TXT": "Adicionar SLA",
+    "ADD_ACTION_LONG": "Criar uma nova política de SLA",
+    "DESCRIPTION": "Acordos de Nível de Serviço (SLAs) são contratos que definem expectativas claras entre sua equipe e os clientes. Eles estabelecem padrões para tempos de resposta e resolução, criando um quadro de responsabilidade e garantindo uma experiência consistente e de alta qualidade.",
+    "LEARN_MORE": "Saiba mais sobre SLA",
+    "LOADING": "Carregando SLAs",
+    "PAYWALL": {
+      "TITLE": "Upgrade to create SLAs",
+      "AVAILABLE_ON": "The SLA feature is only available in the Business and Enterprise plans.",
+      "UPGRADE_PROMPT": "Upgrade your plan to get access to advanced features like team management, automations, custom attributes, and more.",
+      "UPGRADE_NOW": "Upgrade now",
+      "CANCEL_ANYTIME": "You can change or cancel your plan anytime"
+    },
+    "ENTERPRISE_PAYWALL": {
+      "AVAILABLE_ON": "The SLA feature is only available in the paid plans.",
+      "UPGRADE_PROMPT": "Upgrade to a paid plan to access advanced features like audit logs, agent capacity, and more.",
+      "ASK_ADMIN": "Please reach out to your administrator for the upgrade."
+    },
+    "LIST": {
+      "404": "Não há SLAs disponíveis nesta conta.",
+      "EMPTY": {
+        "TITLE_1": "Enterprise P0",
+        "DESC_1": "Problemas levantados por clientes corporativos, que exigem atenção imediata.",
+        "TITLE_2": "Enterprise P1",
+        "DESC_2": "Problemas levantados por clientes corporativos, que precisam ser reconhecidos rapidamente."
+      },
+      "BUSINESS_HOURS_ON": "Horários de funcionamento",
+      "BUSINESS_HOURS_OFF": "Fora do horário comercial",
+      "RESPONSE_TYPES": {
+        "FRT": "Limite de tempo da primeira resposta",
+        "NRT": "Limite de tempo da próxima resposta",
+        "RT": "Limite de tempo de resolução",
+        "SHORT_HAND": {
+          "FRT": "FRT",
+          "NRT": "NRT",
+          "RT": "RT"
+        }
+      }
+    },
+    "FORM": {
+      "NAME": {
+        "LABEL": "Nome do SLA",
+        "PLACEHOLDER": "Nome do SLA",
+        "REQUIRED_ERROR": "Nome do SLA é obrigatório",
+        "MINIMUM_LENGTH_ERROR": "Tamanho mínimo 2 é necessário",
+        "VALID_ERROR": "Somente Letras, Números, Hífen e Sublinhado são permitidos"
+      },
+      "DESCRIPTION": {
+        "LABEL": "Descrição",
+        "PLACEHOLDER": "SLA for premium customers"
+      },
+      "FIRST_RESPONSE_TIME": {
+        "LABEL": "Tempo da Primeira Resposta",
+        "PLACEHOLDER": "5"
+      },
+      "NEXT_RESPONSE_TIME": {
+        "LABEL": "Próximo Tempo de Resposta",
+        "PLACEHOLDER": "5"
+      },
+      "RESOLUTION_TIME": {
+        "LABEL": "Tempo de resolução",
+        "PLACEHOLDER": "60"
+      },
+      "BUSINESS_HOURS": {
+        "LABEL": "Horário de funcionamento",
+        "PLACEHOLDER": "Apenas durante o horário comercial"
+      },
+      "THRESHOLD_TIME": {
+        "INVALID_FORMAT_ERROR": "O limite deve ser um número e maior que zero"
+      },
+      "EDIT": "Alterar",
+      "CREATE": "Criar",
+      "DELETE": "Excluir",
+      "CANCEL": "Cancelar"
+    },
+    "ADD": {
+      "TITLE": "Adicionar SLA",
+      "DESC": "Promessas amigáveis para um ótimo serviço!",
+      "API": {
+        "SUCCESS_MESSAGE": "SLA adicionado com sucesso",
+        "ERROR_MESSAGE": "Ocorreu um erro, por favor tente novamente"
+      }
+    },
+    "EDIT": {
+      "TITLE": "Edit SLA",
+      "API": {
+        "SUCCESS_MESSAGE": "SLA atualizado com sucesso",
+        "ERROR_MESSAGE": "Ocorreu um erro, por favor tente novamente"
+      },
+      "CONFIRM": {
+        "TITLE": "Confirmar exclusão",
+        "MESSAGE": "Tem certeza que deseja excluir?",
+        "YES": "Sim, excluir.",
+        "NO": "Não, mantenha."
+      }
+    },
+    "EVENTS": {
+      "TITLE": "SLA Perdidos",
+      "FRT": "Primeira resposta",
+      "NRT": "Próximo tempo de resposta",
+      "RT": "Tempo de resolução",
+      "SHOW_MORE": "{count} mais",
+      "HIDE": "Ocultar {count} linhas"
+      }
+  }
+}

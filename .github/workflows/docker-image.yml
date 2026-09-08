@@ -1,0 +1,33 @@
+name: Validate HUB Docker AMD64
+
+on:
+  pull_request:
+    branches: [develop, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v4.3.0
+      - name: Audit HUB
+        run: bash ./scripts/audit-hub.sh
+      - name: Validate AMD64 image and load result
+        uses: docker/build-push-action@v7.3.0
+        with:
+          context: .
+          file: docker/Dockerfile
+          platforms: linux/amd64
+          build-args: |
+            GIT_SHA=${{ github.sha }}
+          push: false
+          load: true
+          tags: hub:ci-${{ github.sha }}
+          cache-from: type=gha,scope=hub-pr-amd64
+          cache-to: type=gha,mode=max,scope=hub-pr-amd64

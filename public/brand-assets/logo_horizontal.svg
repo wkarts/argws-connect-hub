@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 410 150" role="img" aria-label="HUB">
+  <title>HUB</title>
+  <g font-family="Inter,Arial,Helvetica,sans-serif" font-weight="800">
+    <text x="0" y="112" font-size="112" letter-spacing="-7" fill="#000000">HU</text>
+    <rect x="239" y="16" width="116" height="116" rx="24" fill="none" stroke="#E10600" stroke-width="11"/>
+    <text x="261" y="112" font-size="104" letter-spacing="-5" fill="#E10600">B</text>
+  </g>
+</svg>

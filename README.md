@@ -1,45 +1,40 @@
-# argws-connect-hub
+# 🅷🆄🅱
 
-Repositorio criado online e pre-configurado para:
+## Release
 
-- Codigo-fonte
-- Releases GitHub
-- Docker Images
-- GitHub Packages / GHCR
+**3.12.8-hub.1** — Comunicação sem limites.
 
-## Visibilidade configurada
+HUB é uma central omnichannel autogerenciada para atendimento e colaboração.
 
-Repository: private
+## Canais desta distribuição
 
-## Imagem Docker GHCR
+- **WhatsApp — Connect|API**: QR Code, código de pareamento, envio/recebimento, mídia, replies, reactions e compatibilidade Meta Cloud fornecida pela própria Connect|API.
+- **E-mail — IMAP/SMTP**: recebe e envia usando servidores padrão (Mailcow, Dovecot/Postfix, cPanel, Plesk, Gmail/Microsoft via OAuth quando configurados). O servidor IMAP permanece como fonte física/autoridade da caixa postal; o HUB mantém os registros de conversa necessários para atendimento sem remover a mensagem remota.
+- Demais canais do núcleo open-source permanecem disponíveis quando configurados.
 
-ghcr.io/wkarts/argws-connect-hub:latest
+## Privacidade
 
-## Pull da imagem
+O HUB não envia dados de uso ou eventos de produto para serviços externos.
 
-Se o package estiver publico:
+## Connect|API
 
-docker pull ghcr.io/wkarts/argws-connect-hub:latest
+Configure no servidor HUB:
 
-Se o package estiver privado:
+```env
+CONNECT_API_BASE_URL=https://api.connect.exemplo.com
+CONNECT_API_AUTH_TOKEN=troque-pelo-token-global-da-connect-api
+```
 
-echo SEU_TOKEN_GITHUB | docker login ghcr.io -u SEU_USUARIO --password-stdin
-docker pull ghcr.io/wkarts/argws-connect-hub:latest
+O token global é usado somente no backend para provisionamento. Cada inbox recebe uma credencial própria para operar sua instância e a façade Meta-compatible `/graph`.
 
-## Observacoes
+## E-mail
 
-- Releases seguem a visibilidade do repositorio.
-- O package Docker/GHCR so existe depois da primeira publicacao da imagem.
-- A imagem e vinculada ao repositorio usando o label OCI:
+Cada inbox de e-mail pode usar IMAP e SMTP próprios. A sincronização IMAP usa `BODY.PEEK[]` para não marcar mensagens como lidas apenas por sincronizá-las. Em contas IMAP/SMTP genéricas, mensagens entregues com sucesso por SMTP são anexadas à pasta remota de enviados.
 
-org.opencontainers.image.source=https://github.com/wkarts/argws-connect-hub
+## Containers
 
-Apos a primeira publicacao, valide em:
+A distribuição está preparada para publicação AMD64 no GitHub Container Registry (GHCR). Consulte `docs/HUB-DEPLOYMENT.md`.
 
-GitHub -> Profile/Organization -> Packages -> Package settings
+## Licença
 
-Confira:
-
-Repository conectado
-Manage Actions access / Inherit access from source repository
-Visibility: Public ou Private
+O núcleo comunitário continua sob os termos de sua licença open-source aplicável e preserva os avisos legais do upstream. O diretório Enterprise do upstream não faz parte deste pacote redistribuível.

@@ -1,0 +1,8 @@
+HUB complete develop source
+Version: 1.0.0
+Files: 3736
+Unpacked bytes: 92829725
+Privacy audit: OK
+Ruby syntax: 675 files OK
+Git metadata: not included
+Base64 transfer fragments: not included

@@ -1,0 +1,247 @@
+<script>
+import { useAlert } from 'dashboard/composables';
+import hubConstants from 'dashboard/constants/globals';
+
+const { ARTICLE_STATUS_TYPES } = hubConstants;
+
+export default {
+  props: {
+    isSidebarOpen: {
+      type: Boolean,
+      default: true,
+    },
+    backButtonLabel: {
+      type: String,
+      default: '',
+    },
+    isUpdating: {
+      type: Boolean,
+      default: false,
+    },
+    isSaved: {
+      type: Boolean,
+      default: false,
+    },
+    enableOpenSidebarButton: {
+      type: Boolean,
+      default: false,
+    },
+  },
+  data() {
+    return {
+      showActionsDropdown: false,
+      alertMessage: '',
+      ARTICLE_STATUS_TYPES,
+    };
+  },
+  computed: {
+    statusText() {
+      return this.isUpdating
+        ? this.$t('HELP_CENTER.EDIT_HEADER.SAVING')
+        : this.$t('HELP_CENTER.EDIT_HEADER.SAVED');
+    },
+    articleSlug() {
+      return this.$route.params.articleSlug;
+    },
+    currentPortalSlug() {
+      return this.$route.params.portalSlug;
+    },
+    currentArticleStatus() {
+      return this.$store.getters['articles/articleStatus'](this.articleSlug);
+    },
+    isPublishedArticle() {
+      return this.currentArticleStatus === 'published';
+    },
+    isArchivedArticle() {
+      return this.currentArticleStatus === 'archived';
+    },
+  },
+  methods: {
+    onClickGoBack() {
+      this.$emit('back');
+    },
+    showPreview() {
+      this.$emit('show');
+    },
+    onClickAdd() {
+      this.$emit('add');
+    },
+    async updateArticleStatus(status) {
+      try {
+        await this.$store.dispatch('articles/update', {
+          portalSlug: this.currentPortalSlug,
+          articleId: this.articleSlug,
+          status: status,
+        });
+        this.$emit('updateMeta');
+        this.statusUpdateSuccessMessage(status);
+        this.closeActionsDropdown();
+        if (status === this.ARTICLE_STATUS_TYPES.ARCHIVE) {
+        } else if (status === this.ARTICLE_STATUS_TYPES.PUBLISH) {
+        }
+      } catch (error) {
+        this.alertMessage =
+          error?.message || this.statusUpdateErrorMessage(status);
+      } finally {
+        useAlert(this.alertMessage);
+      }
+    },
+    statusUpdateSuccessMessage(status) {
+      if (status === this.ARTICLE_STATUS_TYPES.PUBLISH) {
+        this.alertMessage = this.$t('HELP_CENTER.PUBLISH_ARTICLE.API.SUCCESS');
+      } else if (status === this.ARTICLE_STATUS_TYPES.ARCHIVE) {
+        this.alertMessage = this.$t('HELP_CENTER.ARCHIVE_ARTICLE.API.SUCCESS');
+      }
+    },
+    statusUpdateErrorMessage(status) {
+      if (status === this.ARTICLE_STATUS_TYPES.PUBLISH) {
+        this.alertMessage = this.$t('HELP_CENTER.PUBLISH_ARTICLE.API.ERROR');
+      } else if (status === this.ARTICLE_STATUS_TYPES.ARCHIVE) {
+        this.alertMessage = this.$t('HELP_CENTER.ARCHIVE_ARTICLE.API.ERROR');
+      }
+    },
+    openSidebar() {
+      this.$emit('open');
+    },
+    closeSidebar() {
+      this.$emit('close');
+    },
+    openActionsDropdown() {
+      this.showActionsDropdown = !this.showActionsDropdown;
+    },
+    closeActionsDropdown() {
+      this.showActionsDropdown = false;
+    },
+  },
+};
+</script>
+
+<template>
+  <div class="flex items-center justify-between w-full h-16">
+    <div class="flex items-center">
+      <hub-button
+        icon="chevron-left"
+        variant="clear"
+        size="small"
+        color-scheme="primary"
+        class="back-button"
+        @click="onClickGoBack"
+      >
+        {{ backButtonLabel }}
+      </hub-button>
+    </div>
+    <div class="flex items-center gap-1">
+      <span
+        v-if="isUpdating || isSaved"
+        class="items-center ml-4 mr-1 text-xs draft-status rtl:ml-2 rtl:mr-4 text-slate-400 dark:text-slate-300"
+      >
+        {{ statusText }}
+      </span>
+
+      <hub-button
+        class-names="article--buttons relative"
+        icon="globe"
+        color-scheme="secondary"
+        variant="hollow"
+        size="small"
+        @click="showPreview"
+      >
+        {{ $t('HELP_CENTER.EDIT_HEADER.PREVIEW') }}
+      </hub-button>
+      <!-- Hidden since this is in V2
+      <hub-button
+        v-if="shouldShowAddLocaleButton"
+        class-names="article--buttons relative"
+        icon="add"
+        color-scheme="secondary"
+        variant="hollow"
+        size="small"
+        @click="onClickAdd"
+      >
+        {{ $t('HELP_CENTER.EDIT_HEADER.ADD_TRANSLATION') }}
+      </hub-button> -->
+      <hub-button
+        v-if="!isSidebarOpen"
+        v-tooltip.top-end="$t('HELP_CENTER.EDIT_HEADER.OPEN_SIDEBAR')"
+        icon="pane-open"
+        class-names="article--buttons relative sidebar-button"
+        variant="hollow"
+        size="small"
+        color-scheme="secondary"
+        :is-disabled="enableOpenSidebarButton"
+        @click="openSidebar"
+      />
+      <hub-button
+        v-if="isSidebarOpen"
+        v-tooltip.top-end="$t('HELP_CENTER.EDIT_HEADER.CLOSE_SIDEBAR')"
+        icon="pane-close"
+        class-names="article--buttons relative"
+        variant="hollow"
+        size="small"
+        color-scheme="secondary"
+        @click="closeSidebar"
+      />
+      <div class="relative article--buttons">
+        <div class="button-group">
+          <hub-button
+            class-names="publish-button"
+            size="small"
+            icon="checkmark"
+            color-scheme="primary"
+            :is-disabled="!articleSlug || isPublishedArticle"
+            @click="updateArticleStatus(ARTICLE_STATUS_TYPES.PUBLISH)"
+          >
+            {{ $t('HELP_CENTER.EDIT_HEADER.PUBLISH_BUTTON') }}
+          </hub-button>
+          <hub-button
+            size="small"
+            icon="chevron-down"
+            :is-disabled="!articleSlug || isArchivedArticle"
+            @click="openActionsDropdown"
+          />
+        </div>
+        <div
+          v-if="showActionsDropdown"
+          v-on-clickaway="closeActionsDropdown"
+          class="dropdown-pane dropdown-pane--open"
+        >
+          <hub-dropdown-menu>
+            <hub-dropdown-item>
+              <hub-button
+                variant="clear"
+                color-scheme="secondary"
+                size="small"
+                icon="book-clock"
+                @click="updateArticleStatus(ARTICLE_STATUS_TYPES.ARCHIVE)"
+              >
+                {{ $t('HELP_CENTER.EDIT_HEADER.MOVE_TO_ARCHIVE_BUTTON') }}
+              </hub-button>
+            </hub-dropdown-item>
+          </hub-dropdown-menu>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<style scoped lang="scss">
+.article--buttons {
+  .dropdown-pane {
+    @apply absolute right-0;
+  }
+}
+
+.draft-status {
+  animation: fadeIn 1s;
+
+  @keyframes fadeIn {
+    0% {
+      opacity: 0;
+    }
+
+    100% {
+      opacity: 1;
+    }
+  }
+}
+</style>

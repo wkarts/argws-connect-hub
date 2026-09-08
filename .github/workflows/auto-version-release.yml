@@ -1,0 +1,159 @@
+name: Release - Auto Version, Build and Publish
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      force_bump:
+        description: Optional bump override
+        required: false
+        type: choice
+        options: [auto, patch, minor, major]
+        default: auto
+
+permissions:
+  contents: write
+  packages: write
+  pull-requests: read
+
+concurrency:
+  group: argws-connect-hub-release-main
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    if: ${{ github.event_name == 'workflow_dispatch' || !contains(github.event.head_commit.message, '[skip release]') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - run: bash ./scripts/audit-hub.sh
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3.10'
+          bundler-cache: false
+      - name: Ruby syntax
+        run: find app config lib db/migrate -type f -name '*.rb' -print0 | xargs -0 -n1 ruby -c >/dev/null
+      - uses: docker/setup-buildx-action@v4.3.0
+      - name: Validate production image
+        uses: docker/build-push-action@v7.3.0
+        with:
+          context: .
+          file: docker/Dockerfile
+          platforms: linux/amd64
+          push: false
+          load: true
+          tags: hub:release-validation-${{ github.sha }}
+          build-args: |
+            GIT_SHA=${{ github.sha }}
+          cache-from: type=gha,scope=hub-release-validation-amd64
+          cache-to: type=gha,mode=max,scope=hub-release-validation-amd64
+
+  plan:
+    needs: validate
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.plan.outputs.version }}
+      tag: ${{ steps.plan.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.x'
+      - id: pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          json="$(gh api -H 'Accept: application/vnd.github+json' "/repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/pulls" 2>/dev/null || echo '[]')"
+          echo "title=$(jq -r '.[0].title // empty' <<<"$json")" >> "$GITHUB_OUTPUT"
+          echo "labels=$(jq -r '[.[0].labels[]?.name] | join(",")' <<<"$json")" >> "$GITHUB_OUTPUT"
+      - id: plan
+        env:
+          LABELS: ${{ steps.pr.outputs.labels }}
+          TITLE: ${{ steps.pr.outputs.title }}
+          FORCE: ${{ inputs.force_bump || 'auto' }}
+        run: |
+          git fetch --tags --force
+          latest="$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n1 || true)"
+          labels="$LABELS"
+          [[ "$FORCE" == auto || -z "$FORCE" ]] || labels="version:$FORCE"
+          result="$(node .github/scripts/compute-next-version.mjs "$latest" "$labels" "$TITLE")"
+          version="$(jq -r .version <<<"$result")"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=v$version" >> "$GITHUB_OUTPUT"
+
+  version-source:
+    needs: plan
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.commit.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.x'
+      - run: node .github/scripts/apply-version.mjs "${{ needs.plan.outputs.version }}"
+      - id: commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add VERSION package.json RELEASE-MANIFEST.json
+          if ! git diff --cached --quiet; then
+            git commit -m "chore(release): v${{ needs.plan.outputs.version }} [skip release]"
+            git push origin HEAD:main
+          fi
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+  publish:
+    needs: [plan, version-source]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.version-source.outputs.sha }}
+      - uses: docker/setup-buildx-action@v4.3.0
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        run: |
+          v="${{ needs.plan.outputs.version }}"; major="${v%%.*}"; r="${v#*.}"; minor="${r%%.*}"
+          {
+            echo 'tags<<EOF'
+            echo "ghcr.io/${{ github.repository_owner }}/argws-connect-hub:${v}"
+            echo "ghcr.io/${{ github.repository_owner }}/argws-connect-hub:${major}.${minor}"
+            echo "ghcr.io/${{ github.repository_owner }}/argws-connect-hub:${major}"
+            echo "ghcr.io/${{ github.repository_owner }}/argws-connect-hub:latest"
+            echo "ghcr.io/${{ github.repository_owner }}/argws-connect-hub:sha-${{ needs.version-source.outputs.sha }}"
+            echo EOF
+          } >> "$GITHUB_OUTPUT"
+      - id: build
+        uses: docker/build-push-action@v7.3.0
+        with:
+          context: .
+          file: docker/Dockerfile
+          platforms: linux/amd64
+          push: true
+          build-args: |
+            GIT_SHA=${{ needs.version-source.outputs.sha }}
+          tags: ${{ steps.meta.outputs.tags }}
+          provenance: true
+          sbom: true
+      - name: Tag and release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git fetch --tags
+          git tag -a "${{ needs.plan.outputs.tag }}" "${{ needs.version-source.outputs.sha }}" -m "HUB ${{ needs.plan.outputs.tag }}"
+          git push origin "${{ needs.plan.outputs.tag }}"
+          gh release create "${{ needs.plan.outputs.tag }}" --target "${{ needs.version-source.outputs.sha }}" --title "HUB ${{ needs.plan.outputs.tag }}" --generate-notes
