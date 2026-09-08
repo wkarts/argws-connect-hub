@@ -6,6 +6,6 @@
   "repository": "wkarts/argws-connect-hub",
   "image": "ghcr.io/wkarts/argws-connect-hub",
   "architecture": "linux/amd64",
-  "ruby": "3.3.8",
+  "ruby": "3.3.10",
   "revision_date": "2026-09-08"
 }
