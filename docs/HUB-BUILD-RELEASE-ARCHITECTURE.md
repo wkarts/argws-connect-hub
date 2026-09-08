@@ -36,7 +36,41 @@ A Connect|API é outra plataforma, possui build, imagens e versionamento própri
 | PostgreSQL data | `postgres-data-connec-hub-develop` |
 | Redis data | `redis-data-connec-hub-develop` |
 
-Nos deployments embutidos, serviços `connect-*` continuam pertencendo à Connect|API e não recebem o sufixo do HUB.
+## Serviços Connect|API embutidos
+
+A Connect|API continua sendo uma plataforma independente. O sufixo abaixo identifica apenas a colocação dela dentro da stack do HUB e evita colisões de `service`/`container_name` com outras stacks.
+
+### Produção
+
+| Função | Service / container |
+| --- | --- |
+| API | `connect-api-hub` |
+| Documentação | `docs-connect-api-hub` |
+| PostgreSQL | `postgres-connect-api-hub` |
+| Redis | `redis-connect-api-hub` |
+| RabbitMQ | `rabbitmq-connect-api-hub` |
+| MinIO | `minio-connect-api-hub` |
+| NATS opcional | `nats-connect-api-hub` |
+| ZooKeeper opcional | `zookeeper-connect-api-hub` |
+| Kafka opcional | `kafka-connect-api-hub` |
+
+### Development/homologação
+
+| Função | Service / container |
+| --- | --- |
+| API | `connect-api-hub-develop` |
+| Documentação | `docs-connect-api-hub-develop` |
+| PostgreSQL | `postgres-connect-api-hub-develop` |
+| Redis | `redis-connect-api-hub-develop` |
+| RabbitMQ | `rabbitmq-connect-api-hub-develop` |
+| MinIO | `minio-connect-api-hub-develop` |
+| NATS opcional | `nats-connect-api-hub-develop` |
+| ZooKeeper opcional | `zookeeper-connect-api-hub-develop` |
+| Kafka opcional | `kafka-connect-api-hub-develop` |
+
+Todos os hosts internos da Connect|API usam os mesmos nomes. Em produção, por exemplo, o HUB usa `http://connect-api-hub:8080`, a API acessa `postgres-connect-api-hub`, `redis-connect-api-hub`, `rabbitmq-connect-api-hub` e `minio-connect-api-hub`. Em development são usados os equivalentes com `-develop`.
+
+Os nomes lógicos dos volumes persistentes da Connect|API foram preservados para que uma atualização de nomenclatura de containers não crie storage vazio acidentalmente. O Compose continua isolando esses volumes pelo `COMPOSE_PROJECT_NAME` da stack.
 
 ## Deployments oficiais
 
@@ -100,7 +134,9 @@ A validação executa:
 - JSON básico de release/package;
 - consistência da versão das imagens-base;
 - `docker compose config` nos quatro deployments;
-- validação dos nomes dos cinco serviços pertencentes ao HUB.
+- validação dos nomes dos cinco serviços pertencentes ao HUB;
+- validação do namespace completo dos nove serviços Connect|API nas duas variantes embutidas;
+- validação de `container_name` explícito igual ao nome do serviço, evitando colisões entre stacks.
 
 O build de imagem só ocorre após uma validação bem-sucedida em `develop` ou no fluxo de release da `main`.
 
