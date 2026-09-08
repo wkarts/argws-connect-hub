@@ -44,12 +44,8 @@ COPY Gemfile Gemfile.lock ./
 RUN apk update && apk add --no-cache build-base musl gcc make musl-dev openssl openssl-dev g++ linux-headers xz vips-dev
 RUN bundle config set --local force_ruby_platform true
 
-# Alpine's Ruby package hardens native extensions with -Werror=format-security.
-# google-protobuf 3.25.x contains legacy rb_raise(format) calls and therefore
-# cannot compile with that warning promoted to an error. Patch only the Ruby
-# compiler configuration in this disposable builder stage; final runtime is a
-# fresh image and keeps the distro defaults unchanged.
-RUN ruby -rrbconfig -e 'path = $LOADED_FEATURES.find { |p| p.end_with?("/rbconfig.rb") }; abort("rbconfig.rb not found") unless path; data = File.read(path); abort("format-security hardening flag not found") unless data.include?("-Werror=format-security"); File.write(path, data.gsub("-Werror=format-security", "-Wno-error=format-security")); puts "builder rbconfig patched: #{path}"'
+# Keep the lock resolution deterministic for the Ruby/Alpine-compatible protobuf patch release.
+RUN bundle lock --update google-protobuf
 
 # Do not install development or test gems in production.
 RUN if [ "$RAILS_ENV" = "production" ]; then \
