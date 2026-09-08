@@ -1,0 +1,47 @@
+name: GHCR - Publish HUB Codespace AMD64
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: argws-connect-hub-codespace-image
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Audit HUB
+        run: bash ./scripts/audit-hub.sh
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v4.3.0
+
+      - name: Login GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and publish Codespace image
+        uses: docker/build-push-action@v7.3.0
+        with:
+          context: .
+          file: .devcontainer/Dockerfile
+          platforms: linux/amd64
+          push: true
+          build-args: |
+            HUB_DEVCONTAINER_IMAGE=ghcr.io/${{ github.repository_owner }}/argws-connect-hub:develop
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/argws-connect-hub-codespace:develop
+            ghcr.io/${{ github.repository_owner }}/argws-connect-hub-codespace:sha-${{ github.sha }}
+          provenance: true
+          sbom: true

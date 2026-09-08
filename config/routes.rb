@@ -99,6 +99,13 @@ Rails.application.routes.draw do
               resource :participants, only: [:show, :create, :update, :destroy]
               resource :direct_uploads, only: [:create]
               resource :draft_messages, only: [:show, :update, :destroy]
+              resource :connect_api_calls, only: [:show, :create], controller: 'connect_api_calls' do
+                post :accept
+                post :reject
+                post :end_call
+                post :mute
+                post :media_ticket
+              end
             end
             member do
               post :mute
@@ -499,6 +506,12 @@ Rails.application.routes.draw do
       end
       resources :platform_apps, only: [:index, :new, :create, :show, :edit, :update]
       resource :instance_status, only: [:show]
+
+      resource :connect_api, only: [:show], controller: 'connect_api' do
+        post :instance_action
+        post :migrate_provider
+        post :update_voip_limit
+      end
 
       resource :settings, only: [:show] do
         get :refresh, on: :collection

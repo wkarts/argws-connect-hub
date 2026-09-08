@@ -1,7 +1,7 @@
-# Optional HUB devcontainer bootstrap.
-# Publish HUB itself first; this image is not required for production.
-ARG HUB_DEVCONTAINER_IMAGE=ghcr.io/wkarts/hub:latest
+# Optional HUB devcontainer bootstrap. Production does not depend on this image.
+ARG HUB_DEVCONTAINER_IMAGE=ghcr.io/wkarts/argws-connect-hub:develop
 FROM ${HUB_DEVCONTAINER_IMAGE}
+
 USER root
 WORKDIR /workspace
 CMD ["sleep", "infinity"]

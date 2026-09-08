@@ -1,36 +1,46 @@
 # HUB — implantação GHCR / AMD64
 
-## Imagens
+## Imagem da aplicação
 
-A aplicação publica em `ghcr.io/<owner>/hub`. Esta distribuição usa somente `linux/amd64`.
+- Produção: `ghcr.io/wkarts/argws-connect-hub:latest`
+- Development/homologação: `ghcr.io/wkarts/argws-connect-hub:develop`
+- Arquitetura de publicação: `linux/amd64`
 
-Por política de registry, os seguintes containers-base devem existir no GHCR do projeto antes do primeiro build/deploy:
+PostgreSQL e Redis do HUB permanecem nas imagens de infraestrutura já utilizadas pelo projeto:
 
-- `ghcr.io/wkarts/hub-ruby:3.3.8-alpine3.19`
 - `ghcr.io/wkarts/hub-postgres:16-alpine`
 - `ghcr.io/wkarts/hub-redis:7-alpine`
-- `ghcr.io/wkarts/hub-mailhog:latest` (somente desenvolvimento)
-- `ghcr.io/wkarts/hub-codespace:latest` (desenvolvimento/codespaces)
 
-A imagem da aplicação é `ghcr.io/wkarts/hub:latest` por padrão e pode ser alterada com `HUB_IMAGE`.
+## Deployments prontos
 
-## Produção
+Use `deployment/README.md` como documento canônico desta entrega.
 
-1. Copie `.env.example` para `.env`.
-2. Defina `SECRET_KEY_BASE`, `POSTGRES_PASSWORD`, `REDIS_PASSWORD`, `FRONTEND_URL` e as credenciais da Connect|API.
-3. Execute as migrations antes/depois da atualização conforme seu fluxo operacional.
-4. Suba `docker-compose.production.yaml` no Dockge/Compose.
+Há quatro variantes:
 
-## Connect|API
+- `deployment/production/standalone`
+- `deployment/production/embedded-connect-api`
+- `deployment/development/standalone`
+- `deployment/development/embedded-connect-api`
+
+Cada diretório contém `compose.yaml` e `.env.example` próprios.
+
+## Connect|API externa
 
 ```env
-CONNECT_API_BASE_URL=https://api.connect.exemplo.com
-CONNECT_API_AUTH_TOKEN=token-global-da-connect-api
+CONNECT_API_BASE_URL=https://connect.exemplo.com
+CONNECT_API_PUBLIC_URL=https://connect.exemplo.com
+CONNECT_API_MANAGER_PUBLIC_URL=https://connect.exemplo.com/manager
+CONNECT_API_AUTH_TOKEN=troque-por-token-forte
+CONNECT_API_REQUEST_TIMEOUT=60
+CONNECT_API_DEFAULT_PROVIDER=WHATSAPP-BAILEYS
 ```
 
-O token global é usado somente pelo backend HUB para provisionar instâncias isoladas. O navegador não recebe esse segredo.
+`CONNECT_API_AUTH_TOKEN` é utilizado somente pelo backend do HUB.
 
+## Connect|API embutida
 
-## Desenvolvimento / Codespace
+No modo embutido, o HUB fala com `http://connect-api:8080` pela rede Docker. O domínio público da Connect|API continua obrigatório para Manager e para `wss://.../voice/media`.
 
-O workflow opcional publica `ghcr.io/wkarts/hub-codespace:latest` em AMD64 e usa `ghcr.io/wkarts/hub:latest` como imagem-pai. Ele não é necessário para produção.
+PostgreSQL/Redis do HUB nunca são compartilhados com PostgreSQL/Redis da Connect|API. A Connect|API também possui RabbitMQ e MinIO próprios, com NATS/Kafka opcionais por profile.
+
+O proxy reverso do domínio da Connect|API precisa permitir WebSocket Upgrade em `/voice/media`.

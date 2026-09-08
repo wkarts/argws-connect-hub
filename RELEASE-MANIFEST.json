@@ -8,5 +8,23 @@
   "architecture": "linux/amd64",
   "ruby": "3.3.10",
   "revision_date": "2026-09-08",
-  "privacy": "third-party telemetry disabled and removed from shipped runtime"
+  "privacy": "third-party telemetry disabled and removed from shipped runtime",
+  "integration_revision": "connect-api-next",
+  "connect_api": {
+    "source_channel": "develop",
+    "inbox_protocols": [
+      "WHATSAPP-BAILEYS",
+      "WHATSAPP-ZAPO"
+    ],
+    "call_provider": "WHATSAPP-ZAPO",
+    "voice_media_auth": "short-lived-one-time-ticket",
+    "embedded_deployment": true,
+    "automatic_provider_migration": false
+  },
+  "deployment_variants": [
+    "production/standalone",
+    "production/embedded-connect-api",
+    "development/standalone",
+    "development/embedded-connect-api"
+  ]
 }

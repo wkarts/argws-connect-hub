@@ -1,0 +1,12 @@
+HUB 1.0.0 develop - pacote completo corrigido
+Gerado: 2026-09-08
+Arquitetura de imagem: linux/amd64
+Ruby alvo: 3.3.10
+Arquivos: 3744
+Diretorios: 936
+Tamanho descompactado: 103M
+Auditoria: HUB AUDIT: OK
+Ruby syntax: 1121 arquivos OK
+Storybook: restaurado, telemetria desabilitada
+Codespace: restaurado, GHCR-only
+Analytics de produto de terceiros: removidos

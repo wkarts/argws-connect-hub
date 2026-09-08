@@ -48,7 +48,7 @@ foi atribuída a você"
       notification = create(:notification, notification_type: 'assigned_conversation_new_message', primary_actor: message.conversation,
                                            secondary_actor: message)
 
-      expect(notification. eq "Uma nova mensagem foi criada na conversa (##{notification.primary_actor.display_id})"
+      expect(notification.push_message_title).to eq "Uma nova mensagem foi criada na conversa (##{notification.primary_actor.display_id})"
     end
 
     it 'returns appropriate title suited for the notification type participating_conversation_new_message' do
