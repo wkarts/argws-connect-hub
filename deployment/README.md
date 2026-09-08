@@ -33,9 +33,41 @@ postgres-connec-hub-develop
 redis-connec-hub-develop
 ```
 
-Volumes e redes seguem a mesma separação (`*-connec-hub` e `*-connec-hub-develop`).
+Volumes e redes do HUB seguem a mesma separação (`*-connec-hub` e `*-connec-hub-develop`).
 
-Na variante embutida, serviços com prefixo `connect-` pertencem à Connect|API e mantêm seus próprios nomes.
+## Identidade dos serviços Connect|API embutidos
+
+A Connect|API mantém identidade própria mesmo quando sobe junto com o HUB. Para evitar colisões com outras stacks, todos os containers embutidos recebem nomes explícitos.
+
+Produção:
+
+```text
+connect-api-hub
+docs-connect-api-hub
+postgres-connect-api-hub
+redis-connect-api-hub
+rabbitmq-connect-api-hub
+minio-connect-api-hub
+nats-connect-api-hub
+zookeeper-connect-api-hub
+kafka-connect-api-hub
+```
+
+Development/homologação:
+
+```text
+connect-api-hub-develop
+docs-connect-api-hub-develop
+postgres-connect-api-hub-develop
+redis-connect-api-hub-develop
+rabbitmq-connect-api-hub-develop
+minio-connect-api-hub-develop
+nats-connect-api-hub-develop
+zookeeper-connect-api-hub-develop
+kafka-connect-api-hub-develop
+```
+
+Os nomes acima são tanto os `services` quanto os `container_name` da variante embutida. Os volumes persistentes próprios da Connect|API foram preservados para evitar troca acidental de storage durante a atualização.
 
 ## Domínios
 
@@ -45,7 +77,7 @@ Os `.env.example` usam ARGWS apenas como exemplo. Troque:
 - `CONNECT_API_PUBLIC_URL` — domínio público da Connect|API;
 - `CONNECT_API_MANAGER_PUBLIC_URL` — normalmente `${CONNECT_API_PUBLIC_URL}/manager`.
 
-No modo embutido, o HUB fala com `http://connect-api:8080` internamente e o navegador usa somente a URL pública para o WebSocket de mídia.
+No modo embutido, em produção o HUB fala com `http://connect-api-hub:8080`; em development usa `http://connect-api-hub-develop:8080`. O navegador usa somente a URL pública para o WebSocket de mídia.
 
 ## Proxy reverso / CloudPanel
 
@@ -87,6 +119,7 @@ Além do profile, habilite `CONNECT_NATS_ENABLED=true` e/ou `CONNECT_KAFKA_ENABL
 4. Execute `docker compose pull && docker compose up -d`.
 5. Produção standalone: acompanhe `docker compose logs -f migrate-connec-hub rails-connec-hub sidekiq-connec-hub`.
 6. Development standalone: use os mesmos nomes com `-develop`.
-7. Na variante embutida, acompanhe também `connect-api` quando necessário.
+7. Na variante embutida de produção, acompanhe também `connect-api-hub` quando necessário.
+8. Na variante embutida de development, use `connect-api-hub-develop`.
 
 Os bancos e Redis do HUB nunca são compartilhados com a Connect|API na variante embutida.
