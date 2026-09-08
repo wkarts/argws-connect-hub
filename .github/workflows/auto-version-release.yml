@@ -53,7 +53,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: HUB privacy/product audit
-        run: ./scripts/audit-hub.sh
+        run: bash ./scripts/audit-hub.sh
       - name: Ruby syntax
         run: |
           docker run --rm -v "$PWD:/workspace" -w /workspace \
