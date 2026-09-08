@@ -44,6 +44,11 @@ COPY Gemfile Gemfile.lock ./
 RUN apk update && apk add --no-cache build-base musl gcc make musl-dev openssl openssl-dev g++ linux-headers xz vips-dev
 RUN bundle config set --local force_ruby_platform true
 
+# google-protobuf 3.25.x is compatible with Ruby 3.3 but its C extension contains
+# legacy rb_raise calls that Alpine's hardening flag promotes to a build error.
+# Relax only this warning for this gem; keep the remaining compiler hardening intact.
+RUN bundle config set --local build.google-protobuf "--with-cflags=-Wno-error=format-security"
+
 # Do not install development or test gems in production.
 # Bundler is intentionally not frozen here so a compatible Ruby patch-level
 # upgrade can refresh only lockfile runtime metadata inside the image build.
