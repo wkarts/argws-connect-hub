@@ -22,7 +22,7 @@
 
   // 5432 postgres
   // 6379 redis
-  // 1025,8025 mailhog
+  // 1025,8025 Mailpit
   "forwardPorts": [8025, 3000, 3035],
 
   "postCreateCommand": ".devcontainer/scripts/setup.sh && POSTGRES_STATEMENT_TIMEOUT=600s bundle exec rake db:hub_prepare && yarn",
@@ -34,7 +34,7 @@
       "label": "Webpack Dev Server"
     },
     "8025": {
-      "label": "Mailhog UI"
+      "label": "Mailpit UI"
     }
   }
 }

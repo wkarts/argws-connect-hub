@@ -3,12 +3,15 @@
 require 'cgi'
 
 class Whatsapp::ConnectApiWebhookSetupService
-  DEFAULT_TIMEOUT = 15
+  DEFAULT_TIMEOUT = 60
+  DEFAULT_PROVIDER = 'WHATSAPP-BAILEYS'
+  SUPPORTED_PROVIDERS = %w[WHATSAPP-BAILEYS WHATSAPP-ZAPO].freeze
 
   def perform(whatsapp_channel)
     @channel = whatsapp_channel
     normalize_config!
     ensure_instance!
+    sync_instance_metadata!
     enable_meta_compatibility!
 
     if config['disconnect']
@@ -47,6 +50,10 @@ class Whatsapp::ConnectApiWebhookSetupService
     config['instance_name'] ||= "hub-#{channel.account_id}-#{digits}"
     config['api_key'] ||= SecureRandom.hex(32)
     config['auth_mode'] = %w[qrcode pairing_code].include?(config['auth_mode']) ? config['auth_mode'] : 'qrcode'
+    requested_provider = config['connect_api_provider'].presence || GlobalConfigService.load('CONNECT_API_DEFAULT_PROVIDER', ENV.fetch('CONNECT_API_DEFAULT_PROVIDER', DEFAULT_PROVIDER)).to_s
+    config['connect_api_provider'] = SUPPORTED_PROVIDERS.include?(requested_provider) ? requested_provider : DEFAULT_PROVIDER
+    config['calls_supported'] = config['connect_api_provider'] == 'WHATSAPP-ZAPO'
+    config['voice_supported'] = config['calls_supported']
     config['url'] = "#{base_url}/graph"
   end
 
@@ -56,7 +63,7 @@ class Whatsapp::ConnectApiWebhookSetupService
     body = {
       instanceName: config['instance_name'],
       token: config['api_key'],
-      integration: 'WHATSAPP-BAILEYS',
+      integration: config['connect_api_provider'],
       qrcode: false,
       # Storing the stable number lets the Meta-compatible identity resolver work
       # before the device session has completed authentication.
@@ -64,12 +71,15 @@ class Whatsapp::ConnectApiWebhookSetupService
       groupsIgnore: config.fetch('ignore_group_messages', true),
       syncFullHistory: !config.fetch('ignore_history_messages', true)
     }
+    if config['connect_api_provider'] == 'WHATSAPP-ZAPO' && config['voip_max_concurrent_calls'].present?
+      body[:voipMaxConcurrentCalls] = config['voip_max_concurrent_calls'].to_i
+    end
 
     response = HTTParty.post(
       "#{base_url}/instance/create",
       headers: admin_headers,
       body: body.to_json,
-      timeout: DEFAULT_TIMEOUT
+      timeout: request_timeout
     )
 
     unless response.success?
@@ -90,7 +100,7 @@ class Whatsapp::ConnectApiWebhookSetupService
       "#{base_url}/compat/meta/#{CGI.escape(config['instance_name'])}",
       headers: instance_headers,
       body: { enabled: true, webhookUrl: webhook_url }.to_json,
-      timeout: DEFAULT_TIMEOUT
+      timeout: request_timeout
     )
     raise response_body(response) unless response.success?
 
@@ -109,7 +119,7 @@ class Whatsapp::ConnectApiWebhookSetupService
     response = HTTParty.get(
       "#{base_url}/instance/connect/#{CGI.escape(config['instance_name'])}#{query}",
       headers: instance_headers,
-      timeout: 20
+      timeout: request_timeout
     )
     raise response_body(response) unless response.success?
 
@@ -125,7 +135,7 @@ class Whatsapp::ConnectApiWebhookSetupService
     response = HTTParty.delete(
       "#{base_url}/instance/logout/#{CGI.escape(config['instance_name'])}",
       headers: instance_headers,
-      timeout: DEFAULT_TIMEOUT
+      timeout: request_timeout
     )
     raise response_body(response) unless response.success?
 
@@ -139,7 +149,7 @@ class Whatsapp::ConnectApiWebhookSetupService
     response = HTTParty.get(
       "#{base_url}/instance/connectionState/#{CGI.escape(config['instance_name'])}",
       headers: instance_headers,
-      timeout: DEFAULT_TIMEOUT
+      timeout: request_timeout
     )
     return unless response.success?
 
@@ -156,15 +166,48 @@ class Whatsapp::ConnectApiWebhookSetupService
     response = HTTParty.get(
       "#{base_url}/instance/connectionState/#{CGI.escape(config['instance_name'])}",
       headers: instance_headers,
-      timeout: 5
+      timeout: [request_timeout, 10].min
     )
     response.success?
   rescue StandardError
     false
   end
 
+  def sync_instance_metadata!
+    response = HTTParty.get(
+      "#{base_url}/instance/fetchInstances",
+      headers: admin_headers,
+      timeout: request_timeout
+    )
+    return unless response.success?
+
+    instances = response.parsed_response
+    instances = [instances] unless instances.is_a?(Array)
+    instance = instances.find do |item|
+      item = item.to_h
+      (item['name'] || item['instanceName']).to_s == config['instance_name'].to_s
+    end
+    return unless instance
+
+    provider = instance['integration'].presence || instance['provider'].presence
+    if provider.present?
+      config['connect_api_provider'] = provider
+      config['calls_supported'] = provider == 'WHATSAPP-ZAPO'
+      config['voice_supported'] = provider == 'WHATSAPP-ZAPO'
+    end
+    config['connect_api_profile_name'] = instance['profileName'] if instance['profileName'].present?
+    config['connect_api_profile_picture'] = instance['profilePicUrl'] if instance['profilePicUrl'].present?
+  rescue StandardError => e
+    Rails.logger.debug("[HUB Connect|API] metadata sync skipped: #{e.class}: #{e.message}")
+  end
+
   def persist_config!
     channel.provider_config = config
+  end
+
+  def request_timeout
+    value = GlobalConfigService.load('CONNECT_API_REQUEST_TIMEOUT', ENV.fetch('CONNECT_API_REQUEST_TIMEOUT', DEFAULT_TIMEOUT)).to_i
+    value.positive? ? value : DEFAULT_TIMEOUT
   end
 
   def base_url

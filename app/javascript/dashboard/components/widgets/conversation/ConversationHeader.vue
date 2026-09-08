@@ -12,6 +12,7 @@ import { conversationListPageURL } from 'dashboard/helper/URLHelper';
 import { snoozedReopenTime } from 'dashboard/helper/snoozeHelpers';
 import { FEATURE_FLAGS } from 'dashboard/featureFlags';
 import Linear from './linear/index.vue';
+import ConnectApiCallPanel from './ConnectApiCallPanel.vue';
 
 export default {
   components: {
@@ -21,6 +22,7 @@ export default {
     Thumbnail,
     SLACardLabel,
     Linear,
+    ConnectApiCallPanel,
   },
   mixins: [inboxMixin],
   props: {
@@ -203,6 +205,11 @@ export default {
         <Linear
           v-if="isLinearIntegrationEnabled && isLinearFeatureEnabled"
           :conversation-id="currentChat.id"
+        />
+        <ConnectApiCallPanel
+          v-if="inbox"
+          :conversation-id="currentChat.id"
+          :inbox="inbox"
         />
         <MoreActions :conversation-id="currentChat.id" />
       </div>

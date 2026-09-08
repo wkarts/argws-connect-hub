@@ -5,7 +5,7 @@ class Whatsapp::Providers::ConnectApiService < Whatsapp::Providers::WhatsappClou
     Whatsapp::ConnectApiWebhookSetupService.new.perform(whatsapp_channel)
   end
 
-  # Connect|API 1.0.21 Meta-compatible endpoints authenticate with
+  # Connect|API Meta-compatible endpoints authenticate with
   # Authorization: Bearer. Do not rely on Meta's legacy access_token query form.
   def sync_templates
     whatsapp_channel.mark_message_templates_updated

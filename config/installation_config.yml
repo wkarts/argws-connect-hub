@@ -144,6 +144,26 @@
   display_title: 'Connect|API Administrative Token'
   description: 'Server-side administrative token used only to provision isolated HUB WhatsApp instances.'
   locked: false
+- name: CONNECT_API_PUBLIC_URL
+  value: ''
+  display_title: 'Connect|API Public URL'
+  description: 'Public HTTPS URL used by the HUB call UI to open the short-lived Voice Media WebSocket. No API token is exposed.'
+  locked: false
+- name: CONNECT_API_MANAGER_PUBLIC_URL
+  value: ''
+  display_title: 'Connect|API Manager URL'
+  description: 'Optional public URL for the full Connect|API Manager opened from HUB Admin.'
+  locked: false
+- name: CONNECT_API_REQUEST_TIMEOUT
+  value: '60'
+  display_title: 'Connect|API Request Timeout'
+  description: 'Server-side timeout in seconds for HUB requests to Connect|API.'
+  locked: false
+- name: CONNECT_API_DEFAULT_PROVIDER
+  value: 'WHATSAPP-BAILEYS'
+  display_title: 'Connect|API Default WhatsApp Protocol'
+  description: 'Compatibility default for new inboxes when no protocol is explicitly selected. Supported: WHATSAPP-BAILEYS and WHATSAPP-ZAPO.'
+  locked: false
 # End of Connect|API Channel Config
 
 # ------- HUB compatibility config (cloud features disabled by default) ----#

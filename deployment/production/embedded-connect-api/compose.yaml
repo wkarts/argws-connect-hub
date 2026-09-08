@@ -1,0 +1,350 @@
+name: ${COMPOSE_PROJECT_NAME:-hub}
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: ${DOCKER_LOG_MAX_SIZE:-20m}
+    max-file: "${DOCKER_LOG_MAX_FILE:-5}"
+
+x-hub-base: &hub-base
+  image: ${HUB_IMAGE}
+  pull_policy: always
+  platform: linux/amd64
+  env_file: .env
+  restart: unless-stopped
+  volumes:
+    - hub_storage:/app/storage
+  networks:
+    - hub-net
+  logging: *default-logging
+
+services:
+  hub-migrate:
+    <<: *hub-base
+    restart: "no"
+    depends_on:
+      hub-postgres:
+        condition: service_healthy
+      hub-redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      RAILS_ENV: production
+      INSTALLATION_ENV: docker
+      CONNECT_API_BASE_URL: http://connect-api:8080
+    entrypoint: docker/entrypoints/rails.sh
+    command: ['bundle', 'exec', 'rails', 'db:prepare']
+
+  hub:
+    <<: *hub-base
+    depends_on:
+      hub-migrate:
+        condition: service_completed_successfully
+    ports:
+      - '${HUB_BIND_ADDRESS:-127.0.0.1}:${HUB_PORT:-3000}:3000'
+    environment:
+      NODE_ENV: production
+      RAILS_ENV: production
+      INSTALLATION_ENV: docker
+      CONNECT_API_BASE_URL: http://connect-api:8080
+    entrypoint: docker/entrypoints/rails.sh
+    command: ['bundle', 'exec', 'rails', 's', '-p', '3000', '-b', '0.0.0.0']
+
+  hub-sidekiq:
+    <<: *hub-base
+    depends_on:
+      hub-migrate:
+        condition: service_completed_successfully
+    environment:
+      NODE_ENV: production
+      RAILS_ENV: production
+      INSTALLATION_ENV: docker
+      CONNECT_API_BASE_URL: http://connect-api:8080
+    command: ['bundle', 'exec', 'sidekiq', '-C', 'config/sidekiq.yml']
+
+  hub-postgres:
+    image: ${HUB_POSTGRES_IMAGE:-ghcr.io/wkarts/hub-postgres:16-alpine}
+    platform: linux/amd64
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DATABASE}
+      POSTGRES_USER: ${POSTGRES_USERNAME}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - hub_postgres:/var/lib/postgresql/data
+    networks:
+      - hub-net
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USERNAME} -d ${POSTGRES_DATABASE}']
+      interval: 10s
+      timeout: 5s
+      retries: 15
+    logging: *default-logging
+
+  hub-redis:
+    image: ${HUB_REDIS_IMAGE:-ghcr.io/wkarts/hub-redis:7-alpine}
+    platform: linux/amd64
+    restart: unless-stopped
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    command: ['sh', '-c', 'redis-server --appendonly yes --requirepass "$$REDIS_PASSWORD"']
+    volumes:
+      - hub_redis:/data
+    networks:
+      - hub-net
+    healthcheck:
+      test: ['CMD-SHELL', 'redis-cli -a "$$REDIS_PASSWORD" ping | grep PONG']
+      interval: 10s
+      timeout: 5s
+      retries: 15
+    logging: *default-logging
+
+  connect-api:
+    image: ${ARGWS_CONNECT_API_IMAGE}
+    pull_policy: always
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      SERVER_NAME: ${CONNECT_SERVER_NAME:-argws-connect-api}
+      SERVER_TYPE: http
+      SERVER_PORT: "8080"
+      SERVER_URL: ${CONNECT_API_PUBLIC_URL}
+      SERVER_DISABLE_MANAGER: "false"
+      SERVER_DISABLE_DOCS: "false"
+      NODE_ENV: ${CONNECT_NODE_ENV:-PROD}
+      DOCKER_ENV: "true"
+      LANGUAGE: ${CONNECT_LANGUAGE:-pt-BR}
+      CORS_ORIGIN: ${CONNECT_CORS_ORIGIN:-*}
+      CORS_METHODS: ${CONNECT_CORS_METHODS:-GET,POST,PUT,PATCH,DELETE,OPTIONS}
+      CORS_CREDENTIALS: ${CONNECT_CORS_CREDENTIALS:-false}
+      LOG_QRCODE: ${CONNECT_LOG_QRCODE:-true}
+      QRCODE_LIMIT: ${CONNECT_QRCODE_LIMIT:-30}
+      DATABASE_PROVIDER: postgresql
+      DATABASE_MIGRATION_MAX_ATTEMPTS: ${CONNECT_DATABASE_MIGRATION_MAX_ATTEMPTS:-60}
+      DATABASE_MIGRATION_RETRY_SECONDS: ${CONNECT_DATABASE_MIGRATION_RETRY_SECONDS:-2}
+      DATABASE_CONNECTION_URI: postgresql://${CONNECT_POSTGRES_USERNAME}:${CONNECT_POSTGRES_PASSWORD}@connect-postgres:5432/${CONNECT_POSTGRES_DATABASE}?schema=public
+      DATABASE_SAVE_DATA_INSTANCE: ${CONNECT_DATABASE_SAVE_DATA_INSTANCE:-true}
+      DATABASE_SAVE_DATA_NEW_MESSAGE: ${CONNECT_DATABASE_SAVE_DATA_NEW_MESSAGE:-true}
+      DATABASE_SAVE_MESSAGE_UPDATE: ${CONNECT_DATABASE_SAVE_MESSAGE_UPDATE:-true}
+      DATABASE_SAVE_DATA_CONTACTS: ${CONNECT_DATABASE_SAVE_DATA_CONTACTS:-true}
+      DATABASE_SAVE_DATA_CHATS: ${CONNECT_DATABASE_SAVE_DATA_CHATS:-true}
+      DATABASE_SAVE_DATA_LABELS: ${CONNECT_DATABASE_SAVE_DATA_LABELS:-true}
+      DATABASE_SAVE_DATA_HISTORIC: ${CONNECT_DATABASE_SAVE_DATA_HISTORIC:-true}
+      DATABASE_SAVE_IS_ON_WHATSAPP: ${CONNECT_DATABASE_SAVE_IS_ON_WHATSAPP:-true}
+      DATABASE_SAVE_IS_ON_WHATSAPP_DAYS: ${CONNECT_DATABASE_SAVE_IS_ON_WHATSAPP_DAYS:-7}
+      DATABASE_DELETE_MESSAGE: ${CONNECT_DATABASE_DELETE_MESSAGE:-true}
+      CACHE_REDIS_ENABLED: "true"
+      CACHE_REDIS_URI: redis://:${CONNECT_REDIS_PASSWORD}@connect-redis:6379/0
+      CACHE_REDIS_PREFIX_KEY: ${CONNECT_REDIS_PREFIX_KEY:-hub-connect}
+      CACHE_REDIS_TTL: ${CONNECT_CACHE_REDIS_TTL:-604800}
+      CACHE_REDIS_SAVE_INSTANCES: ${CONNECT_CACHE_REDIS_SAVE_INSTANCES:-false}
+      CACHE_LOCAL_ENABLED: ${CONNECT_CACHE_LOCAL_ENABLED:-false}
+      RABBITMQ_ENABLED: "true"
+      RABBITMQ_URI: amqp://${CONNECT_RABBITMQ_USER}:${CONNECT_RABBITMQ_PASSWORD}@connect-rabbitmq:5672/${CONNECT_RABBITMQ_VHOST}
+      RABBITMQ_EXCHANGE_NAME: ${CONNECT_RABBITMQ_EXCHANGE_NAME:-hub_connect}
+      RABBITMQ_GLOBAL_ENABLED: ${CONNECT_RABBITMQ_GLOBAL_ENABLED:-true}
+      RABBITMQ_EVENTS_CALL: "true"
+      S3_ENABLED: "true"
+      S3_ACCESS_KEY: ${CONNECT_MINIO_USER}
+      S3_SECRET_KEY: ${CONNECT_MINIO_PASSWORD}
+      S3_BUCKET: ${CONNECT_S3_BUCKET:-hub-connect}
+      S3_PORT: "9000"
+      S3_ENDPOINT: connect-minio
+      S3_REGION: ${CONNECT_S3_REGION:-us-east-1}
+      S3_USE_SSL: "false"
+      S3_SKIP_POLICY: "true"
+      S3_SAVE_VIDEO: ${CONNECT_S3_SAVE_VIDEO:-true}
+      AUTHENTICATION_API_KEY: ${CONNECT_API_AUTH_TOKEN}
+      AUTHENTICATION_EXPOSE_IN_FETCH_INSTANCES: "false"
+      WEBSOCKET_ENABLED: "true"
+      WEBSOCKET_GLOBAL_EVENTS: "true"
+      ZAPO_VOIP_ENABLED: "true"
+      ZAPO_VOIP_MAX_CONCURRENT_CALLS: ${ZAPO_VOIP_MAX_CONCURRENT_CALLS:-4}
+      NATS_ENABLED: ${CONNECT_NATS_ENABLED:-false}
+      NATS_URI: nats://connect-nats:4222
+      NATS_EVENTS_CALL: ${CONNECT_NATS_EVENTS_CALL:-false}
+      KAFKA_ENABLED: ${CONNECT_KAFKA_ENABLED:-false}
+      KAFKA_BROKERS: connect-kafka:9092
+      KAFKA_EVENTS_CALL: ${CONNECT_KAFKA_EVENTS_CALL:-false}
+      WEBHOOK_REQUEST_TIMEOUT_MS: ${CONNECT_WEBHOOK_REQUEST_TIMEOUT_MS:-60000}
+    depends_on:
+      connect-postgres:
+        condition: service_healthy
+      connect-redis:
+        condition: service_healthy
+      connect-rabbitmq:
+        condition: service_healthy
+      connect-minio:
+        condition: service_healthy
+    ports:
+      - '${CONNECT_API_BIND_ADDRESS:-127.0.0.1}:${CONNECT_API_PORT:-38080}:8080'
+    volumes:
+      - connect_instances:/argws-connect/instances
+    networks:
+      - hub-net
+    healthcheck:
+      test: ['CMD', 'curl', '-fsS', 'http://127.0.0.1:8080/health']
+      interval: 30s
+      timeout: 5s
+      retries: 15
+      start_period: 60s
+    logging: *default-logging
+
+  connect-docs:
+    image: ${ARGWS_CONNECT_DOCS_IMAGE:-ghcr.io/wkarts/argws-connect-docs:latest}
+    pull_policy: always
+    restart: unless-stopped
+    environment:
+      SERVER_URL: ${CONNECT_API_PUBLIC_URL}
+    ports:
+      - '${CONNECT_DOCS_BIND_ADDRESS:-127.0.0.1}:${CONNECT_DOCS_PORT:-38082}:8080'
+    networks:
+      - hub-net
+    logging: *default-logging
+
+  connect-postgres:
+    image: ${ARGWS_CONNECT_POSTGRES_IMAGE:-ghcr.io/wkarts/argws-connect-postgres:15}
+    pull_policy: always
+    restart: unless-stopped
+    command: ["postgres", "-c", "max_connections=${CONNECT_POSTGRES_MAX_CONNECTIONS:-300}", "-c", "listen_addresses=*"]
+    environment:
+      POSTGRES_DB: ${CONNECT_POSTGRES_DATABASE}
+      POSTGRES_USER: ${CONNECT_POSTGRES_USERNAME}
+      POSTGRES_PASSWORD: ${CONNECT_POSTGRES_PASSWORD}
+      TZ: ${TZ:-America/Bahia}
+    volumes:
+      - connect_postgres:/var/lib/postgresql/data
+    networks:
+      - hub-net
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${CONNECT_POSTGRES_USERNAME} -d ${CONNECT_POSTGRES_DATABASE}']
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    logging: *default-logging
+
+  connect-redis:
+    image: ${ARGWS_CONNECT_REDIS_IMAGE:-ghcr.io/wkarts/argws-connect-redis:latest}
+    pull_policy: always
+    restart: unless-stopped
+    environment:
+      REDIS_PASSWORD: ${CONNECT_REDIS_PASSWORD}
+    command: ['redis-server', '--appendonly', 'yes', '--requirepass', '${CONNECT_REDIS_PASSWORD}']
+    volumes:
+      - connect_redis:/data
+    networks:
+      - hub-net
+    healthcheck:
+      test: ['CMD-SHELL', 'redis-cli -a "$$REDIS_PASSWORD" ping | grep PONG']
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    logging: *default-logging
+
+  connect-rabbitmq:
+    image: ${ARGWS_CONNECT_RABBITMQ_IMAGE:-ghcr.io/wkarts/argws-connect-rabbitmq:management}
+    pull_policy: always
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_VHOST: ${CONNECT_RABBITMQ_VHOST}
+      RABBITMQ_DEFAULT_USER: ${CONNECT_RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${CONNECT_RABBITMQ_PASSWORD}
+    volumes:
+      - connect_rabbitmq:/var/lib/rabbitmq
+    networks:
+      - hub-net
+    healthcheck:
+      test: ['CMD', 'rabbitmq-diagnostics', '-q', 'ping']
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 30s
+    logging: *default-logging
+
+  connect-minio:
+    image: ${ARGWS_CONNECT_MINIO_IMAGE:-ghcr.io/wkarts/argws-connect-minio:latest}
+    pull_policy: always
+    restart: unless-stopped
+    command: server /data --console-address ':9001'
+    environment:
+      MINIO_ROOT_USER: ${CONNECT_MINIO_USER}
+      MINIO_ROOT_PASSWORD: ${CONNECT_MINIO_PASSWORD}
+    volumes:
+      - connect_minio:/data
+    networks:
+      - hub-net
+    healthcheck:
+      test: ['CMD', 'curl', '-fsS', 'http://127.0.0.1:9000/minio/health/live']
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    logging: *default-logging
+
+  connect-nats:
+    profiles: ['nats', 'extended']
+    image: ${ARGWS_CONNECT_NATS_IMAGE:-ghcr.io/wkarts/argws-connect-nats:2.10-alpine}
+    pull_policy: always
+    restart: unless-stopped
+    command: ['-js', '-m', '8222', '--store_dir', '/data']
+    volumes:
+      - connect_nats:/data
+    networks:
+      - hub-net
+    logging: *default-logging
+
+  connect-zookeeper:
+    profiles: ['kafka', 'extended']
+    image: ${ARGWS_CONNECT_ZOOKEEPER_IMAGE:-ghcr.io/wkarts/argws-connect-zookeeper:7.5.0}
+    pull_policy: always
+    restart: unless-stopped
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    volumes:
+      - connect_zookeeper_data:/var/lib/zookeeper/data
+      - connect_zookeeper_log:/var/lib/zookeeper/log
+    networks:
+      - hub-net
+    logging: *default-logging
+
+  connect-kafka:
+    profiles: ['kafka', 'extended']
+    image: ${ARGWS_CONNECT_KAFKA_IMAGE:-ghcr.io/wkarts/argws-connect-kafka:7.5.0}
+    pull_policy: always
+    restart: unless-stopped
+    depends_on:
+      - connect-zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: connect-zookeeper:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://connect-kafka:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'false'
+    volumes:
+      - connect_kafka:/var/lib/kafka/data
+    networks:
+      - hub-net
+    logging: *default-logging
+
+volumes:
+  hub_storage:
+  hub_postgres:
+  hub_redis:
+  connect_instances:
+  connect_postgres:
+  connect_redis:
+  connect_rabbitmq:
+  connect_minio:
+  connect_nats:
+  connect_zookeeper_data:
+  connect_zookeeper_log:
+  connect_kafka:
+
+networks:
+  hub-net:
+    name: ${HUB_NETWORK_NAME:-hub-net}
+    driver: bridge
