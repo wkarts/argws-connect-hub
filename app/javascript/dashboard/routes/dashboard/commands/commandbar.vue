@@ -1,5 +1,5 @@
 <script setup>
-import '@hub/ninja-keys';
+import 'ninja-keys';
 import { ref, computed, watchEffect, onMounted } from 'vue';
 import { useStore } from 'dashboard/composables/store';
 import { useI18n } from 'dashboard/composables/useI18n';
