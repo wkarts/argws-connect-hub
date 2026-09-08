@@ -31,7 +31,9 @@ jobs:
         run: |
           set -euo pipefail
           gem install bundler -v 2.5.16 --no-document
-          bundle _2.5.16_ lock --update azure-blob devise-secure_password html2text
+          # Keep all already-locked compatible gems; Bundler only resolves the
+          # dependencies changed in Gemfile and removes now-unused GIT sections.
+          bundle _2.5.16_ lock
           if grep -Fq 'github.com/chatwoot' Gemfile Gemfile.lock; then
             echo 'Chatwoot Git dependency still present in Ruby manifests.' >&2
             exit 1
@@ -41,7 +43,6 @@ jobs:
         uses: actions/setup-node@v5
         with:
           node-version: '20.x'
-          cache: yarn
 
       - name: Install Yarn 1
         run: npm install --global yarn@1.22.22
@@ -53,6 +54,8 @@ jobs:
           rm -rf vendor/javascript/hub-prosemirror-schema vendor/javascript/hub-utils
           mkdir -p vendor/javascript/hub-prosemirror-schema vendor/javascript/hub-utils /tmp/hub-vendor/pm /tmp/hub-vendor/utils
 
+          # One-time migration only. These packages are copied into this repository;
+          # normal HUB CI/build/release never fetches them again.
           npm pack @chatwoot/prosemirror-schema@1.0.11 --pack-destination /tmp/hub-vendor >/tmp/hub-vendor/pm-name.txt
           npm pack @chatwoot/utils@0.0.25 --pack-destination /tmp/hub-vendor >/tmp/hub-vendor/utils-name.txt
 
