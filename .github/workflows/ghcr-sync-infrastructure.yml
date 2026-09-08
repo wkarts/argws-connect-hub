@@ -1,0 +1,50 @@
+name: GHCR - Sync HUB Infrastructure Images
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 4 * * 1'
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: argws-connect-hub-infrastructure-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Sync AMD64 base images to GHCR
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install skopeo
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y skopeo
+      - name: Login GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | skopeo login ghcr.io -u "${{ github.actor }}" --password-stdin
+      - name: Mirror runtime/build dependencies
+        env:
+          OWNER: ${{ github.repository_owner }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          skopeo copy --override-arch amd64 \
+            docker://docker.io/library/ruby:3.3.8-alpine3.19 \
+            docker://ghcr.io/${OWNER}/hub-ruby:3.3.8-alpine3.19
+          skopeo copy --override-arch amd64 \
+            docker://docker.io/library/postgres:16-alpine \
+            docker://ghcr.io/${OWNER}/hub-postgres:16-alpine
+          skopeo copy --override-arch amd64 \
+            docker://docker.io/library/redis:7-alpine \
+            docker://ghcr.io/${OWNER}/hub-redis:7-alpine
+      - name: Verify mirrored images
+        env:
+          OWNER: ${{ github.repository_owner }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          skopeo inspect docker://ghcr.io/${OWNER}/hub-ruby:3.3.8-alpine3.19 >/dev/null
+          skopeo inspect docker://ghcr.io/${OWNER}/hub-postgres:16-alpine >/dev/null
+          skopeo inspect docker://ghcr.io/${OWNER}/hub-redis:7-alpine >/dev/null
