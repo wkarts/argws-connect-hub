@@ -65,7 +65,7 @@ jobs:
           [[ "$(git branch --show-current)" == "develop" ]]
 
       - name: Audit HUB
-        run: ./scripts/audit-hub.sh
+        run: bash ./scripts/audit-hub.sh
 
       - name: Resolve version metadata
         id: metadata
