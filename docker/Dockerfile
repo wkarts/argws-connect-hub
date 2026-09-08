@@ -44,18 +44,18 @@ COPY Gemfile Gemfile.lock ./
 RUN apk update && apk add --no-cache build-base musl gcc make musl-dev openssl openssl-dev g++ linux-headers xz vips-dev
 RUN bundle config set --local force_ruby_platform true
 
-# google-protobuf 3.25.x is compatible with Ruby 3.3 but its C extension contains
-# legacy rb_raise calls that Alpine's hardening flag promotes to a build error.
-# Relax only this warning for this gem; keep the remaining compiler hardening intact.
-RUN bundle config set --local build.google-protobuf "--with-cflags=-Wno-error=format-security"
-
 # Do not install development or test gems in production.
-# Bundler is intentionally not frozen here so a compatible Ruby patch-level
-# upgrade can refresh only lockfile runtime metadata inside the image build.
-RUN if [ "$RAILS_ENV" = "production" ]; then \
-  bundle config set without 'development test'; bundle install -j $(nproc) -r 3; \
-else bundle install -j $(nproc) -r 3; \
-  fi
+# google-protobuf 3.25.x uses ffi-compiler/Rake and reads ENV['CFLAGS'] directly.
+# Preserve Alpine/Ruby compiler hardening and relax only format-security from
+# fatal error to warning so the legacy extension can compile on Ruby 3.3.10.
+RUN BASE_CFLAGS="$(ruby -rrbconfig -e 'print RbConfig::CONFIG["CFLAGS"]')" \
+  && export CFLAGS="${BASE_CFLAGS} -Wno-error=format-security" \
+  && export CXXFLAGS="${BASE_CFLAGS} -Wno-error=format-security" \
+  && if [ "$RAILS_ENV" = "production" ]; then \
+       bundle config set without 'development test'; bundle install -j $(nproc) -r 3; \
+     else \
+       bundle install -j $(nproc) -r 3; \
+     fi
 
 COPY package.json yarn.lock ./
 RUN yarn install --network-concurrency 1 --network-timeout 600000
