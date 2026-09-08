@@ -1,0 +1,29 @@
+{
+  "files": [
+    "docs/contributors.md"
+  ],
+  "imageSize": 48,
+  "commit": false,
+  "contributors": [
+    {
+      "login": "wkarts",
+      "name": "Wkarts",
+      "avatar_url": "https://avatars.githubusercontent.com/u/57051272?s=400&u=e6c5790c7b2c416ff5c56dc068d3a7e77827b0f4&v=4",
+      "profile": "https://avatars.githubusercontent.com/u/57051272?s=400&u=e6c5790c7b2c416ff5c56dc068d3a7e77827b0f4&v=4",
+      "contributions": [
+        "bug",
+        "blog",
+        "code",
+        "doc",
+        "design",
+        "maintenance",
+        "review"
+      ]
+    }
+  ],
+  "contributorsPerLine": 7,
+  "projectName": "🅷🆄🅱",
+  "projectOwner": "wkarts",
+  "repoType": "github",
+  "repoHost": "https://github.com"
+}

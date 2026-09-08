@@ -1,0 +1,64 @@
+<script>
+import { useAlert } from 'dashboard/composables';
+import { useGlobalConfig } from 'shared/composables/useGlobalConfig';
+import { mapGetters } from 'vuex';
+import WebhookForm from './WebhookForm.vue';
+
+export default {
+  components: { WebhookForm },
+  props: {
+    onClose: {
+      type: Function,
+      required: true,
+    },
+  },
+  setup() {
+    const { useInstallationName } = useGlobalConfig();
+    return {
+      useInstallationName,
+    };
+  },
+  computed: {
+    ...mapGetters({
+      globalConfig: 'globalConfig/get',
+      uiFlags: 'webhooks/getUIFlags',
+    }),
+  },
+  methods: {
+    async onSubmit(webhook) {
+      try {
+        await this.$store.dispatch('webhooks/create', { webhook });
+        useAlert(
+          this.$t('INTEGRATION_SETTINGS.WEBHOOK.ADD.API.SUCCESS_MESSAGE')
+        );
+        this.onClose();
+      } catch (error) {
+        const message =
+          error.response.data.message ||
+          this.$t('INTEGRATION_SETTINGS.WEBHOOK.EDIT.API.ERROR_MESSAGE');
+        useAlert(message);
+      }
+    },
+  },
+};
+</script>
+
+<template>
+  <div class="h-auto overflow-auto flex flex-col">
+    <hub-modal-header
+      :header-title="$t('INTEGRATION_SETTINGS.WEBHOOK.ADD.TITLE')"
+      :header-content="
+        useInstallationName(
+          $t('INTEGRATION_SETTINGS.WEBHOOK.FORM.DESC'),
+          globalConfig.installationName
+        )
+      "
+    />
+    <WebhookForm
+      :is-submitting="uiFlags.creatingItem"
+      :submit-label="$t('INTEGRATION_SETTINGS.WEBHOOK.FORM.ADD_SUBMIT')"
+      @submit="onSubmit"
+      @cancel="onClose"
+    />
+  </div>
+</template>

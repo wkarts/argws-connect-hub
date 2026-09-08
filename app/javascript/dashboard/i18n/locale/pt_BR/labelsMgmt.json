@@ -1,0 +1,84 @@
+{
+  "LABEL_MGMT": {
+    "HEADER": "Marcadores",
+    "HEADER_BTN_TXT": "Adicionar marcador",
+    "LOADING": "Buscando marcadores",
+    "DESCRIPTION": "Marcadores ajudam a categorizar e priorizar conversas, facilitando o gerenciamento. Eles podem ser atribuídos a uma conversa através do menu lateral e estão vinculados à conta, permitindo a criação de fluxos de trabalho personalizados na sua organização. Você pode personalizar a cor dos marcadores para facilitar a identificação e exibi-los na barra lateral, tornando mais simples filtrar e encontrar as conversas relevantes.",
+    "SEARCH_404": "Não existem itens correspondentes a esta consulta",
+    "SIDEBAR_TXT": "<p><b>Marcadores</b> <p>Os marcadores o ajudam a categorizar as conversas e a priorizá-las. Você pode atribuir o marcador a uma conversa a partir do menu lateral. <br /><br />Os marcadores estão vinculados à conta e podem ser usados para criar fluxos de trabalho personalizados em sua organização. Você pode atribuir uma cor personalizada para um marcador, facilitando a identificação. Você será capaz de exibir o marcador na barra lateral para filtrar as conversas com mais facilidade.</p>",
+    "LIST": {
+      "404": "Não há marcadores disponíveis nesta conta.",
+      "TITLE": "Gerenciar marcadores",
+      "DESC": "Marcadores permitem agrupar as conversas.",
+      "TABLE_HEADER": [
+        "Nome",
+        "Descrição",
+        "Cor"
+      ]
+    },
+    "FORM": {
+      "NAME": {
+        "LABEL": "Nome do marcador",
+        "PLACEHOLDER": "Nome do marcador",
+        "REQUIRED_ERROR": "O nome do marcador é obrigatório",
+        "MINIMUM_LENGTH_ERROR": "Tamanho mínimo 2 é necessário",
+        "VALID_ERROR": "Somente Letras, Números, Hífen e Sublinhado são permitidos"
+      },
+      "DESCRIPTION": {
+        "LABEL": "Descrição",
+        "PLACEHOLDER": "Descrição do marcador"
+      },
+      "COLOR": {
+        "LABEL": "Cor"
+      },
+      "SHOW_ON_SIDEBAR": {
+        "LABEL": "Exibir marcador na barra lateral"
+      },
+      "EDIT": "Alterar",
+      "CREATE": "Criar",
+      "DELETE": "Excluir",
+      "CANCEL": "Cancelar"
+    },
+    "SUGGESTIONS": {
+      "TOOLTIP": {
+        "SINGLE_SUGGESTION": "Adicionar etiqueta à conversa",
+        "MULTIPLE_SUGGESTION": "Selecione esta etiqueta",
+        "DESELECT": "Desmarcar etiqueta",
+        "DISMISS": "Descartar sugestão"
+      },
+      "POWERED_BY": "🅷🆄🅱 AI",
+      "DISMISS": "Recusar",
+      "ADD_SELECTED_LABELS": "Adicionar etiquetas selecionadas",
+      "ADD_SELECTED_LABEL": "Adicionar etiqueta selecionada",
+      "ADD_ALL_LABELS": "Adicionar todas as etiquetas"
+    },
+    "ADD": {
+      "TITLE": "Adicionar marcador",
+      "DESC": "Marcadores permitem agrupar as conversas.",
+      "API": {
+        "SUCCESS_MESSAGE": "Marcador adicionado com sucesso",
+        "ERROR_MESSAGE": "Ocorreu um erro, por favor tente novamente"
+      }
+    },
+    "EDIT": {
+      "TITLE": "Editar marcador",
+      "API": {
+        "SUCCESS_MESSAGE": "Marcador atualizado com sucesso",
+        "ERROR_MESSAGE": "Ocorreu um erro, por favor tente novamente"
+      }
+    },
+    "DELETE": {
+      "BUTTON_TEXT": "Excluir",
+      "API": {
+        "SUCCESS_MESSAGE": "Marcador excluído com sucesso",
+        "ERROR_MESSAGE": "Ocorreu um erro, por favor tente novamente"
+      },
+      "CONFIRM": {
+        "TITLE": "Confirmar exclusão",
+        "MESSAGE": "Você tem certeza que deseja excluir ",
+        "YES": "Sim, excluir ",
+        "NO": "Não, Mantenha "
+      }
+    }
+  }
+}
