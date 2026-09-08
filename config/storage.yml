@@ -21,9 +21,9 @@ google:
   credentials: <%= ENV.fetch('GCS_CREDENTIALS', '') %>
   bucket: <%= ENV.fetch('GCS_BUCKET', '') %>
 
-# Use rails credentials:edit to set the Azure Storage secret (as azure_storage:storage_access_key)
+# Azure Blob adapter provided by the azure-blob gem from RubyGems.
 microsoft:
-  service: AzureStorage
+  service: AzureBlob
   storage_account_name: <%= ENV.fetch('AZURE_STORAGE_ACCOUNT_NAME', '') %>
   storage_access_key: <%= ENV.fetch('AZURE_STORAGE_ACCESS_KEY', '') %>
   container: <%= ENV.fetch('AZURE_STORAGE_CONTAINER', '') %>
