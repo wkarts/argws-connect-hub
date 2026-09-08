@@ -5,7 +5,6 @@ import ConversationBox from 'dashboard/components/widgets/conversation/Conversat
 import InboxEmptyState from './InboxEmptyState.vue';
 import { useUISettings } from 'dashboard/composables/useUISettings';
 import { BUS_EVENTS } from 'shared/constants/busEvents';
-import { INBOX_EVENTS } from 'dashboard/helper/AnalyticsHelper/events';
 
 export default {
   components: {
@@ -140,11 +139,6 @@ export default {
         primary_actor: { meta: { unreadCount } = {} },
         notification_type: notificationType,
       } = notification;
-
-      this.$track(INBOX_EVENTS.OPEN_CONVERSATION_VIA_INBOX, {
-        notificationType,
-      });
-
       this.$store.dispatch('notifications/read', {
         id,
         primaryActorId,

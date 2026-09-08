@@ -50,11 +50,13 @@ class ConversationReplyMailer < ApplicationMailer
     Rails.logger.info("Email sent from #{from_email_with_name} \
       to #{to_email} with subject #{@conversation.display_id} \
       #{I18n.t('conversations.reply.transcript_subject')} ")
-    mail({
-           to: to_email,
-           from: from_email_with_name,
-           subject: "[##{@conversation.display_id}] #{I18n.t('conversations.reply.transcript_subject')}"
-         })
+    message = mail({
+                     to: to_email,
+                     from: from_email_with_name,
+                     subject: "[##{@conversation.display_id}] #{I18n.t('conversations.reply.transcript_subject')}"
+                   })
+    message.instance_variable_set(:@hub_inbox_id, @inbox.id) if @inbox&.email?
+    message
   end
 
   private

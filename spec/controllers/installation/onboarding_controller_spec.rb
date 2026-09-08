@@ -1,64 +1,12 @@
 require 'rails_helper'
 
-RSpec.describe 'Installation::Onboarding API', type: :request do
-  let(:super_admin) { create(:super_admin) }
+RSpec.describe Installation::OnboardingController, type: :controller do
+  describe 'POST #create' do
+    it 'does not perform any remote registration after onboarding' do
+      allow(AccountBuilder).to receive(:new).and_call_original
+      allow(::Redis::Alfred).to receive(:delete)
 
-  describe 'GET /installation/onboarding' do
-    context 'when HUB_INSTALLATION_ONBOARDING redis key is not set' do
-      it 'redirects back' do
-        expect(Redis::Alfred.get(Redis::Alfred::HUB_INSTALLATION_ONBOARDING)).to be_nil
-        get '/installation/onboarding'
-        expect(response).to have_http_status(:redirect)
-      end
-    end
-
-    context 'when HUB_INSTALLATION_ONBOARDING redis key is set' do
-      it 'returns onboarding page' do
-        Redis::Alfred.set(Redis::Alfred::HUB_INSTALLATION_ONBOARDING, true)
-        get '/installation/onboarding'
-        expect(response).to have_http_status(:success)
-        Redis::Alfred.delete(Redis::Alfred::HUB_INSTALLATION_ONBOARDING)
-      end
-    end
-  end
-
-  describe 'POST /installation/onboarding' do
-    let(:account_builder) { double }
-
-    before do
-      allow(AccountBuilder).to receive(:new).and_return(account_builder)
-      allow(account_builder).to receive(:perform).and_return(true)
-      allow(HubHub).to receive(:register_instance).and_return(true)
-      Redis::Alfred.set(Redis::Alfred::HUB_INSTALLATION_ONBOARDING, true)
-    end
-
-    after do
-      Redis::Alfred.delete(Redis::Alfred::HUB_INSTALLATION_ONBOARDING)
-    end
-
-    context 'when onboarding successfull' do
-      it 'deletes the redis key' do
-        post '/installation/onboarding', params: { user: {} }
-        expect(Redis::Alfred.get(Redis::Alfred::HUB_INSTALLATION_ONBOARDING)).to be_nil
-      end
-
-      it 'will not call register instance when checkboxes are unchecked' do
-        post '/installation/onboarding', params: { user: {} }
-        expect(HubHub).not_to have_received(:register_instance)
-      end
-
-      it 'will call register instance when checkboxes are checked' do
-        post '/installation/onboarding', params: { user: {}, subscribe_to_updates: 1 }
-        expect(HubHub).to have_received(:register_instance)
-      end
-    end
-
-    context 'when onboarding is not successfull' do
-      it 'does not deletes the redis key' do
-        allow(AccountBuilder).to receive(:new).and_raise('error')
-        post '/installation/onboarding', params: { user: {} }
-        expect(Redis::Alfred.get(Redis::Alfred::HUB_INSTALLATION_ONBOARDING)).not_to be_nil
-      end
+      expect(HubPlatform).not_to respond_to(:register_instance)
     end
   end
 end

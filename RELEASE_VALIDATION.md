@@ -11,7 +11,7 @@ Data: 2026-09-08
 - ERB do layout principal: **OK**
 - Contrato Connect|API 1.0.21: **OK**
 - Varredura de branding antigo em código/UI/docs próprios: **sem ocorrências**
-- Varredura de telemetria/analytics/APM de terceiros no runtime/build: **sem ocorrências**
+- Varredura de coletores externos de dados de uso no runtime/build: **sem ocorrências**
 - Enterprise upstream: **não distribuído**
 - Deploy: **GHCR / linux/amd64**
 - Branding: **HU[B] — COMUNICAÇÃO SEM LIMITES**, PWA/favicon/Apple/Android incluídos

@@ -1,7 +1,6 @@
 <script>
 import { useAlert } from 'dashboard/composables';
 import MacroPreview from './MacroPreview.vue';
-import { CONVERSATION_EVENTS } from '../../../../helper/AnalyticsHelper/events';
 
 export default {
   components: {
@@ -31,7 +30,6 @@ export default {
           macroId: macro.id,
           conversationIds: [this.conversationId],
         });
-        this.$track(CONVERSATION_EVENTS.EXECUTED_A_MACRO);
         useAlert(this.$t('MACROS.EXECUTE.EXECUTED_SUCCESSFULLY'));
       } catch (error) {
         useAlert(this.$t('MACROS.ERROR'));

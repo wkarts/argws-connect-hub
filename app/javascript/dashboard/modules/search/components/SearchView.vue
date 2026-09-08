@@ -6,7 +6,6 @@ import SearchResultMessagesList from './SearchResultMessagesList.vue';
 import SearchResultContactsList from './SearchResultContactsList.vue';
 
 import { mapGetters } from 'vuex';
-import { CONVERSATION_EVENTS } from '../../../helper/AnalyticsHelper/events';
 export default {
   components: {
     SearchHeader,
@@ -126,7 +125,6 @@ export default {
         this.$store.dispatch('conversationSearch/clearSearchResults');
         return;
       }
-      this.$track(CONVERSATION_EVENTS.SEARCH_CONVERSATION);
       this.$store.dispatch('conversationSearch/fullSearch', { q });
     },
     onBack() {

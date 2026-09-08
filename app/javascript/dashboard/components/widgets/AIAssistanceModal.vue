@@ -15,8 +15,8 @@ export default {
   },
   setup() {
     const { formatMessage } = useMessageFormatter();
-    const { draftMessage, processEvent, recordAnalytics } = useAI();
-    return { draftMessage, processEvent, recordAnalytics, formatMessage };
+    const { draftMessage, processEvent } = useAI();
+    return { draftMessage, processEvent, formatMessage };
   },
   data() {
     return {
@@ -51,7 +51,6 @@ export default {
       this.isGenerating = false;
     },
     applyText() {
-      this.recordAnalytics(this.aiOption);
       this.$emit('applyText', this.generatedContent);
       this.onClose();
     },

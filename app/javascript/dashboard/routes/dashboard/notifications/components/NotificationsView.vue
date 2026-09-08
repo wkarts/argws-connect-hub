@@ -4,7 +4,6 @@ import TableFooter from 'dashboard/components/widgets/TableFooter.vue';
 
 import NotificationTable from './NotificationTable.vue';
 
-import { ACCOUNT_EVENTS } from '../../../../helper/AnalyticsHelper/events';
 export default {
   components: {
     NotificationTable,
@@ -33,10 +32,6 @@ export default {
         primary_actor: { id: conversationId },
         notification_type: notificationType,
       } = notification;
-
-      this.$track(ACCOUNT_EVENTS.OPEN_CONVERSATION_VIA_NOTIFICATION, {
-        notificationType,
-      });
       this.$store.dispatch('notifications/read', {
         id: notification.id,
         primaryActorId,
@@ -49,7 +44,6 @@ export default {
       );
     },
     onMarkAllDoneClick() {
-      this.$track(ACCOUNT_EVENTS.MARK_AS_READ_NOTIFICATIONS);
       this.$store.dispatch('notifications/readAll');
     },
   },

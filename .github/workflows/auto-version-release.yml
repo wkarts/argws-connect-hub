@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       force_bump:
-        description: "Optional bump override for manual execution"
+        description: Optional bump override
         required: false
         type: choice
         options: [auto, patch, minor, major]
@@ -23,246 +23,137 @@ concurrency:
 
 jobs:
   validate:
-    name: Validate source
     if: ${{ github.event_name == 'workflow_dispatch' || !contains(github.event.head_commit.message, '[skip release]') }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 40
+    timeout-minutes: 60
     steps:
-      - name: Checkout main commit
-        uses: actions/checkout@v5
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
-      - name: HUB privacy/product audit
-        run: bash ./scripts/audit-hub.sh
-      - name: Install Ruby 3.3.10
-        uses: ruby/setup-ruby@v1
+      - run: bash ./scripts/audit-hub.sh
+      - uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.3.10'
           bundler-cache: false
       - name: Ruby syntax
         run: find app config lib db/migrate -type f -name '*.rb' -print0 | xargs -0 -n1 ruby -c >/dev/null
-      - name: Set up Buildx
-        uses: docker/setup-buildx-action@v3
-      - name: Validate production Docker build
-        uses: docker/build-push-action@v6
+      - uses: docker/setup-buildx-action@v4.3.0
+      - name: Validate production image
+        uses: docker/build-push-action@v7.3.0
         with:
           context: .
           file: docker/Dockerfile
           platforms: linux/amd64
           push: false
+          load: true
+          tags: hub:release-validation-${{ github.sha }}
           build-args: |
             GIT_SHA=${{ github.sha }}
           cache-from: type=gha,scope=hub-release-validation-amd64
           cache-to: type=gha,mode=max,scope=hub-release-validation-amd64
 
-  plan-version:
-    name: Plan semantic version
+  plan:
     needs: validate
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.plan.outputs.version }}
       tag: ${{ steps.plan.outputs.tag }}
-      bump: ${{ steps.plan.outputs.bump }}
-      previous: ${{ steps.plan.outputs.previous }}
     steps:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
-      - name: Install Node
-        uses: actions/setup-node@v5
+      - uses: actions/setup-node@v5
         with:
-          node-version: '20.x'
-      - name: Resolve merged PR metadata
-        id: pr
+          node-version: '24.x'
+      - id: pr
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        shell: bash
         run: |
-          set -euo pipefail
-          pr_json="$(gh api -H 'Accept: application/vnd.github+json' "/repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/pulls" 2>/dev/null || echo '[]')"
-          title="$(jq -r '.[0].title // empty' <<<"$pr_json")"
-          labels="$(jq -r '[.[0].labels[]?.name] | join(",")' <<<"$pr_json")"
-          {
-            echo "title=$title"
-            echo "labels=$labels"
-          } >> "$GITHUB_OUTPUT"
-      - name: Compute next version
-        id: plan
+          json="$(gh api -H 'Accept: application/vnd.github+json' "/repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/pulls" 2>/dev/null || echo '[]')"
+          echo "title=$(jq -r '.[0].title // empty' <<<"$json")" >> "$GITHUB_OUTPUT"
+          echo "labels=$(jq -r '[.[0].labels[]?.name] | join(",")' <<<"$json")" >> "$GITHUB_OUTPUT"
+      - id: plan
         env:
           LABELS: ${{ steps.pr.outputs.labels }}
-          PR_TITLE: ${{ steps.pr.outputs.title }}
-          FORCE_BUMP: ${{ inputs.force_bump || 'auto' }}
-        shell: bash
+          TITLE: ${{ steps.pr.outputs.title }}
+          FORCE: ${{ inputs.force_bump || 'auto' }}
         run: |
-          set -euo pipefail
           git fetch --tags --force
           latest="$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n1 || true)"
           labels="$LABELS"
-          if [[ "$FORCE_BUMP" != "auto" && -n "$FORCE_BUMP" ]]; then
-            labels="version:$FORCE_BUMP"
-          fi
-          plan="$(node .github/scripts/compute-next-version.mjs "$latest" "$labels" "$PR_TITLE")"
-          version="$(jq -r '.version' <<<"$plan")"
-          bump="$(jq -r '.bump' <<<"$plan")"
-          previous="$(jq -r '.previous // ""' <<<"$plan")"
-          if git rev-parse "v${version}" >/dev/null 2>&1; then
-            echo "Tag v${version} already exists; refusing duplicate release." >&2
-            exit 1
-          fi
-          {
-            echo "version=$version"
-            echo "tag=v$version"
-            echo "bump=$bump"
-            echo "previous=$previous"
-          } >> "$GITHUB_OUTPUT"
-          echo "Planned HUB v${version} (${bump})"
+          [[ "$FORCE" == auto || -z "$FORCE" ]] || labels="version:$FORCE"
+          result="$(node .github/scripts/compute-next-version.mjs "$latest" "$labels" "$TITLE")"
+          version="$(jq -r .version <<<"$result")"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=v$version" >> "$GITHUB_OUTPUT"
 
   version-source:
-    name: Persist version metadata
-    needs: plan-version
+    needs: plan
     runs-on: ubuntu-latest
     outputs:
-      release_sha: ${{ steps.commit.outputs.release_sha }}
+      sha: ${{ steps.commit.outputs.sha }}
     steps:
-      - name: Checkout main
-        uses: actions/checkout@v5
+      - uses: actions/checkout@v5
         with:
           ref: main
           fetch-depth: 0
-      - name: Install Node
-        uses: actions/setup-node@v5
+      - uses: actions/setup-node@v5
         with:
-          node-version: '20.x'
-      - name: Ensure main still points to validated commit
-        shell: bash
+          node-version: '24.x'
+      - run: node .github/scripts/apply-version.mjs "${{ needs.plan.outputs.version }}"
+      - id: commit
         run: |
-          set -euo pipefail
-          current="$(git rev-parse HEAD)"
-          if [[ "$current" != "$GITHUB_SHA" ]]; then
-            echo "main moved while release was being prepared ($current != $GITHUB_SHA)." >&2
-            exit 1
-          fi
-      - name: Apply version
-        run: node .github/scripts/apply-version.mjs "${{ needs.plan-version.outputs.version }}"
-      - name: Commit version metadata
-        id: commit
-        shell: bash
-        run: |
-          set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add VERSION package.json RELEASE-MANIFEST.json
           if ! git diff --cached --quiet; then
-            git commit -m "chore(release): v${{ needs.plan-version.outputs.version }} [skip release]"
+            git commit -m "chore(release): v${{ needs.plan.outputs.version }} [skip release]"
             git push origin HEAD:main
           fi
-          echo "release_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
   publish:
-    name: Publish stable AMD64 image
-    needs: [plan-version, version-source]
+    needs: [plan, version-source]
     runs-on: ubuntu-24.04
     steps:
-      - name: Checkout versioned source
-        uses: actions/checkout@v5
+      - uses: actions/checkout@v5
         with:
-          ref: ${{ needs.version-source.outputs.release_sha }}
-          fetch-depth: 0
-      - name: Set up Buildx
-        uses: docker/setup-buildx-action@v3
-      - name: Login GHCR
-        uses: docker/login-action@v3
+          ref: ${{ needs.version-source.outputs.sha }}
+      - uses: docker/setup-buildx-action@v4.3.0
+      - uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Resolve stable tags
-        id: tags
-        shell: bash
+      - id: meta
         run: |
-          set -euo pipefail
-          version="${{ needs.plan-version.outputs.version }}"
-          major="${version%%.*}"
-          rest="${version#*.}"
-          minor="${rest%%.*}"
+          v="${{ needs.plan.outputs.version }}"; major="${v%%.*}"; r="${v#*.}"; minor="${r%%.*}"
           {
-            echo 'value<<EOF'
-            echo "ghcr.io/${{ github.repository_owner }}/argws-connect-hub:${version}"
+            echo 'tags<<EOF'
+            echo "ghcr.io/${{ github.repository_owner }}/argws-connect-hub:${v}"
             echo "ghcr.io/${{ github.repository_owner }}/argws-connect-hub:${major}.${minor}"
             echo "ghcr.io/${{ github.repository_owner }}/argws-connect-hub:${major}"
             echo "ghcr.io/${{ github.repository_owner }}/argws-connect-hub:latest"
-            echo "ghcr.io/${{ github.repository_owner }}/argws-connect-hub:sha-${{ needs.version-source.outputs.release_sha }}"
-            echo 'EOF'
+            echo "ghcr.io/${{ github.repository_owner }}/argws-connect-hub:sha-${{ needs.version-source.outputs.sha }}"
+            echo EOF
           } >> "$GITHUB_OUTPUT"
-      - name: Build and publish stable image
-        id: build
-        uses: docker/build-push-action@v6
+      - id: build
+        uses: docker/build-push-action@v7.3.0
         with:
           context: .
           file: docker/Dockerfile
           platforms: linux/amd64
           push: true
           build-args: |
-            GIT_SHA=${{ needs.version-source.outputs.release_sha }}
-          tags: ${{ steps.tags.outputs.value }}
-          labels: |
-            org.opencontainers.image.title=HUB
-            org.opencontainers.image.version=${{ needs.plan-version.outputs.version }}
-            org.opencontainers.image.revision=${{ needs.version-source.outputs.release_sha }}
-            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
-          cache-from: type=gha,scope=hub-release-amd64
-          cache-to: type=gha,mode=max,scope=hub-release-amd64
+            GIT_SHA=${{ needs.version-source.outputs.sha }}
+          tags: ${{ steps.meta.outputs.tags }}
           provenance: true
           sbom: true
-      - name: Save image digest
-        shell: bash
-        run: |
-          set -euo pipefail
-          {
-            echo "HUB ${{ needs.plan-version.outputs.version }}"
-            echo "Image: ghcr.io/${{ github.repository_owner }}/argws-connect-hub:${{ needs.plan-version.outputs.version }}"
-            echo "Architecture: linux/amd64"
-            echo "Digest: ${{ steps.build.outputs.digest }}"
-            echo "Revision: ${{ needs.version-source.outputs.release_sha }}"
-          } > IMAGE-DIGEST.txt
-      - name: Upload image digest report
-        uses: actions/upload-artifact@v4
-        with:
-          name: hub-image-digest
-          path: IMAGE-DIGEST.txt
-          retention-days: 30
-
-  release:
-    name: Tag and publish GitHub Release
-    needs: [plan-version, version-source, publish]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout versioned source
-        uses: actions/checkout@v5
-        with:
-          ref: ${{ needs.version-source.outputs.release_sha }}
-          fetch-depth: 0
-      - name: Download image digest report
-        uses: actions/download-artifact@v5
-        with:
-          name: hub-image-digest
-          path: release-assets
-      - name: Create immutable tag
-        shell: bash
-        run: |
-          set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag -a "${{ needs.plan-version.outputs.tag }}" "${{ needs.version-source.outputs.release_sha }}" \
-            -m "HUB ${{ needs.plan-version.outputs.tag }}"
-          git push origin "${{ needs.plan-version.outputs.tag }}"
-      - name: Create GitHub Release
+      - name: Tag and release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        shell: bash
         run: |
-          set -euo pipefail
-          gh release create "${{ needs.plan-version.outputs.tag }}" release-assets/IMAGE-DIGEST.txt \
-            --target "${{ needs.version-source.outputs.release_sha }}" \
-            --title "HUB ${{ needs.plan-version.outputs.tag }}" \
-            --generate-notes
+          git fetch --tags
+          git tag -a "${{ needs.plan.outputs.tag }}" "${{ needs.version-source.outputs.sha }}" -m "HUB ${{ needs.plan.outputs.tag }}"
+          git push origin "${{ needs.plan.outputs.tag }}"
+          gh release create "${{ needs.plan.outputs.tag }}" --target "${{ needs.version-source.outputs.sha }}" --title "HUB ${{ needs.plan.outputs.tag }}" --generate-notes

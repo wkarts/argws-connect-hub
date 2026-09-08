@@ -9,13 +9,8 @@ permissions:
   contents: read
   packages: read
 
-concurrency:
-  group: argws-connect-hub-infrastructure-verify
-  cancel-in-progress: false
-
 jobs:
   verify:
-    name: Verify required AMD64 GHCR images
     runs-on: ubuntu-latest
     steps:
       - name: Install skopeo
@@ -27,9 +22,7 @@ jobs:
       - name: Verify production infrastructure images
         env:
           OWNER: ${{ github.repository_owner }}
-        shell: bash
         run: |
           set -euo pipefail
           skopeo inspect --override-arch amd64 docker://ghcr.io/${OWNER}/hub-postgres:16-alpine >/dev/null
           skopeo inspect --override-arch amd64 docker://ghcr.io/${OWNER}/hub-redis:7-alpine >/dev/null
-          echo "Required HUB production infrastructure images are available in GHCR."

@@ -66,8 +66,6 @@ gem 'dotenv-rails', '>= 3.0.0'
 gem 'foreman'
 gem 'puma'
 gem 'webpacker'
-# metrics on heroku
-gem 'barnes'
 
 ##--- gems for authentication & authorization ---##
 gem 'devise', '>= 4.9.4'
@@ -99,16 +97,12 @@ gem 'slack-ruby-client', '~> 2.2.0'
 # for dialogflow integrations
 gem 'google-cloud-dialogflow-v2', '>= 0.24.0'
 gem 'grpc'
-# Keep the protobuf line compatible with grpc 1.x while using the Alpine/Ruby 3.3 build fix.
+# Alpine/Ruby 3.3 compatible protobuf patch release.
 gem 'google-protobuf', '3.25.8'
 # Translate integrations
 # 'google-cloud-translate' gem depends on faraday 2.0 version
 # this dependency breaks the slack-ruby-client gem
 gem 'google-cloud-translate-v3', '>= 0.7.0'
-
-##-- apm and error monitoring ---#
-# loaded only when environment variables are set.
-# ref application.rb
 
 ##-- background job processing --##
 gem 'sidekiq', '>= 7.3.1'

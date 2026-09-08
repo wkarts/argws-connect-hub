@@ -6,7 +6,6 @@ import hubConstants from 'dashboard/constants/globals';
 
 import InboxCard from './components/InboxCard.vue';
 import InboxListHeader from './components/InboxListHeader.vue';
-import { INBOX_EVENTS } from 'dashboard/helper/AnalyticsHelper/events';
 import IntersectionObserver from 'dashboard/components/IntersectionObserver.vue';
 import CmdBarConversationSnooze from 'dashboard/routes/dashboard/commands/CmdBarConversationSnooze.vue';
 
@@ -98,7 +97,6 @@ export default {
       this.page += 1;
     },
     markNotificationAsRead(notification) {
-      this.$track(INBOX_EVENTS.MARK_NOTIFICATION_AS_READ);
       const {
         id,
         primary_actor_id: primaryActorId,
@@ -116,7 +114,6 @@ export default {
         });
     },
     markNotificationAsUnRead(notification) {
-      this.$track(INBOX_EVENTS.MARK_NOTIFICATION_AS_UNREAD);
       this.redirectToInbox();
       const { id } = notification;
       this.$store
@@ -128,7 +125,6 @@ export default {
         });
     },
     deleteNotification(notification) {
-      this.$track(INBOX_EVENTS.DELETE_NOTIFICATION);
       this.redirectToInbox();
       this.$store
         .dispatch('notifications/delete', {

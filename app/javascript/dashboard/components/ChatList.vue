@@ -25,7 +25,6 @@ import {
   isOnMentionsView,
   isOnUnattendedView,
 } from '../store/modules/conversations/helpers/actionHelpers';
-import { CONVERSATION_EVENTS } from '../helper/AnalyticsHelper/events';
 import IntersectionObserver from './IntersectionObserver.vue';
 
 export default {
@@ -765,10 +764,6 @@ export default {
       this.$store
         .dispatch('assignPriority', { conversationId, priority })
         .then(() => {
-          this.$track(CONVERSATION_EVENTS.CHANGE_PRIORITY, {
-            newValue: priority,
-            from: 'Context menu',
-          });
           useAlert(
             this.$t('CONVERSATION.PRIORITY.CHANGE_PRIORITY.SUCCESSFUL', {
               priority,

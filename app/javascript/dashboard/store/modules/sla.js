@@ -1,8 +1,6 @@
 import * as MutationHelpers from 'shared/helpers/vuex/mutationHelpers';
 import types from '../mutation-types';
 import SlaAPI from '../../api/sla';
-import AnalyticsHelper from '../../helper/AnalyticsHelper';
-import { SLA_EVENTS } from '../../helper/AnalyticsHelper/events';
 import { throwErrorMessage } from '../utils/api';
 
 export const state = {
@@ -41,7 +39,6 @@ export const actions = {
     commit(types.SET_SLA_UI_FLAG, { isCreating: true });
     try {
       const response = await SlaAPI.create(slaObj);
-      AnalyticsHelper.track(SLA_EVENTS.CREATE);
       commit(types.ADD_SLA, response.data.payload);
     } catch (error) {
       throwErrorMessage(error);
@@ -54,7 +51,6 @@ export const actions = {
     commit(types.SET_SLA_UI_FLAG, { isDeleting: true });
     try {
       await SlaAPI.delete(id);
-      AnalyticsHelper.track(SLA_EVENTS.DELETED);
       commit(types.DELETE_SLA, id);
     } catch (error) {
       throwErrorMessage(error);

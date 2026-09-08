@@ -4,7 +4,6 @@ import { frontendURL } from '../helper/URLHelper';
 import dashboard from './dashboard/dashboard.routes';
 import store from '../store';
 import { validateLoggedInRoutes } from '../helper/routeHelpers';
-import AnalyticsHelper from '../helper/AnalyticsHelper';
 import { buildPermissionsFromRouter } from '../helper/permissionsHelper';
 
 const routes = [...dashboard.routes];
@@ -32,11 +31,6 @@ export const initalizeRouter = () => {
   const userAuthentication = store.dispatch('setUser');
 
   router.beforeEach((to, from, next) => {
-    AnalyticsHelper.page(to.name || '', {
-      path: to.path,
-      name: to.name,
-    });
-
     userAuthentication.then(() => {
       return validateAuthenticateRoutePermission(to, next, store);
     });

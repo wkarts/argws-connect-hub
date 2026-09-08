@@ -4,7 +4,7 @@ import {
   useStoreGetters,
   useMapGetter,
 } from 'dashboard/composables/store';
-import { useAlert, useTrack } from 'dashboard/composables';
+import { useAlert } from 'dashboard/composables';
 import { useI18n } from '../useI18n';
 import OpenAPI from 'dashboard/api/integrations/openapi';
 
@@ -12,11 +12,6 @@ vi.mock('dashboard/composables/store');
 vi.mock('dashboard/composables');
 vi.mock('../useI18n');
 vi.mock('dashboard/api/integrations/openapi');
-vi.mock('dashboard/helper/AnalyticsHelper/events', () => ({
-  OPEN_AI_EVENTS: {
-    TEST_EVENT: 'open_ai_test_event',
-  },
-}));
 
 describe('useAI', () => {
   const mockStore = {
@@ -40,7 +35,6 @@ describe('useAI', () => {
       };
       return { value: mockValues[getter] };
     });
-    useTrack.mockReturnValue(vi.fn());
     useI18n.mockReturnValue({ t: vi.fn() });
     useAlert.mockReturnValue(vi.fn());
   });
@@ -77,18 +71,6 @@ describe('useAI', () => {
     expect(mockStore.dispatch).not.toHaveBeenCalled();
   });
 
-  it('records analytics correctly', async () => {
-    const mockTrack = vi.fn();
-    useTrack.mockReturnValue(mockTrack);
-    const { recordAnalytics } = useAI();
-
-    await recordAnalytics('TEST_EVENT', { data: 'test' });
-
-    expect(mockTrack).toHaveBeenCalledWith('open_ai_test_event', {
-      type: 'TEST_EVENT',
-      data: 'test',
-    });
-  });
 
   it('fetches label suggestions', async () => {
     OpenAPI.processEvent.mockResolvedValue({

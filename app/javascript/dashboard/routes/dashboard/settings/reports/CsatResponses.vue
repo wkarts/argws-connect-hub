@@ -5,7 +5,6 @@ import CsatMetrics from './components/CsatMetrics.vue';
 import CsatTable from './components/CsatTable.vue';
 import ReportFilterSelector from './components/FilterSelector.vue';
 import { generateFileName } from '../../../../helper/downloadHelper';
-import { REPORTS_EVENTS } from '../../../../helper/AnalyticsHelper/events';
 import { FEATURE_FLAGS } from '../../../../featureFlags';
 
 export default {
@@ -88,10 +87,6 @@ export default {
     }) {
       // do not track filter change on inital load
       if (this.from !== 0 && this.to !== 0) {
-        this.$track(REPORTS_EVENTS.FILTER_REPORT, {
-          filterType: 'date',
-          reportType: 'csat',
-        });
       }
 
       this.from = from;

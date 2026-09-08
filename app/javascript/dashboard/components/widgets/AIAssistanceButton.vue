@@ -19,7 +19,7 @@ export default {
   setup(props, { emit }) {
     const { uiSettings, updateUISettings } = useUISettings();
 
-    const { isAIIntegrationEnabled, draftMessage, recordAnalytics } = useAI();
+    const { isAIIntegrationEnabled, draftMessage } = useAI();
 
     const { isAdmin } = useAdmin();
 
@@ -47,7 +47,6 @@ export default {
       isAdmin,
       initialMessage,
       initializeMessage,
-      recordAnalytics,
       isAIIntegrationEnabled,
       draftMessage,
     };
@@ -86,9 +85,6 @@ export default {
 
   methods: {
     hideAIAssistanceModal() {
-      this.recordAnalytics('DISMISS_AI_SUGGESTION', {
-        aiOption: this.aiOption,
-      });
       this.showAIAssistanceModal = false;
     },
     openAIAssist() {

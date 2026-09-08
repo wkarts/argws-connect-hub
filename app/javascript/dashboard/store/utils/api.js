@@ -2,8 +2,6 @@ import fromUnixTime from 'date-fns/fromUnixTime';
 import differenceInDays from 'date-fns/differenceInDays';
 import Cookies from 'js-cookie';
 import {
-  ANALYTICS_IDENTITY,
-  ANALYTICS_RESET,
   HUB_RESET,
   HUB_SET_USER,
 } from '../../helper/scriptHelpers';
@@ -20,7 +18,6 @@ export const setLoadingStatus = (state, status) => {
 
 export const setUser = user => {
   emitter.emit(HUB_SET_USER, { user });
-  emitter.emit(ANALYTICS_IDENTITY, { user });
 };
 
 export const getHeaderExpiry = response =>
@@ -72,7 +69,6 @@ export const deleteIndexedDBOnLogout = async () => {
 
 export const clearCookiesOnLogout = () => {
   emitter.emit(HUB_RESET);
-  emitter.emit(ANALYTICS_RESET);
   clearBrowserSessionCookies();
   clearLocalStorageOnLogout();
   const globalConfig = window.globalConfig || {};

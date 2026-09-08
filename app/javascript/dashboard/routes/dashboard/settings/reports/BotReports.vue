@@ -4,7 +4,6 @@ import BotMetrics from './components/BotMetrics.vue';
 import ReportFilterSelector from './components/FilterSelector.vue';
 import { GROUP_BY_FILTER } from './constants';
 import ReportContainer from './ReportContainer.vue';
-import { REPORTS_EVENTS } from '../../../../helper/AnalyticsHelper/events';
 
 export default {
   name: 'BotReports',
@@ -73,11 +72,6 @@ export default {
       this.groupBy = groupBy;
       this.businessHours = businessHours;
       this.fetchAllData();
-
-      this.$track(REPORTS_EVENTS.FILTER_REPORT, {
-        filterValue: { from, to, groupBy, businessHours },
-        reportType: 'bots',
-      });
     },
   },
 };

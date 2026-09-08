@@ -14,7 +14,7 @@ HUB é uma central omnichannel autogerenciada para atendimento e colaboração.
 
 ## Privacidade
 
-Esta distribuição não inclui telemetria privada, analytics de produto ou APM de terceiros. June, Segment Analytics, Sentry, Datadog, New Relic, Elastic APM e Scout APM foram removidos do runtime/build.
+O HUB não envia dados de uso ou eventos de produto para serviços externos.
 
 ## Connect|API
 

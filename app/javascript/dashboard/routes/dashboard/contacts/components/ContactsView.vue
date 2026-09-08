@@ -13,7 +13,6 @@ import contactFilterItems from '../contactFilterItems';
 import filterQueryGenerator from '../../../../helper/filterQueryGenerator';
 import AddCustomViews from 'dashboard/routes/dashboard/customviews/AddCustomViews.vue';
 import DeleteCustomViews from 'dashboard/routes/dashboard/customviews/DeleteCustomViews.vue';
-import { CONTACTS_EVENTS } from '../../../../helper/AnalyticsHelper/events';
 import countries from 'shared/constants/countries.js';
 import { generateValuesForEditCustomViews } from 'dashboard/helper/customViewsHelper';
 
@@ -271,11 +270,6 @@ export default {
 
       const sortBy =
         Object.entries(params).find(pair => Boolean(pair[1])) || [];
-
-      this.$track(CONTACTS_EVENTS.APPLY_SORT, {
-        appliedOn: sortBy[0],
-        order: sortBy[1],
-      });
     },
     onToggleFilters() {
       if (this.hasActiveSegments) {

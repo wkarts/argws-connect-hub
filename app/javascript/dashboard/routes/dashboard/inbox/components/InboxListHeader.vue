@@ -1,6 +1,5 @@
 <script>
 import { useAlert } from 'dashboard/composables';
-import { INBOX_EVENTS } from 'dashboard/helper/AnalyticsHelper/events';
 import InboxOptionMenu from './InboxOptionMenu.vue';
 import InboxDisplayMenu from './InboxDisplayMenu.vue';
 
@@ -34,7 +33,6 @@ export default {
   },
   methods: {
     markAllRead() {
-      this.$track(INBOX_EVENTS.MARK_ALL_NOTIFICATIONS_AS_READ);
       this.$store.dispatch('notifications/readAll').then(() => {
         useAlert(this.$t('INBOX.ALERTS.MARK_ALL_READ'));
       });

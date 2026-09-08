@@ -29,7 +29,6 @@ import { MESSAGE_MAX_LENGTH } from 'shared/helpers/MessageTypeHelper';
 import inboxMixin, { INBOX_FEATURES } from 'shared/mixins/inboxMixin';
 import { trimContent, debounce } from '@hub/utils';
 import hubConstants from 'dashboard/constants/globals';
-import { CONVERSATION_EVENTS } from '../../../helper/AnalyticsHelper/events';
 import fileUploadMixin from 'dashboard/mixins/fileUploadMixin';
 import {
   appendSignature,
@@ -490,8 +489,6 @@ export default {
           `${this.$t('CONVERSATION.REPLYBOX.INSERT_READ_MORE')} ${url}`
         );
       }
-
-      this.$track(CONVERSATION_EVENTS.INSERT_ARTICLE_LINK);
     },
     toggleRichContentEditor() {
       this.updateUISettings({
@@ -683,16 +680,6 @@ export default {
         this.sendMessage(messagePayload);
       });
     },
-    sendMessageAnalyticsData(isPrivate) {
-      // Analytics data for message signature is enabled or not in channels
-      return isPrivate
-        ? this.$track(CONVERSATION_EVENTS.SENT_PRIVATE_NOTE)
-        : this.$track(CONVERSATION_EVENTS.SENT_MESSAGE, {
-            channelType: this.channelType,
-            signatureEnabled: this.sendWithSignature,
-            hasReplyTo: !!this.inReplyTo?.id,
-          });
-    },
     async onSendReply() {
       const undefinedVariables = getUndefinedVariablesInMessage({
         message: this.message,
@@ -726,7 +713,6 @@ export default {
         this.$emitter.emit(BUS_EVENTS.SCROLL_TO_MESSAGE);
         this.$emitter.emit(BUS_EVENTS.MESSAGE_SENT);
         this.removeFromDraft();
-        this.sendMessageAnalyticsData(messagePayload.private);
       } catch (error) {
         const errorMessage =
           error?.response?.data?.error || this.$t('CONVERSATION.MESSAGE_ERROR');
@@ -754,7 +740,6 @@ export default {
       });
 
       setTimeout(() => {
-        this.$track(CONVERSATION_EVENTS.INSERTED_A_CANNED_RESPONSE);
         this.message = updatedMessage;
       }, 100);
     },

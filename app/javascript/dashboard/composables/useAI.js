@@ -4,9 +4,8 @@ import {
   useStoreGetters,
   useMapGetter,
 } from 'dashboard/composables/store';
-import { useAlert, useTrack } from 'dashboard/composables';
+import { useAlert } from 'dashboard/composables';
 import { useI18n } from './useI18n';
-import { OPEN_AI_EVENTS } from 'dashboard/helper/AnalyticsHelper/events';
 import OpenAPI from 'dashboard/api/integrations/openapi';
 
 /**
@@ -30,7 +29,6 @@ const cleanLabels = labels => {
 export function useAI() {
   const store = useStore();
   const getters = useStoreGetters();
-  const track = useTrack();
   const { t } = useI18n();
 
   /**
@@ -116,21 +114,6 @@ export function useAI() {
     }
   };
 
-  /**
-   * Records analytics for AI-related events.
-   * @param {string} type - The type of event.
-   * @param {Object} payload - Additional data for the event.
-   * @returns {Promise<void>}
-   */
-  const recordAnalytics = async (type, payload) => {
-    const event = OPEN_AI_EVENTS[type.toUpperCase()];
-    if (event) {
-      track(event, {
-        type,
-        ...payload,
-      });
-    }
-  };
 
   /**
    * Fetches label suggestions for the current conversation.
@@ -197,7 +180,6 @@ export function useAI() {
     isLabelSuggestionFeatureEnabled,
     isFetchingAppIntegrations,
     fetchIntegrationsIfRequired,
-    recordAnalytics,
     fetchLabelSuggestions,
     processEvent,
   };

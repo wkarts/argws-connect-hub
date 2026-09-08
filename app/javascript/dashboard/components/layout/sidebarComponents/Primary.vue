@@ -6,7 +6,6 @@ import AgentDetails from './AgentDetails.vue';
 import NotificationBell from './NotificationBell.vue';
 import hubConstants from 'dashboard/constants/globals';
 import { frontendURL } from 'dashboard/helper/URLHelper';
-import { ACCOUNT_EVENTS } from '../../../helper/AnalyticsHelper/events';
 
 export default {
   components: {
@@ -60,7 +59,6 @@ export default {
       window.$hub.toggle();
     },
     openNotificationPanel() {
-      this.$track(ACCOUNT_EVENTS.OPENED_NOTIFICATIONS);
       this.$emit('openNotificationPanel');
     },
   },

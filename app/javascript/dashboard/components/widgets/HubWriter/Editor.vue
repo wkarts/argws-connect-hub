@@ -39,7 +39,6 @@ import {
   replaceVariablesInMessage,
   createTypingIndicator,
 } from '@hub/utils';
-import { CONVERSATION_EVENTS } from '../../../helper/AnalyticsHelper/events';
 import { checkFileSizeLimit } from 'shared/helpers/FileHelper';
 import { uploadFile } from 'dashboard/helper/uploadHelper';
 import { useAlert } from 'dashboard/composables';
@@ -527,8 +526,6 @@ export default {
       });
 
       this.insertNodeIntoEditor(node, this.range.from, this.range.to);
-      this.$track(CONVERSATION_EVENTS.USED_MENTIONS);
-
       return false;
     },
     insertCannedResponse(cannedItem) {
@@ -551,8 +548,6 @@ export default {
           : this.range.from - 1;
 
       this.insertNodeIntoEditor(node, from, this.range.to);
-
-      this.$track(CONVERSATION_EVENTS.INSERTED_A_CANNED_RESPONSE);
       return false;
     },
     insertVariable(variable) {
@@ -566,7 +561,6 @@ export default {
 
       this.insertNodeIntoEditor(node, from, to);
       this.showVariables = false;
-      this.$track(CONVERSATION_EVENTS.INSERTED_A_VARIABLE);
       return false;
     },
     openFileBrowser() {

@@ -1,9 +1,7 @@
-# HUB — privacidade e telemetria
+# Privacidade do HUB
 
-Esta distribuição remove SDKs e agentes de analytics/APM de terceiros do runtime e do build: June/Segment Analytics, Sentry, Datadog/ddtrace, New Relic, Elastic APM, Scout APM, PostHog, Mixpanel, Amplitude, Google Analytics/gtag/GTM e Meta/Facebook Pixel.
+O HUB não inclui SDK, agente, pixel, coletor ou endpoint de telemetria/analytics de terceiros no runtime ou no build.
 
-`AnalyticsHelper` permanece apenas como shim local sem operações para compatibilidade com componentes legados e não transmite eventos.
+Logs operacionais permanecem locais à instalação e integrações funcionais só fazem comunicação externa quando configuradas explicitamente pelo administrador.
 
-O antigo serviço de hub/registro externo foi convertido em `HubPlatform`, implementação local sem chamadas de rede. Scripts arbitrários de dashboard não são injetados pela distribuição.
-
-Integrações explicitamente configuradas pelo administrador (Connect|API, SMTP/IMAP, webhooks, storage, Facebook/Instagram como canal etc.) continuam realizando as comunicações funcionais necessárias e não são classificadas como telemetria.
+Não existe telemetria de produto ativa por padrão. Uma eventual telemetria própria do HUB deverá ser implementada futuramente como recurso explícito e documentado.

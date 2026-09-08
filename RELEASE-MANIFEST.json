@@ -2,10 +2,11 @@
   "product": "HUB",
   "display_name": "🅷🆄🅱",
   "version": "1.0.0",
-  "release_channel": "stable",
+  "release_channel": "develop",
   "repository": "wkarts/argws-connect-hub",
   "image": "ghcr.io/wkarts/argws-connect-hub",
   "architecture": "linux/amd64",
   "ruby": "3.3.10",
-  "revision_date": "2026-09-08"
+  "revision_date": "2026-09-08",
+  "privacy": "third-party telemetry disabled and removed from shipped runtime"
 }

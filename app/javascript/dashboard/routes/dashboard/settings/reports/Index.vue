@@ -4,7 +4,6 @@ import fromUnixTime from 'date-fns/fromUnixTime';
 import format from 'date-fns/format';
 import ReportFilterSelector from './components/FilterSelector.vue';
 import { GROUP_BY_FILTER } from './constants';
-import { REPORTS_EVENTS } from '../../../../helper/AnalyticsHelper/events';
 import ReportContainer from './ReportContainer.vue';
 
 const REPORTS_KEYS = {
@@ -87,11 +86,6 @@ export default {
       this.groupBy = groupBy;
       this.businessHours = businessHours;
       this.fetchAllData();
-
-      this.$track(REPORTS_EVENTS.FILTER_REPORT, {
-        filterValue: { from, to, groupBy, businessHours },
-        reportType: 'conversations',
-      });
     },
   },
 };

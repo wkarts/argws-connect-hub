@@ -2,7 +2,7 @@ require 'rails_helper'
 
 RSpec.describe HubExceptionTracker do
   describe '#capture_exception' do
-    it 'logs locally without invoking an external telemetry service' do
+    it 'logs exceptions locally' do
       exception = StandardError.new('local failure')
       allow(exception).to receive(:backtrace).and_return(['line 1'])
       allow(Rails.logger).to receive(:error)

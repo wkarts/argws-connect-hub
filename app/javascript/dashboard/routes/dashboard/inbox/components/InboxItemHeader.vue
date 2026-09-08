@@ -5,7 +5,6 @@ import { getUnixTime } from 'date-fns';
 import { CMD_SNOOZE_NOTIFICATION } from 'dashboard/helper/commandbar/events';
 import hubConstants from 'dashboard/constants/globals';
 import { findSnoozeTime } from 'dashboard/helper/snoozeHelpers';
-import { INBOX_EVENTS } from 'dashboard/helper/AnalyticsHelper/events';
 import PaginationButton from './PaginationButton.vue';
 import CustomSnoozeModal from 'dashboard/components/CustomSnoozeModal.vue';
 
@@ -76,7 +75,6 @@ export default {
       }
     },
     deleteNotification() {
-      this.$track(INBOX_EVENTS.DELETE_NOTIFICATION);
       this.$store
         .dispatch('notifications/delete', {
           notification: this.activeNotification,

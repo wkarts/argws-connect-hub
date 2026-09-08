@@ -4,15 +4,13 @@ import { required } from '@vuelidate/validators';
 import { useAlert } from 'dashboard/composables';
 import { useUISettings } from 'dashboard/composables/useUISettings';
 import { useAI } from 'dashboard/composables/useAI';
-import { OPEN_AI_EVENTS } from 'dashboard/helper/AnalyticsHelper/events';
 
 export default {
   setup() {
     const { updateUISettings } = useUISettings();
-    const { recordAnalytics } = useAI();
     const v$ = useVuelidate();
 
-    return { updateUISettings, v$, recordAnalytics };
+    return { updateUISettings, v$ };
   },
   data() {
     return {
@@ -50,9 +48,6 @@ export default {
         await this.$store.dispatch('integrations/createHook', payload);
         this.alertMessage = this.$t(
           'INTEGRATION_SETTINGS.OPEN_AI.CTA_MODAL.SUCCESS_MESSAGE'
-        );
-        this.recordAnalytics(
-          OPEN_AI_EVENTS.ADDED_AI_INTEGRATION_VIA_CTA_BUTTON
         );
         this.onClose();
       } catch (error) {

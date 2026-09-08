@@ -6,7 +6,6 @@ import InboxContextMenu from './InboxContextMenu.vue';
 import Thumbnail from 'dashboard/components/widgets/Thumbnail.vue';
 import { dynamicTime, shortTimestamp } from 'shared/helpers/timeHelper';
 import { snoozedReopenTime } from 'dashboard/helper/snoozeHelpers';
-import { INBOX_EVENTS } from 'dashboard/helper/AnalyticsHelper/events';
 export default {
   components: {
     PriorityIcon,
@@ -106,10 +105,6 @@ export default {
       } = notification;
 
       if (this.$route.params.notification_id !== id) {
-        this.$track(INBOX_EVENTS.OPEN_CONVERSATION_VIA_INBOX, {
-          notificationType,
-        });
-
         this.$store.dispatch('notifications/read', {
           id,
           primaryActorId,

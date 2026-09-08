@@ -27,7 +27,6 @@ import {
 import FluentIcon from 'shared/components/FluentIcon/DashboardIcon';
 import VueDOMPurifyHTML from 'vue-dompurify-html';
 import { domPurifyConfig } from '../shared/helpers/HTMLSanitizer';
-import AnalyticsPlugin from '../dashboard/helper/AnalyticsHelper/plugin';
 import resizeDirective from '../dashboard/helper/directives/resize.js';
 import { directive as onClickaway } from 'vue-clickaway';
 
@@ -47,8 +46,6 @@ Vue.use(VTooltip, {
   defaultHtml: false,
 });
 Vue.use(hljs.vuePlugin);
-Vue.use(AnalyticsPlugin);
-
 Vue.component('multiselect', Multiselect);
 Vue.component('hub-switch', HubSwitch);
 Vue.component('hub-wizard', HubWizard);

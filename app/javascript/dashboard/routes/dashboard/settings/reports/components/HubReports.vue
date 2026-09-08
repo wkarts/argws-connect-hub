@@ -4,7 +4,6 @@ import ReportFilters from './ReportFilters.vue';
 import ReportContainer from '../ReportContainer.vue';
 import { GROUP_BY_FILTER } from '../constants';
 import { generateFileName } from '../../../../../helper/downloadHelper';
-import { REPORTS_EVENTS } from '../../../../../helper/AnalyticsHelper/events';
 
 const REPORTS_KEYS = {
   CONVERSATIONS: 'conversations_count',
@@ -116,10 +115,6 @@ export default {
     onDateRangeChange({ from, to, groupBy }) {
       // do not track filter change on inital load
       if (this.from !== 0 && this.to !== 0) {
-        this.$track(REPORTS_EVENTS.FILTER_REPORT, {
-          filterType: 'date',
-          reportType: this.type,
-        });
       }
 
       this.from = from;
@@ -145,12 +140,6 @@ export default {
     onGroupByFilterChange(payload) {
       this.groupBy = GROUP_BY_FILTER[payload.id];
       this.fetchAllData();
-
-      this.$track(REPORTS_EVENTS.FILTER_REPORT, {
-        filterType: 'groupBy',
-        filterValue: this.groupBy?.period,
-        reportType: this.type,
-      });
     },
     fetchFilterItems(groupBy) {
       switch (groupBy) {
@@ -167,12 +156,6 @@ export default {
     onBusinessHoursToggle(value) {
       this.businessHours = value;
       this.fetchAllData();
-
-      this.$track(REPORTS_EVENTS.FILTER_REPORT, {
-        filterType: 'businessHours',
-        filterValue: value,
-        reportType: this.type,
-      });
     },
   },
 };

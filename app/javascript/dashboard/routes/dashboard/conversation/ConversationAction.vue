@@ -7,7 +7,6 @@ import ContactDetailsItem from './ContactDetailsItem.vue';
 import MultiselectDropdown from 'shared/components/ui/MultiselectDropdown.vue';
 import ConversationLabels from './labels/LabelBox.vue';
 import { CONVERSATION_PRIORITY } from '../../../../shared/constants/messages';
-import { CONVERSATION_EVENTS } from '../../../helper/AnalyticsHelper/events';
 
 export default {
   components: {
@@ -128,11 +127,6 @@ export default {
         this.$store
           .dispatch('assignPriority', { conversationId, priority })
           .then(() => {
-            this.$track(CONVERSATION_EVENTS.CHANGE_PRIORITY, {
-              oldValue,
-              newValue: priority,
-              from: 'Conversation Sidebar',
-            });
             useAlert(
               this.$t('CONVERSATION.PRIORITY.CHANGE_PRIORITY.SUCCESSFUL', {
                 priority: priorityItem.name,

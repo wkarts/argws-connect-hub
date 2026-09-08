@@ -1,5 +1,4 @@
-# HUB intentionally keeps exception handling local.
-# External exception/telemetry collectors are not used.
+# HUB exception handling writes only to the local Rails logger.
 class HubExceptionTracker
   def initialize(exception, context: {})
     @exception = exception

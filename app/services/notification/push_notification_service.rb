@@ -9,7 +9,6 @@ class Notification::PushNotificationService
     notification_subscriptions.each do |subscription|
       send_browser_push(subscription)
       send_fcm_push(subscription)
-      send_push_via_hub_hub(subscription)
     end
   end
 
@@ -90,21 +89,10 @@ class Notification::PushNotificationService
     remove_subscription_if_error(subscription, response)
   end
 
-  def send_push_via_hub_hub(subscription)
-    return if firebase_credentials_present?
-    return unless hub_hub_enabled?
-    return unless subscription.fcm?
-
-    HubPlatform.send_push(fcm_options(subscription))
-  end
-
   def firebase_credentials_present?
     GlobalConfigService.load('FIREBASE_PROJECT_ID', nil) && GlobalConfigService.load('FIREBASE_CREDENTIALS', nil)
   end
 
-  def hub_hub_enabled?
-    ActiveModel::Type::Boolean.new.cast(ENV.fetch('ENABLE_PUSH_RELAY_SERVER', false))
-  end
 
   def remove_subscription_if_error(subscription, response)
     if JSON.parse(response[:body])['results']&.first&.keys&.include?('error')

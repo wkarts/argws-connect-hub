@@ -1,7 +1,7 @@
 name: ${COMPOSE_PROJECT_NAME:-hub}
 
 x-hub-base: &hub-base
-  image: ${HUB_IMAGE:-ghcr.io/wkarts/argws-connect-hub:latest}
+  image: ${HUB_IMAGE:-ghcr.io/wkarts/hub:latest}
   pull_policy: always
   platform: linux/amd64
   env_file: .env

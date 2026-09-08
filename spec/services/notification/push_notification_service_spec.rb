@@ -30,7 +30,6 @@ describe Notification::PushNotificationService do
       end
 
       it 'sends a fcm notification for firebase subscription' do
-        with_modified_env ENABLE_PUSH_RELAY_SERVER: 'false' do
           create(:notification_subscription, user: notification.user, subscription_type: 'fcm')
 
           described_class.new(notification: notification).perform
@@ -38,7 +37,6 @@ describe Notification::PushNotificationService do
           expect(fcm_double).to have_received(:send_v1)
           expect(WebPush).not_to have_received(:payload_send)
           expect(Rails.logger).to have_received(:info).with("FCM push sent to #{user.email} with title #{notification.push_message_title}")
-        end
       end
     end
   end

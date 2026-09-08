@@ -5,6 +5,6 @@
 - WhatsApp: provider visível único Connect|API.
 - Connect|API: QR Code, código de pareamento e façade Meta-compatible `/graph`.
 - E-mail: IMAP/SMTP, sincronização `BODY.PEEK[]`, mensagens mantidas no servidor e cópia de enviados em `Sent` para IMAP genérico.
-- Telemetria/analytics/APM privados de terceiros removidos/neutralizados.
+- Removidos coletores e hooks externos de dados de uso do produto.
 - Enterprise upstream removido do pacote redistribuível.
 - Deploy GHCR, `linux/amd64`.

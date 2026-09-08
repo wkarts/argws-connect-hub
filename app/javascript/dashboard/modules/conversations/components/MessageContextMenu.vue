@@ -5,10 +5,6 @@ import { useMessageFormatter } from 'shared/composables/useMessageFormatter';
 import AddCannedModal from 'dashboard/routes/dashboard/settings/canned/AddCanned.vue';
 import { copyTextToClipboard } from 'shared/helpers/clipboard';
 import { conversationUrl, frontendURL } from '../../../helper/URLHelper';
-import {
-  ACCOUNT_EVENTS,
-  CONVERSATION_EVENTS,
-} from '../../../helper/AnalyticsHelper/events';
 import TranslateModal from 'dashboard/components/widgets/conversation/bubble/TranslateModal.vue';
 import MenuItem from '../../../components/widgets/conversation/contextMenu/menuItem.vue';
 import ForwardModal from 'dashboard/components/widgets/conversation/bubble/ForwardModal.vue';
@@ -102,7 +98,6 @@ export default {
       this.handleClose();
     },
     showCannedResponseModal() {
-      this.$track(ACCOUNT_EVENTS.ADDED_TO_CANNED_RESPONSE);
       this.isCannedResponseModalOpen = true;
     },
     hideCannedResponseModal() {
@@ -122,7 +117,6 @@ export default {
         messageId: this.messageId,
         targetLanguage: locale || 'en',
       });
-      this.$track(CONVERSATION_EVENTS.TRANSLATE_A_MESSAGE);
       this.handleClose();
       this.showTranslateModal = true;
     },

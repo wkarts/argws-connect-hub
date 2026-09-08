@@ -2,7 +2,6 @@
 import '@hub/ninja-keys';
 import { ref, computed, watchEffect, onMounted } from 'vue';
 import { useStore } from 'dashboard/composables/store';
-import { useTrack } from 'dashboard/composables';
 import { useI18n } from 'dashboard/composables/useI18n';
 import { useAppearanceHotKeys } from 'dashboard/composables/commands/useAppearanceHotKeys';
 import { useInboxHotKeys } from 'dashboard/composables/commands/useInboxHotKeys';
@@ -10,10 +9,8 @@ import { useGoToCommandHotKeys } from 'dashboard/composables/commands/useGoToCom
 import { useBulkActionsHotKeys } from 'dashboard/composables/commands/useBulkActionsHotKeys';
 import { useConversationHotKeys } from 'dashboard/composables/commands/useConversationHotKeys';
 import hubConstants from 'dashboard/constants/globals';
-import { GENERAL_EVENTS } from 'dashboard/helper/AnalyticsHelper/events';
 
 const store = useStore();
-const track = useTrack();
 const { t } = useI18n();
 
 const ninjakeys = ref(null);
@@ -54,12 +51,6 @@ const onSelected = item => {
   } else {
     selectedSnoozeType.value = null;
   }
-
-  track(GENERAL_EVENTS.COMMAND_BAR, {
-    section,
-    action: title,
-  });
-
   setCommandBarData();
 };
 
