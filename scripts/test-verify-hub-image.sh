@@ -20,17 +20,31 @@ fi
 printf '%s|%s|%s\n' "$anonymous" "$*" "${DOCKER_CONFIG:-}" >> "$TEST_CALLS"
 case "$1 $2" in
   'buildx imagetools')
-    [[ "$3" == inspect && "$5" == --format && "$6" == '{{.Manifest.Digest}}' ]] || exit 93
+    # Match the documented Buildx JSON interface; never bless an invented template.
+    [[ "$3" == inspect && "$5" == --format && "$6" == '{{json .Manifest}}' ]] || exit 93
     if [[ "$TEST_CASE" == private && "$anonymous" == true ]]; then
       echo 'unauthorized: anonymous access denied' >&2; exit 1
     fi
-    if [[ "$TEST_CASE" == stale ]]; then
-      printf 'sha256:%064d\n' 0
-    elif [[ "$TEST_CASE" == retry && ! -f "$TEST_RETRIED" ]]; then
-      touch "$TEST_RETRIED"; echo 'temporary registry error' >&2; exit 1
-    else
-      echo "$EXPECTED_DIGEST"
+    if [[ "$TEST_CASE" == inspect-failure ]]; then
+      echo 'registry unavailable' >&2; exit 1
     fi
+    if [[ "$TEST_CASE" == retry && ! -f "$TEST_RETRIED" ]]; then
+      touch "$TEST_RETRIED"; echo 'temporary registry error' >&2; exit 1
+    fi
+    digest="$EXPECTED_DIGEST"
+    [[ "$TEST_CASE" != stale ]] || digest="sha256:$(printf '%064d' 0)"
+    case "$TEST_CASE" in
+      malformed-json) echo 'not JSON' ;;
+      missing-digest) echo '{"schemaVersion":2,"manifests":[]}' ;;
+      null-digest) echo '{"digest":null}' ;;
+      object-digest) echo '{"digest":{"unexpected":true}}' ;;
+      child-only) printf '{"manifests":[{"digest":"%s"}]}\n' "$digest" ;;
+      single-manifest)
+        printf '{"schemaVersion":2,"mediaType":"application/vnd.oci.image.manifest.v1+json","digest":"%s","config":{"digest":"sha256:%064d"},"layers":[]}\n' "$digest" 3 ;;
+      *)
+        # Index digest differs from platform and attestation digests.
+        printf '{"schemaVersion":2,"mediaType":"application/vnd.oci.image.index.v1+json","digest":"%s","manifests":[{"digest":"sha256:%064d","platform":{"os":"linux","architecture":"amd64"}},{"digest":"sha256:%064d","platform":{"os":"unknown","architecture":"unknown"}}]}\n' "$digest" 3 4 ;;
+    esac
     ;;
   'pull --platform')
     [[ "$3" == linux/amd64 && "$4" == "$IMAGE_REPOSITORY@$EXPECTED_DIGEST" ]] || exit 94
@@ -96,6 +110,11 @@ run_case private failure
 run_case private success false
 run_case stale failure
 ! grep -Fq '|pull ' "$TEST_CALLS"
+for scenario in inspect-failure malformed-json missing-digest null-digest object-digest child-only; do
+  run_case "$scenario" failure
+  ! grep -Fq '|pull ' "$TEST_CALLS"
+done
+run_case single-manifest success
 run_case pull-failure failure
 ! grep -Fq '|run ' "$TEST_CALLS"
 run_case bad-identity failure
