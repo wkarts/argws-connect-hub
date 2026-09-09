@@ -13,7 +13,7 @@ x-hub-base: &hub-base
   env_file: .env
   restart: unless-stopped
   volumes:
-    - storage-connec-hub:/app/storage
+    - ./data/storage:/app/storage
   networks:
     - network-connec-hub
   logging: *default-logging
@@ -84,7 +84,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USERNAME}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
-      - postgres-data-connec-hub:/var/lib/postgresql/data
+      - ./data/postgres:/var/lib/postgresql/data
     networks:
       - network-connec-hub
     healthcheck:
@@ -103,7 +103,7 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD}
     command: ['sh', '-c', 'redis-server --appendonly yes --requirepass "$$REDIS_PASSWORD"']
     volumes:
-      - redis-data-connec-hub:/data
+      - ./data/redis:/data
     networks:
       - network-connec-hub
     healthcheck:
@@ -112,14 +112,6 @@ services:
       timeout: 5s
       retries: 15
     logging: *default-logging
-
-volumes:
-  storage-connec-hub:
-    name: ${HUB_STORAGE_VOLUME_NAME:-storage-connec-hub}
-  postgres-data-connec-hub:
-    name: ${HUB_POSTGRES_VOLUME_NAME:-postgres-data-connec-hub}
-  redis-data-connec-hub:
-    name: ${HUB_REDIS_VOLUME_NAME:-redis-data-connec-hub}
 
 networks:
   network-connec-hub:
