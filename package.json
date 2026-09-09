@@ -1,6 +1,6 @@
 {
   "name": "@wkarts/hub",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "license": "UNLICENSED",
   "scripts": {
     "eslint": "eslint app/**/*.{js,vue}",
