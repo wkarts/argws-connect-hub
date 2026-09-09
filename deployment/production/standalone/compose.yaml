@@ -13,7 +13,7 @@ x-hub-base: &hub-base
   env_file: .env
   restart: unless-stopped
   volumes:
-    - ./data/storage:/app/storage
+    - ${HUB_STORAGE_DATA_PATH:-./volumes/storage}:/app/storage
   networks:
     - network-connec-hub
   logging: *default-logging
@@ -84,7 +84,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USERNAME}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
-      - ./data/postgres:/var/lib/postgresql/data
+      - ${HUB_POSTGRES_DATA_PATH:-./volumes/postgres}:/var/lib/postgresql/data
     networks:
       - network-connec-hub
     healthcheck:
@@ -103,7 +103,7 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD}
     command: ['sh', '-c', 'redis-server --appendonly yes --requirepass "$$REDIS_PASSWORD"']
     volumes:
-      - ./data/redis:/data
+      - ${HUB_REDIS_DATA_PATH:-./volumes/redis}:/data
     networks:
       - network-connec-hub
     healthcheck:
