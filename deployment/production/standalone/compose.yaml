@@ -63,7 +63,9 @@ services:
     command: ['bundle', 'exec', 'sidekiq', '-C', 'config/sidekiq.yml']
 
   postgres-connec-hub:
-    image: ${HUB_POSTGRES_IMAGE:-postgres:16-alpine}
+    # Pinned to the official public image. This intentionally ignores legacy
+    # HUB_POSTGRES_IMAGE values left in existing .env files.
+    image: postgres:16-alpine
     container_name: postgres-connec-hub
     platform: linux/amd64
     restart: unless-stopped
@@ -83,7 +85,9 @@ services:
     logging: *default-logging
 
   redis-connec-hub:
-    image: ${HUB_REDIS_IMAGE:-redis:7-alpine}
+    # Pinned to the official public image. This intentionally ignores legacy
+    # HUB_REDIS_IMAGE values left in existing .env files.
+    image: redis:7-alpine
     container_name: redis-connec-hub
     platform: linux/amd64
     restart: unless-stopped
