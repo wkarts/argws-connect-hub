@@ -48,6 +48,9 @@ jobs:
       - name: Validate source and deployments
         run: bash ./scripts/validate-hub-ci.sh
 
+      - name: Test image publication verification
+        run: bash ./scripts/test-verify-hub-image.sh
+
   build:
     name: Build and publish HUB develop / amd64
     needs: validate
@@ -144,11 +147,17 @@ jobs:
           provenance: true
           sbom: true
 
-      - name: Verify develop tag was published
-        shell: bash
-        run: |
-          set -euo pipefail
-          image="ghcr.io/${{ github.repository_owner }}/argws-connect-hub:develop"
-          docker buildx imagetools inspect "$image" >/dev/null
-          echo "Published $image"
-          echo "Digest: ${{ steps.build.outputs.digest }}"
+      - name: Verify final develop image and anonymous pull
+        timeout-minutes: 15
+        env:
+          IMAGE_REPOSITORY: ghcr.io/${{ github.repository_owner }}/argws-connect-hub
+          IMAGE_TAGS: |
+            ghcr.io/${{ github.repository_owner }}/argws-connect-hub:develop
+            ghcr.io/${{ github.repository_owner }}/argws-connect-hub:develop-${{ steps.versions.outputs.short_sha }}
+            ghcr.io/${{ github.repository_owner }}/argws-connect-hub:sha-${{ github.sha }}
+          EXPECTED_DIGEST: ${{ steps.build.outputs.digest }}
+          EXPECTED_VERSION: ${{ steps.versions.outputs.develop }}
+          EXPECTED_REVISION: ${{ github.sha }}
+          EXPECTED_CHANNEL: develop
+          HUB_IMAGE_REQUIRE_ANONYMOUS_PULL: ${{ vars.HUB_IMAGE_REQUIRE_ANONYMOUS_PULL || 'true' }}
+        run: bash ./scripts/verify-hub-image.sh
