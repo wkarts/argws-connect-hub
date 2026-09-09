@@ -9,7 +9,7 @@ import {
 describe('#getUserCookieName', () => {
   it('returns correct cookie name', () => {
     global.$hub = { websiteToken: '123456' };
-    expect(getUserCookieName()).toBe('cw_user_123456');
+    expect(getUserCookieName()).toBe('hub_user_123456');
   });
 });
 

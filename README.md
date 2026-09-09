@@ -1,20 +1,16 @@
 # 🅷🆄🅱
 
-## Release
+HUB é uma plataforma privada de comunicação, atendimento e colaboração multicanal.
 
-**3.12.8-hub.1** — Comunicação sem limites.
+## Canais
 
-HUB é uma central omnichannel autogerenciada para atendimento e colaboração.
-
-## Canais desta distribuição
-
-- **WhatsApp — Connect|API**: QR Code, código de pareamento, envio/recebimento, mídia, replies, reactions e compatibilidade Meta Cloud fornecida pela própria Connect|API.
-- **E-mail — IMAP/SMTP**: recebe e envia usando servidores padrão (Mailcow, Dovecot/Postfix, cPanel, Plesk, Gmail/Microsoft via OAuth quando configurados). O servidor IMAP permanece como fonte física/autoridade da caixa postal; o HUB mantém os registros de conversa necessários para atendimento sem remover a mensagem remota.
-- Demais canais do núcleo open-source permanecem disponíveis quando configurados.
+- **WhatsApp — Connect|API**: QR Code, código de pareamento, mensagens, mídia, replies, reactions e chamadas quando o provider oferecer suporte.
+- **E-mail — IMAP/SMTP**: recebimento e envio por servidores padrão; o servidor IMAP continua sendo a autoridade física da caixa postal.
+- Outros canais podem ser habilitados por integrações próprias do HUB.
 
 ## Privacidade
 
-O HUB não envia dados de uso ou eventos de produto para serviços externos.
+O HUB não envia telemetria de produto para serviços externos por padrão.
 
 ## Connect|API
 
@@ -25,16 +21,42 @@ CONNECT_API_BASE_URL=https://api.connect.exemplo.com
 CONNECT_API_AUTH_TOKEN=troque-pelo-token-global-da-connect-api
 ```
 
-O token global é usado somente no backend para provisionamento. Cada inbox recebe uma credencial própria para operar sua instância e a façade Meta-compatible `/graph`.
+O token global permanece no backend. Sessões de mídia usam tickets temporários quando o recurso está disponível na Connect|API.
 
-## E-mail
+## Dependências
 
-Cada inbox de e-mail pode usar IMAP e SMTP próprios. A sincronização IMAP usa `BODY.PEEK[]` para não marcar mensagens como lidas apenas por sincronizá-las. Em contas IMAP/SMTP genéricas, mensagens entregues com sucesso por SMTP são anexadas à pasta remota de enviados.
+O build do HUB não instala gems diretamente de repositórios Git e não depende de pacotes de namespaces externos específicos do produto.
+
+Pacotes específicos do produto são mantidos no próprio repositório:
+
+```text
+packages/hub-utils
+packages/hub-editor
+packages/hub-command-palette
+```
+
+As dependências Ruby e JavaScript ficam pré-instaladas na imagem imutável `argws-connect-hub-deps-base`, reconstruída somente quando manifests/locks/pacotes locais mudam.
+
+## Namespace interno
+
+Cookies, parâmetros, IDs DOM, caches e chaves internas usam prefixos `hub_` / `hub-`.
+
+Não existe camada de compatibilidade com os identificadores antigos: novas instalações começam com dados novos.
 
 ## Containers
 
-A distribuição está preparada para publicação AMD64 no GitHub Container Registry (GHCR). Consulte `docs/HUB-DEPLOYMENT.md`.
+Consulte `docs/HUB-DEPLOYMENT.md`.
 
-## Licença
+A aplicação usa três bases independentes de release da aplicação:
 
-O núcleo comunitário continua sob os termos de sua licença open-source aplicável e preserva os avisos legais do upstream. O diretório Enterprise do upstream não faz parte deste pacote redistribuível.
+```text
+argws-connect-hub-build-base
+argws-connect-hub-deps-base
+argws-connect-hub-runtime-base
+```
+
+`develop` e releases utilizam a mesma família de bases imutáveis.
+
+## Licenciamento
+
+O produto HUB é mantido como produto privado. Bibliotecas de terceiros continuam sujeitas às respectivas licenças. Avisos legais existentes devem ser avaliados pela origem efetiva do código antes de qualquer remoção.

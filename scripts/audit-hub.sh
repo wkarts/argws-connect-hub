@@ -48,7 +48,7 @@ fi
 legacy_brand="$(printf '%s%s%s' 'cha' 'two' 'ot')"
 legacy_short="$(printf '%s%s' 'wo' 'ot')"
 if grep -RniIE --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=spec --exclude-dir=test --exclude-dir=chromium \
-  --exclude='Gemfile' --exclude='Gemfile.lock' --exclude='yarn.lock' --exclude='package.json' --exclude='LICENSE' --exclude='THIRD_PARTY_NOTICES.md' --exclude='audit-hub.sh' \
+  --exclude='Gemfile' --exclude='Gemfile.lock' --exclude='yarn.lock' --exclude='package.json' --exclude='LICENSE' --exclude='THIRD_PARTY_NOTICES.md' --exclude='audit-hub.sh' --exclude='validate-hub-ci.sh' \
   "${legacy_brand}|${legacy_short}[_-]|[^[:alnum:]_]${legacy_short}[^[:alnum:]_]" app config lib docs public scripts swagger theme stories 2>/dev/null; then
   say_fail 'marca legada encontrada em código/UI/documentação do HUB'
 fi

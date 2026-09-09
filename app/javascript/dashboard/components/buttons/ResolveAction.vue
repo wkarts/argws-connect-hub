@@ -77,8 +77,8 @@ const getConversationParams = () => {
 };
 
 const openSnoozeModal = () => {
-  const ninja = document.querySelector('ninja-keys');
-  ninja.open({ parent: 'snooze_conversation' });
+  const commandPalette = document.querySelector('hub-command-palette');
+  commandPalette.open({ parent: 'snooze_conversation' });
 };
 
 const toggleStatus = (status, snoozedUntil) => {

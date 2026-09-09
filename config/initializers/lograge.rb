@@ -5,7 +5,7 @@ if ActiveModel::Type::Boolean.new.cast(ENV.fetch('LOGRAGE_ENABLED', false)).pres
     config.lograge.enabled = true
     config.lograge.formatter = Lograge::Formatters::Json.new
     config.lograge.custom_payload do |controller|
-      # Fixes upstream compatibility note
+      # Fixes compatibility note
       user_id = controller.try(:current_user).try(:id) unless controller.is_a?(SuperAdmin::Devise::SessionsController)
       {
         host: controller.request.host,

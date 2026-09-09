@@ -17,7 +17,7 @@ class BaseMarkdownRenderer < CommonMarker::HtmlRenderer
 
   def extract_image_height(src)
     query_params = parse_query_params(src)
-    query_params['cw_image_height']&.first
+    query_params['hub_image_height']&.first
   end
 
   def parse_query_params(url)

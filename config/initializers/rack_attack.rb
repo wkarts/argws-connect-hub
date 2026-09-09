@@ -125,8 +125,8 @@ class Rack::Attack
     end
 
     ## Prevent Conversation Bombing through multiple sessions
-    throttle('widget?website_token={website_token}&cw_conversation={x-auth-token}', limit: 5, period: 1.hour) do |req|
-      req.ip if req.path_without_extentions == '/widget' && ActionDispatch::Request.new(req.env).params['cw_conversation'].blank?
+    throttle('widget?website_token={website_token}&hub_conversation={x-auth-token}', limit: 5, period: 1.hour) do |req|
+      req.ip if req.path_without_extentions == '/widget' && ActionDispatch::Request.new(req.env).params['hub_conversation'].blank?
     end
   end
 

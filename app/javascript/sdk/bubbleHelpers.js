@@ -62,7 +62,7 @@ export const createBubbleHolder = hideMessageBubble => {
   }
   addClasses(bubbleHolder, 'hub--bubble-holder');
   bubbleHolder.style = 'overflow: hidden;';
-  bubbleHolder.id = 'cw-bubble-holder';
+  bubbleHolder.id = 'hub-bubble-holder';
   body.appendChild(bubbleHolder);
 };
 

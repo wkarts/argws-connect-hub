@@ -26,9 +26,9 @@ describe('#buildSearchParamsWithLocale', () => {
 
 describe('#getLocale', () => {
   it('returns correct locale', () => {
-    expect(getLocale('?test=1&cw_conv=2&locale=fr')).toEqual('fr');
+    expect(getLocale('?test=1&hub_conv=2&locale=fr')).toEqual('fr');
     expect(getLocale('?test=1&locale=fr')).toEqual('fr');
-    expect(getLocale('?test=1&cw_conv=2&website_token=3&locale=fr')).toEqual(
+    expect(getLocale('?test=1&hub_conv=2&website_token=3&locale=fr')).toEqual(
       'fr'
     );
     expect(getLocale('')).toEqual(null);
@@ -45,7 +45,7 @@ describe('#buildPopoutURL', () => {
         locale: 'ar',
       })
     ).toEqual(
-      'https://hub.com/widget?cw_conversation=random-jwt-token&website_token=random-website-token&locale=ar'
+      'https://hub.com/widget?hub_conversation=random-jwt-token&website_token=random-website-token&locale=ar'
     );
   });
 });

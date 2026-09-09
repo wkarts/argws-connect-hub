@@ -38,7 +38,7 @@ A Connect|API é outra plataforma, possui build, imagens e versionamento própri
 
 ## Serviços Connect|API embutidos
 
-A Connect|API continua sendo uma plataforma independente. O sufixo abaixo identifica apenas a colocação dela dentro da stack do HUB e evita colisões de `service`/`container_name` com outras stacks.
+A Connect|API continua sendo uma plataforma independente. O sufixo identifica apenas a colocação dela dentro da stack do HUB e evita colisões de `service`/`container_name` com outras stacks.
 
 ### Produção
 
@@ -68,9 +68,9 @@ A Connect|API continua sendo uma plataforma independente. O sufixo abaixo identi
 | ZooKeeper opcional | `zookeeper-connect-api-hub-develop` |
 | Kafka opcional | `kafka-connect-api-hub-develop` |
 
-Todos os hosts internos da Connect|API usam os mesmos nomes. Em produção, por exemplo, o HUB usa `http://connect-api-hub:8080`, a API acessa `postgres-connect-api-hub`, `redis-connect-api-hub`, `rabbitmq-connect-api-hub` e `minio-connect-api-hub`. Em development são usados os equivalentes com `-develop`.
+Todos os hosts internos da Connect|API usam os mesmos nomes. Em produção, por exemplo, o HUB usa `http://connect-api-hub:8080`, e a API acessa `postgres-connect-api-hub`, `redis-connect-api-hub`, `rabbitmq-connect-api-hub` e `minio-connect-api-hub`. Em development são usados os equivalentes com `-develop`.
 
-Os nomes lógicos dos volumes persistentes da Connect|API foram preservados para que uma atualização de nomenclatura de containers não crie storage vazio acidentalmente. O Compose continua isolando esses volumes pelo `COMPOSE_PROJECT_NAME` da stack.
+Os nomes lógicos dos volumes persistentes da Connect|API permanecem separados dos volumes do HUB. O Compose continua isolando os volumes pelo `COMPOSE_PROJECT_NAME` da stack.
 
 ## Deployments oficiais
 
@@ -86,15 +86,16 @@ deployment/
 
 `standalone` usa uma Connect|API externa.
 
-`embedded-connect-api` coloca HUB + Connect|API na mesma stack, mas mantém persistências e imagens independentes.
+`embedded-connect-api` coloca HUB + Connect|API na mesma stack, mas mantém persistências, serviços e imagens independentes.
 
-## Imagens-base imutáveis do HUB
+## Família de imagens-base imutáveis do HUB
 
-O HUB usa duas bases com ciclo de vida próprio:
+O HUB usa três bases com ciclo de vida próprio e uma única versão de infraestrutura:
 
 ```text
-ghcr.io/wkarts/argws-connect-hub-build-base:1.0.0
-ghcr.io/wkarts/argws-connect-hub-runtime-base:1.0.0
+ghcr.io/wkarts/argws-connect-hub-build-base:1.1.0
+ghcr.io/wkarts/argws-connect-hub-deps-base:1.1.0
+ghcr.io/wkarts/argws-connect-hub-runtime-base:1.1.0
 ```
 
 A versão vem de:
@@ -103,23 +104,57 @@ A versão vem de:
 docker/base/VERSION
 ```
 
-A mesma base é usada por `develop` e por releases estáveis. Não existem bases `develop` e `production` diferentes.
+A mesma família de bases é usada por `develop` e por releases estáveis. Não existem bases diferentes para development e production.
 
-Uma base é reconstruída somente quando `docker/base/**` muda ou quando o workflow é executado manualmente. A tag é imutável: se o conteúdo da definição mudar sem incremento de `docker/base/VERSION`, o workflow falha em vez de sobrescrever a tag existente.
+As tags são imutáveis. Se uma definição mudar mantendo uma tag já publicada, o workflow falha e exige incremento de `docker/base/VERSION`.
 
 ### Build base
 
-Contém toolchain e dependências de sistema necessárias para construir o HUB: Ruby/Ruby headers, compiladores, PostgreSQL development headers, Node/Yarn, Git, Vips development headers e Bundler.
+Contém apenas a toolchain e bibliotecas de sistema necessárias para compilar dependências e assets: Ruby/Ruby headers, compiladores, PostgreSQL development headers, Node/Yarn, Git, Vips development headers e Bundler.
+
+### Dependency base
+
+Parte da build base e instala, uma única vez por definição de dependências:
+
+- gems de `Gemfile.lock` em `/gems`;
+- módulos de `yarn.lock` em `/app/node_modules`;
+- pacotes próprios `packages/**`.
+
+A definição da dependency base usa somente campos de dependência do `package.json`, evitando reconstrução apenas porque a versão SemVer do aplicativo mudou.
 
 ### Runtime base
 
-Contém somente dependências necessárias para executar a aplicação: Ruby, OpenSSL, timezone, PostgreSQL client, ImageMagick, Git, Vips e Bundler.
+Contém somente bibliotecas e executáveis necessários para executar o HUB em produção: Ruby, OpenSSL, timezone, PostgreSQL client, ImageMagick/Vips e Bundler. Git e toolchain de compilação não fazem parte do runtime.
 
-## Cache de dependências
+## Quando cada base muda
 
-O `docker/Dockerfile` copia `Gemfile/Gemfile.lock` e `package.json/yarn.lock` antes do restante do código. Dessa forma, alterações apenas em `app/`, `config/` etc. reutilizam as camadas de `bundle install` e `yarn install` pelo cache BuildKit/GitHub Actions.
+`build-base` e `runtime-base` são publicados quando muda `docker/base/**` e a versão de base é incrementada.
 
-Uma mudança em `Gemfile.lock` ou `yarn.lock` invalida somente a camada de dependências correspondente, sem reconstruir o sistema operacional/base.
+`deps-base` também depende de:
+
+- `Gemfile`;
+- `Gemfile.lock`;
+- dependências/resolutions/engines do `package.json`;
+- `yarn.lock`;
+- `packages/**`.
+
+Uma alteração apenas em `app/`, `config/`, views, controllers ou outros arquivos da aplicação **não executa `bundle install` nem `yarn install`**.
+
+## Build da aplicação
+
+O `docker/Dockerfile` começa diretamente em `argws-connect-hub-deps-base`. Portanto um build normal faz essencialmente:
+
+```text
+copiar fonte do HUB
+      ↓
+compilar assets (produção)
+      ↓
+remover dependências exclusivas de build/dev
+      ↓
+copiar aplicação + gems para runtime-base
+```
+
+A imagem de produção remove os grupos Ruby `development/test` e remove `node_modules` depois do asset precompile. Development mantém o superset da dependency base.
 
 ## Validação sem imagem descartável
 
@@ -129,16 +164,17 @@ A validação executa:
 
 - auditoria do HUB;
 - sintaxe Ruby;
-- sintaxe dos scripts Node de release;
+- sintaxe JavaScript dos scripts e pacotes próprios;
 - `bash -n` nos scripts shell;
 - JSON básico de release/package;
+- política de dependências e namespaces;
 - consistência da versão das imagens-base;
-- `docker compose config` nos quatro deployments;
+- `docker compose config` nos quatro deployments quando Docker Compose está disponível;
 - validação dos nomes dos cinco serviços pertencentes ao HUB;
-- validação do namespace completo dos nove serviços Connect|API nas duas variantes embutidas;
-- validação de `container_name` explícito igual ao nome do serviço, evitando colisões entre stacks.
+- validação do namespace completo dos serviços Connect|API nas variantes embutidas;
+- validação de `container_name` explícito igual ao nome do serviço.
 
-O build de imagem só ocorre após uma validação bem-sucedida em `develop` ou no fluxo de release da `main`.
+O build da imagem da aplicação só ocorre após validação bem-sucedida em `develop` ou no fluxo de release da `main`.
 
 ## Fluxo develop
 
@@ -147,13 +183,15 @@ push/merge develop
       │
       ├─ validação sem docker build
       │
-      └─ build real uma vez
+      ├─ se necessário: publicar nova base imutável
+      │
+      └─ build real da aplicação uma vez
              │
              ├─ :develop
              └─ :sha-<commit>
 ```
 
-Se uma nova versão de base estiver sendo publicada no mesmo push, o build da aplicação aguarda a disponibilidade das duas bases imutáveis.
+O build da aplicação aguarda `deps-base` e `runtime-base` da versão declarada em `docker/base/VERSION`.
 
 ## Fluxo release
 
@@ -167,11 +205,12 @@ main
  ├─ configurar identidade Git
  ├─ persistir commit de versão [skip release]
  ├─ preflight de tag anotada
+ ├─ aguardar bases imutáveis
  ├─ construir/publicar imagem real UMA vez
  └─ criar tag + GitHub Release em job separado
 ```
 
-O job de tag/release não constrói imagem. Se somente esse job falhar, ele pode ser reexecutado sem repetir o build da imagem.
+O job de tag/release não constrói imagem. Se somente ele falhar, pode ser reexecutado sem repetir o build da imagem.
 
 ## Correção do erro `Committer identity unknown`
 
@@ -190,13 +229,14 @@ A criação final é idempotente: se a tag já existir no SHA esperado, ela é m
 
 ## Atualização de uma base
 
-Quando Ruby/Alpine/Bundler/libs nativas precisarem mudar:
+Quando Ruby/Alpine/Bundler/libs nativas ou dependências do HUB precisarem mudar:
 
-1. altere `docker/base/build/Dockerfile` e/ou `docker/base/runtime/Dockerfile`;
-2. incremente `docker/base/VERSION`;
+1. altere a definição necessária;
+2. incremente `docker/base/VERSION` se a tag atual já estiver publicada;
 3. abra PR normalmente;
-4. após merge em `develop`, o workflow publica a nova base;
-5. o build `:develop` passa a utilizá-la;
-6. quando `develop` for promovida a `main`, a mesma base já validada é reutilizada pela release.
+4. a PR valida fonte e definições sem montar imagem descartável;
+5. após merge, o workflow publica a nova família de bases necessária;
+6. o build da aplicação passa a reutilizar as bases publicadas;
+7. a mesma versão de base segue para a release.
 
-Não vincule a versão da base à versão do HUB. Elas têm ciclos de vida independentes.
+Não vincule a versão da base à versão do HUB. Aplicação e infraestrutura têm ciclos de vida independentes.

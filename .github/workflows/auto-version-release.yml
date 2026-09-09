@@ -224,7 +224,7 @@ jobs:
           base_version="$(tr -d '[:space:]' < docker/base/VERSION)"
           [[ "$base_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
           echo "version=$base_version" >> "$GITHUB_OUTPUT"
-          echo "build=ghcr.io/${{ github.repository_owner }}/argws-connect-hub-build-base:${base_version}" >> "$GITHUB_OUTPUT"
+          echo "deps=ghcr.io/${{ github.repository_owner }}/argws-connect-hub-deps-base:${base_version}" >> "$GITHUB_OUTPUT"
           echo "runtime=ghcr.io/${{ github.repository_owner }}/argws-connect-hub-runtime-base:${base_version}" >> "$GITHUB_OUTPUT"
 
       - name: Set up Buildx
@@ -240,18 +240,18 @@ jobs:
       - name: Wait for immutable HUB bases
         shell: bash
         env:
-          BUILD_BASE: ${{ steps.bases.outputs.build }}
+          DEPS_BASE: ${{ steps.bases.outputs.deps }}
           RUNTIME_BASE: ${{ steps.bases.outputs.runtime }}
         run: |
           set -euo pipefail
-          for image in "$BUILD_BASE" "$RUNTIME_BASE"; do
+          for image in "$DEPS_BASE" "$RUNTIME_BASE"; do
             ready=false
-            for attempt in $(seq 1 60); do
+            for attempt in $(seq 1 180); do
               if docker buildx imagetools inspect "$image" >/dev/null 2>&1; then
                 ready=true
                 break
               fi
-              echo "Waiting for $image ($attempt/60)..."
+              echo "Waiting for $image ($attempt/180)..."
               sleep 10
             done
             [[ "$ready" == true ]] || {
@@ -289,7 +289,7 @@ jobs:
           push: true
           build-args: |
             GIT_SHA=${{ needs.version-source.outputs.sha }}
-            HUB_BUILD_BASE_IMAGE=${{ steps.bases.outputs.build }}
+            HUB_DEPS_BASE_IMAGE=${{ steps.bases.outputs.deps }}
             HUB_RUNTIME_BASE_IMAGE=${{ steps.bases.outputs.runtime }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: |

@@ -3,8 +3,7 @@ name: HUB - Full Source Package
 on:
   workflow_dispatch:
   push:
-    branches:
-      - hub/ci-base-images-release-hardening
+    branches: [develop, main]
 
 permissions:
   contents: read

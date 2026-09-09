@@ -158,11 +158,11 @@ class Messages::Instagram::MessageBuilder < Messages::Messenger::MessageBuilder
   end
 
   def already_sent_from_hub?
-    cw_message = conversation.messages.where(
+    hub_message = conversation.messages.where(
       source_id: @messaging[:message][:mid]
     ).first
 
-    cw_message.present?
+    hub_message.present?
   end
 
   def all_unsupported_files?

@@ -31,9 +31,9 @@
   "dependencies": {
     "@braid/vue-formulate": "^2.5.2",
     "@hcaptcha/vue-hcaptcha": "^0.3.2",
-    "@hub/ninja-keys": "npm:@chatwoot/ninja-keys@1.2.3",
-    "@hub/prosemirror-schema": "npm:@chatwoot/prosemirror-schema@1.0.11",
-    "@hub/utils": "npm:@chatwoot/utils@^0.0.25",
+    "@hub/command-palette": "file:packages/hub-command-palette",
+    "@hub/editor": "file:packages/hub-editor",
+    "@hub/utils": "file:packages/hub-utils",
     "@radix-ui/colors": "^1.0.1",
     "@rails/actioncable": "6.1.3",
     "@rails/ujs": "^7.0.3-1",
@@ -163,5 +163,6 @@
     "*.scss": [
       "scss-lint"
     ]
-  }
+  },
+  "private": true
 }

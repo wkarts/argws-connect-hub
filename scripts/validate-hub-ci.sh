@@ -15,15 +15,14 @@ fi
 
 if command -v ruby >/dev/null 2>&1; then
   echo "Validating Ruby syntax..."
-  find app config lib db/migrate spec -type f -name '*.rb' -print0 2>/dev/null \
-    | xargs -0 -r -n1 ruby -c >/dev/null
+  ruby ./scripts/check-ruby-syntax.rb app config lib db/migrate spec
 fi
 
 if command -v node >/dev/null 2>&1; then
   echo "Validating release scripts..."
   while IFS= read -r -d '' file; do
     node --check "$file" >/dev/null
-  done < <(find .github/scripts scripts -type f \( -name '*.js' -o -name '*.mjs' -o -name '*.cjs' \) -print0 2>/dev/null)
+  done < <(find .github/scripts scripts packages -type f \( -name '*.js' -o -name '*.mjs' -o -name '*.cjs' \) -print0 2>/dev/null)
 fi
 
 echo "Validating shell scripts..."
@@ -35,10 +34,42 @@ base_version="$(tr -d '[:space:]' < docker/base/VERSION)"
 [[ "$base_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] \
   || fail "docker/base/VERSION must be SemVer X.Y.Z"
 
-grep -Fq "argws-connect-hub-build-base:${base_version}" docker/Dockerfile \
-  || fail "docker/Dockerfile does not reference build base ${base_version}"
+grep -Fq "argws-connect-hub-deps-base:${base_version}" docker/Dockerfile \
+  || fail "docker/Dockerfile does not reference dependency base ${base_version}"
 grep -Fq "argws-connect-hub-runtime-base:${base_version}" docker/Dockerfile \
   || fail "docker/Dockerfile does not reference runtime base ${base_version}"
+
+
+# HUB source policy: no operational dependency or runtime namespace may point back
+# to the historical vendor project. Legal notices are intentionally not rewritten
+# by this technical gate.
+legacy_vendor='chat''woot'
+legacy_namespace='c''w_|c''w-|C''W_'
+if grep -RInI \
+  --exclude-dir=.git \
+  --exclude-dir=node_modules \
+  --exclude-dir=vendor/bundle \
+  --exclude=LICENSE \
+  --exclude=THIRD_PARTY_NOTICES.md \
+  -i "$legacy_vendor" Gemfile Gemfile.lock package.json yarn.lock app config lib packages docker deployment scripts .github 2>/dev/null; then
+  fail "operational historical-vendor reference detected"
+fi
+
+if grep -RInI \
+  --exclude-dir=.git \
+  --exclude-dir=node_modules \
+  --exclude-dir=vendor \
+  -E "$legacy_namespace" app config lib packages docker deployment scripts .github spec 2>/dev/null; then
+  fail "legacy runtime namespace detected; HUB uses hub_* / hub-* only"
+fi
+
+if grep -Eq 'git:|github\.com' Gemfile; then
+  fail "Gemfile must not install gems directly from Git repositories"
+fi
+
+for package in packages/hub-utils packages/hub-editor packages/hub-command-palette; do
+  [[ -f "$package/package.json" ]] || fail "missing local HUB package $package"
+done
 
 for json in package.json RELEASE-MANIFEST.json; do
   [[ -f "$json" ]] || continue

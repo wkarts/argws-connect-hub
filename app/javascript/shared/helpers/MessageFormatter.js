@@ -5,7 +5,7 @@ const setImageHeight = inlineToken => {
   const imgSrc = inlineToken.attrGet('src');
   if (!imgSrc) return;
   const url = new URL(imgSrc);
-  const height = url.searchParams.get('cw_image_height');
+  const height = url.searchParams.get('hub_image_height');
   if (!height) return;
   inlineToken.attrSet('style', `height: ${height};`);
 };
@@ -20,7 +20,7 @@ const processInlineToken = blockToken => {
 
 const imgResizeManager = md => {
   // Custom rule for image resize in markdown
-  // If the image url has a query param cw_image_height, then add a style attribute to the image
+  // If the image url has a query param hub_image_height, then add a style attribute to the image
   md.core.ruler.after('inline', 'add-image-height', state => {
     state.tokens.forEach(blockToken => {
       if (blockToken.type === 'inline') {

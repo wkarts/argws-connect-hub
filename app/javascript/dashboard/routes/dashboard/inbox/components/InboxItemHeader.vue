@@ -41,8 +41,8 @@ export default {
   },
   methods: {
     openSnoozeNotificationModal() {
-      const ninja = document.querySelector('ninja-keys');
-      ninja.open({ parent: 'snooze_notification' });
+      const commandPalette = document.querySelector('hub-command-palette');
+      commandPalette.open({ parent: 'snooze_notification' });
     },
     hideCustomSnoozeModal() {
       this.showCustomSnoozeModal = false;

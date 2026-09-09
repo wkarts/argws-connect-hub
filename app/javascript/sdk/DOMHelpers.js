@@ -4,7 +4,7 @@ import { IFrameHelper } from './IFrameHelper';
 export const loadCSS = () => {
   const css = document.createElement('style');
   css.innerHTML = `${SDK_CSS}`;
-  css.id = 'cw-widget-styles';
+  css.id = 'hub-widget-styles';
   document.body.appendChild(css);
 };
 
@@ -21,9 +21,9 @@ export const restoreElement = (id, newBody) => {
 };
 
 export const restoreWidgetInDOM = newBody => {
-  restoreElement('cw-bubble-holder', newBody);
-  restoreElement('cw-widget-holder', newBody);
-  restoreElement('cw-widget-styles', newBody);
+  restoreElement('hub-bubble-holder', newBody);
+  restoreElement('hub-widget-holder', newBody);
+  restoreElement('hub-widget-styles', newBody);
 };
 
 export const addClasses = (elm, classes) => {

@@ -1,5 +1,5 @@
 <script setup>
-import '@hub/ninja-keys';
+import '@hub/command-palette';
 import { ref, computed, watchEffect, onMounted } from 'vue';
 import { useStore } from 'dashboard/composables/store';
 import { useI18n } from 'dashboard/composables/useI18n';
@@ -13,7 +13,7 @@ import hubConstants from 'dashboard/constants/globals';
 const store = useStore();
 const { t } = useI18n();
 
-const ninjakeys = ref(null);
+const commandPalette = ref(null);
 
 // Added selectedSnoozeType to track the selected snooze type
 // So if the selected snooze type is "custom snooze" then we set selectedSnoozeType with the CMD action id
@@ -37,7 +37,7 @@ const hotKeys = computed(() => [
 ]);
 
 const setCommandBarData = () => {
-  ninjakeys.value.data = hotKeys.value;
+  commandPalette.value.data = hotKeys.value;
 };
 
 const onSelected = item => {
@@ -65,8 +65,8 @@ const onClosed = () => {
 };
 
 watchEffect(() => {
-  if (ninjakeys.value) {
-    ninjakeys.value.data = hotKeys.value;
+  if (commandPalette.value) {
+    commandPalette.value.data = hotKeys.value;
   }
 });
 
@@ -75,8 +75,8 @@ onMounted(setCommandBarData);
 
 <!-- eslint-disable vue/attribute-hyphenation -->
 <template>
-  <ninja-keys
-    ref="ninjakeys"
+  <hub-command-palette
+    ref="commandPalette"
     noAutoLoadMdIcons
     hideBreadcrumbs
     :placeholder="placeholder"
@@ -86,24 +86,24 @@ onMounted(setCommandBarData);
 </template>
 
 <style lang="scss">
-ninja-keys {
-  --ninja-accent-color: var(--w-500);
-  --ninja-font-family: 'PlusJakarta';
+hub-command-palette {
+  --hub-command-accent-color: var(--w-500);
+  --hub-command-font-family: 'PlusJakarta';
   z-index: 9999;
 }
 
 // Wrapped with body.dark to avoid overriding the default theme
 // If OS is in dark theme and app is in light mode, It will prevent showing dark theme in command bar
 body.dark {
-  ninja-keys {
-    --ninja-overflow-background: rgba(26, 29, 30, 0.5);
-    --ninja-modal-background: #151718;
-    --ninja-secondary-background-color: #26292b;
-    --ninja-selected-background: #26292b;
-    --ninja-footer-background: #2b2f31;
-    --ninja-text-color: #f8faf9;
-    --ninja-icon-color: #f8faf9;
-    --ninja-secondary-text-color: #c2c9c6;
+  hub-command-palette {
+    --hub-command-overflow-background: rgba(26, 29, 30, 0.5);
+    --hub-command-modal-background: #151718;
+    --hub-command-secondary-background-color: #26292b;
+    --hub-command-selected-background: #26292b;
+    --hub-command-footer-background: #2b2f31;
+    --hub-command-text-color: #f8faf9;
+    --hub-command-icon-color: #f8faf9;
+    --hub-command-secondary-text-color: #c2c9c6;
   }
 }
 </style>

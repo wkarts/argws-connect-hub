@@ -10,8 +10,8 @@ export class DataManager {
 
   async initDb() {
     if (this.db) return this.db;
-    const dbName = `cw-store-${this.accountId}`;
-    this.db = await openDB(`cw-store-${this.accountId}`, DATA_VERSION, {
+    const dbName = `hub-store-${this.accountId}`;
+    this.db = await openDB(`hub-store-${this.accountId}`, DATA_VERSION, {
       upgrade(db) {
         db.createObjectStore('cache-keys');
         db.createObjectStore('inbox', { keyPath: 'id' });
@@ -21,10 +21,10 @@ export class DataManager {
     });
 
     // Store the database name in LocalStorage
-    const dbNames = JSON.parse(localStorage.getItem('cw-idb-names') || '[]');
+    const dbNames = JSON.parse(localStorage.getItem('hub-idb-names') || '[]');
     if (!dbNames.includes(dbName)) {
       dbNames.push(dbName);
-      localStorage.setItem('cw-idb-names', JSON.stringify(dbNames));
+      localStorage.setItem('hub-idb-names', JSON.stringify(dbNames));
     }
 
     return this.db;

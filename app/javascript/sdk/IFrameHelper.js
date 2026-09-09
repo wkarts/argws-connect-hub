@@ -34,13 +34,13 @@ import { popoutChatWindow } from '../widget/helpers/popoutHelper';
 import addHours from 'date-fns/addHours';
 
 const updateAuthCookie = (cookieContent, baseDomain = '') =>
-  setCookieWithDomain('cw_conversation', cookieContent, {
+  setCookieWithDomain('hub_conversation', cookieContent, {
     baseDomain,
   });
 
 const updateCampaignReadStatus = baseDomain => {
   const expireBy = addHours(new Date(), 1);
-  setCookieWithDomain('cw_snooze_campaigns_till', Number(expireBy), {
+  setCookieWithDomain('hub_snooze_campaigns_till', Number(expireBy), {
     expires: expireBy,
     baseDomain,
   });
@@ -57,10 +57,10 @@ export const IFrameHelper = {
 
     loadCSS();
     const iframe = document.createElement('iframe');
-    const cwCookie = Cookies.get('cw_conversation');
+    const hubCookie = Cookies.get('hub_conversation');
     let widgetUrl = IFrameHelper.getUrl({ baseUrl, websiteToken });
-    if (cwCookie) {
-      widgetUrl = `${widgetUrl}&cw_conversation=${cwCookie}`;
+    if (hubCookie) {
+      widgetUrl = `${widgetUrl}&hub_conversation=${hubCookie}`;
     }
     iframe.src = widgetUrl;
     iframe.allow =
@@ -77,7 +77,7 @@ export const IFrameHelper = {
     }
 
     addClasses(widgetHolder, holderClassName);
-    widgetHolder.id = 'cw-widget-holder';
+    widgetHolder.id = 'hub-widget-holder';
     widgetHolder.appendChild(iframe);
     body.appendChild(widgetHolder);
     IFrameHelper.initPostMessageCommunication();
@@ -151,7 +151,7 @@ export const IFrameHelper = {
     loaded: message => {
       updateAuthCookie(message.config.authToken, window.$hub.baseDomain);
       window.$hub.hasLoaded = true;
-      const campaignsSnoozedTill = Cookies.get('cw_snooze_campaigns_till');
+      const campaignsSnoozedTill = Cookies.get('hub_snooze_campaigns_till');
       IFrameHelper.sendMessage('config-set', {
         locale: window.$hub.locale,
         position: window.$hub.position,
@@ -215,9 +215,9 @@ export const IFrameHelper = {
     },
 
     popoutChatWindow: ({ baseUrl, websiteToken, locale }) => {
-      const cwCookie = Cookies.get('cw_conversation');
+      const hubCookie = Cookies.get('hub_conversation');
       window.$hub.toggle('close');
-      popoutChatWindow(baseUrl, websiteToken, locale, cwCookie);
+      popoutChatWindow(baseUrl, websiteToken, locale, hubCookie);
     },
 
     closeWindow: () => {

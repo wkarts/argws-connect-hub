@@ -5,7 +5,7 @@ const REQUIRED_USER_KEYS = ['avatar_url', 'email', 'name'];
 const ALLOWED_USER_ATTRIBUTES = [...REQUIRED_USER_KEYS, 'identifier_hash'];
 
 export const getUserCookieName = () => {
-  const SET_USER_COOKIE_PREFIX = 'cw_user_';
+  const SET_USER_COOKIE_PREFIX = 'hub_user_';
   const { websiteToken: websiteIdentifier } = window.$hub;
   return `${SET_USER_COOKIE_PREFIX}${websiteIdentifier}`;
 };

@@ -28,20 +28,20 @@ describe('#MessageFormatter', () => {
     });
   });
 
-  describe('content with image and has "cw_image_height" query at the end of URL', () => {
+  describe('content with image and has "hub_image_height" query at the end of URL', () => {
     it('should set image height correctly', () => {
       const message =
-        'Hub is an opensource tool. ![](http://hub.com/hub.png?cw_image_height=24px)';
+        'Hub is an opensource tool. ![](http://hub.com/hub.png?hub_image_height=24px)';
       expect(new MessageFormatter(message).formattedMessage).toMatch(
-        '<p>Hub is an opensource tool. <img src="http://hub.com/hub.png?cw_image_height=24px" alt="" style="height: 24px;" /></p>'
+        '<p>Hub is an opensource tool. <img src="http://hub.com/hub.png?hub_image_height=24px" alt="" style="height: 24px;" /></p>'
       );
     });
 
     it('should set image height correctly if its original size', () => {
       const message =
-        'Hub is an opensource tool. ![](http://hub.com/hub.png?cw_image_height=auto)';
+        'Hub is an opensource tool. ![](http://hub.com/hub.png?hub_image_height=auto)';
       expect(new MessageFormatter(message).formattedMessage).toMatch(
-        '<p>Hub is an opensource tool. <img src="http://hub.com/hub.png?cw_image_height=auto" alt="" style="height: auto;" /></p>'
+        '<p>Hub is an opensource tool. <img src="http://hub.com/hub.png?hub_image_height=auto" alt="" style="height: auto;" /></p>'
       );
     });
 

@@ -21,4 +21,4 @@ jobs:
           ruby-version: '3.3.10'
           bundler-cache: false
       - name: Ruby syntax
-        run: find app config lib db/migrate -type f -name '*.rb' -print0 | xargs -0 -n1 ruby -c >/dev/null
+        run: ruby ./scripts/check-ruby-syntax.rb app config lib db/migrate

@@ -34,8 +34,8 @@ const updateConversations = key => {
   if (key === 'snoozed') {
     // If the user clicks on the snooze option from the bulk action change status dropdown.
     // Open the snooze option for bulk action in the cmd bar.
-    const ninja = document.querySelector('ninja-keys');
-    ninja?.open({ parent: 'bulk_action_snooze_conversation' });
+    const commandPalette = document.querySelector('hub-command-palette');
+    commandPalette?.open({ parent: 'bulk_action_snooze_conversation' });
   } else {
     emit('update', key);
   }

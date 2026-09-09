@@ -184,7 +184,7 @@ const runSDK = ({ baseUrl, websiteToken }) => {
         IFrameHelper.events.toggleBubble();
       }
 
-      Cookies.remove('cw_conversation');
+      Cookies.remove('hub_conversation');
       Cookies.remove(getUserCookieName());
 
       const iframe = IFrameHelper.getAppFrame();

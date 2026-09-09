@@ -16,7 +16,7 @@ ENV BUNDLER_VERSION=${BUNDLER_VERSION}
 ENV BUNDLE_PATH=/gems
 
 RUN apk update && apk add --no-cache \
-      ruby openssl tzdata postgresql-client imagemagick git vips \
+      ruby openssl tzdata postgresql-client imagemagick vips \
     && ruby --version \
     && gem install bundler -v "${BUNDLER_VERSION}" --no-document \
     && mkdir -p /app /gems \

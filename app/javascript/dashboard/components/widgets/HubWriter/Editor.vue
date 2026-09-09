@@ -7,11 +7,11 @@ import {
   MessageMarkdownSerializer,
   EditorState,
   Selection,
-} from '@hub/prosemirror-schema';
+} from '@hub/editor';
 import {
   suggestionsPlugin,
   triggerCharacters,
-} from '@hub/prosemirror-schema/src/mentions/plugin';
+} from '@hub/editor/src/mentions/plugin';
 import { BUS_EVENTS } from 'shared/constants/busEvents';
 
 import TagAgents from '../conversation/TagAgents.vue';
@@ -723,7 +723,7 @@ export default {
 </template>
 
 <style lang="scss">
-@import '~@hub/prosemirror-schema/src/styles/base.scss';
+@import '~@hub/editor/src/styles/base.scss';
 
 .ProseMirror-menubar-wrapper {
   @apply flex flex-col;

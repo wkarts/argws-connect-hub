@@ -97,7 +97,7 @@ describe Integrations::Slack::SendOnSlackService do
 
         builder.perform
 
-        expect(message.external_source_id_slack).to eq 'cw-origin-6789.12345'
+        expect(message.external_source_id_slack).to eq 'hub-origin-6789.12345'
       end
 
       it 'sent message will send to the the previous thread if the slack disconnects and connects to a same channel.' do
@@ -176,7 +176,7 @@ describe Integrations::Slack::SendOnSlackService do
 
         builder.perform
 
-        expect(message.external_source_id_slack).to eq 'cw-origin-6789.12345'
+        expect(message.external_source_id_slack).to eq 'hub-origin-6789.12345'
         expect(message.attachments).to be_any
       end
 
@@ -195,7 +195,7 @@ describe Integrations::Slack::SendOnSlackService do
 
         builder.perform
 
-        expect(template_message.external_source_id_slack).to eq 'cw-origin-6789.12345'
+        expect(template_message.external_source_id_slack).to eq 'hub-origin-6789.12345'
       end
 
       it 'sent a activity message on slack' do
@@ -213,7 +213,7 @@ describe Integrations::Slack::SendOnSlackService do
         ).and_return(slack_message)
 
         builder.perform
-        expect(template_message.external_source_id_slack).to eq 'cw-origin-6789.12345'
+        expect(template_message.external_source_id_slack).to eq 'hub-origin-6789.12345'
       end
 
       it 'disables hook on Slack AccountInactive error' do

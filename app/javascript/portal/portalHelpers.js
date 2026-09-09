@@ -8,7 +8,7 @@ import { directive as onClickaway } from 'vue-clickaway';
 
 export const getHeadingsfromTheArticle = () => {
   const rows = [];
-  const articleElement = document.getElementById('cw-article-content');
+  const articleElement = document.getElementById('hub-article-content');
   articleElement.querySelectorAll('h1, h2, h3').forEach(element => {
     const slug = slugifyWithCounter(element.innerText);
     element.id = slug;
@@ -31,7 +31,7 @@ export const openExternalLinksInNewTab = () => {
 
   // Modify external links only on articles page
   const isOnArticlePage =
-    isSameHost && document.querySelector('#cw-article-content') !== null;
+    isSameHost && document.querySelector('#hub-article-content') !== null;
 
   document.addEventListener('click', event => {
     if (!isOnArticlePage) return;
@@ -90,13 +90,13 @@ export const InitializationHelpers = {
   },
 
   initializeTableOfContents: () => {
-    const isOnArticlePage = document.querySelector('#cw-hc-toc');
+    const isOnArticlePage = document.querySelector('#hub-hc-toc');
     if (isOnArticlePage) {
       new Vue({
         components: { TableOfContents },
         data: { rows: getHeadingsfromTheArticle() },
         template: '<table-of-contents :rows="rows" />',
-      }).$mount('#cw-hc-toc');
+      }).$mount('#hub-hc-toc');
     }
   },
 

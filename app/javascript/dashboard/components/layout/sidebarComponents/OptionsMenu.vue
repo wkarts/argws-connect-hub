@@ -59,8 +59,8 @@ export default {
       if (this.show) this.$emit('close');
     },
     openAppearanceOptions() {
-      const ninja = document.querySelector('ninja-keys');
-      ninja.open({ parent: 'appearance_settings' });
+      const commandPalette = document.querySelector('hub-command-palette');
+      commandPalette.open({ parent: 'appearance_settings' });
     },
   },
 };
