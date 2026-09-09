@@ -318,7 +318,7 @@ jobs:
           EXPECTED_VERSION: ${{ needs.plan.outputs.version }}
           EXPECTED_REVISION: ${{ needs.version-source.outputs.sha }}
           EXPECTED_CHANNEL: stable
-          HUB_IMAGE_REQUIRE_ANONYMOUS_PULL: ${{ vars.HUB_IMAGE_REQUIRE_ANONYMOUS_PULL || 'true' }}
+          HUB_IMAGE_REQUIRE_ANONYMOUS_PULL: ${{ vars.HUB_IMAGE_REQUIRE_ANONYMOUS_PULL || 'false' }}
         run: bash ./scripts/verify-hub-image.sh
 
   release:
