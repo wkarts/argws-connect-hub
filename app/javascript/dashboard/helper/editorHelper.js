@@ -2,7 +2,7 @@ import {
   messageSchema,
   MessageMarkdownTransformer,
   MessageMarkdownSerializer,
-} from '@hub/prosemirror-schema';
+} from '@hub/editor';
 
 /**
  * The delimiter used to separate the signature from the rest of the body.

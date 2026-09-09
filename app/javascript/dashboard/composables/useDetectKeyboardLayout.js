@@ -62,12 +62,12 @@ async function detect() {
  * @returns {Promise<string>} A promise that resolves to the detected keyboard layout.
  */
 export async function useDetectKeyboardLayout() {
-  const cachedLayout = window.cw_keyboard_layout;
+  const cachedLayout = window.hub_keyboard_layout;
   if (cachedLayout) {
     return cachedLayout;
   }
 
   const layout = navigator.keyboard ? await detect() : await detectLegacy();
-  window.cw_keyboard_layout = layout;
+  window.hub_keyboard_layout = layout;
   return layout;
 }

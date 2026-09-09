@@ -37,7 +37,7 @@ RSpec.describe 'Captain Integrations API', type: :request do
       end
 
       it 'returns sso url if hook is available' do
-        InstallationConfig.where(name: 'CAPTAIN_APP_URL').first_or_create(value: 'https://app.hub.com')
+        InstallationConfig.where(name: 'CAPTAIN_APP_URL').first_or_create(value: 'https://app.hub.invalid')
 
         hook = create(:integrations_hook, account: account, app_id: 'captain', settings: {
                         access_token: SecureRandom.hex,
@@ -58,7 +58,7 @@ RSpec.describe 'Captain Integrations API', type: :request do
                         "&email=#{URI.encode_www_form_component(hook['settings']['account_email'])}" \
                         "&account_id=#{URI.encode_www_form_component(hook['settings']['account_id'])}"
 
-        sso_url = "https://app.hub.com/sso?#{params_string}"
+        sso_url = "https://app.hub.invalid/sso?#{params_string}"
         expect(data['sso_url']).to eq(sso_url)
       end
     end

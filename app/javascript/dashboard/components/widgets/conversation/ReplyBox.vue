@@ -564,8 +564,8 @@ export default {
         '$mod+KeyK': {
           action: e => {
             e.preventDefault();
-            const ninja = document.querySelector('ninja-keys');
-            ninja.open();
+            const commandPalette = document.querySelector('hub-command-palette');
+            commandPalette.open();
           },
           allowOnFocusedInput: true,
         },
@@ -992,7 +992,7 @@ export default {
 
       // there might be a situation where the current conversation will include a message from a third person,
       // and the current conversation contact is in CC.
-      // This is an edge-case, reported here: CW-1511 [ONLY FOR INTERNAL REFERENCE]
+      // Preserve this branch for the known edge case handled below.
       // So we remove the current conversation contact's email from the CC list if present
       if (cc.includes(conversationContact)) {
         cc = cc.filter(email => email !== conversationContact);

@@ -25,6 +25,6 @@ class HtmlParser
   end
 
   def filtered_text
-    @filtered_text ||= Html2Text.convert(filtered_html)
+    @filtered_text ||= Hub::HtmlToText.convert(filtered_html)
   end
 end

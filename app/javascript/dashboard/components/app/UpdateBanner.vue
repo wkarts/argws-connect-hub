@@ -72,7 +72,7 @@ export default {
     v-if="shouldShowBanner"
     color-scheme="primary"
     :banner-message="bannerMessage"
-    href-link="https://github.com/sendingtk/hub/releases"
+    href-link="https://github.com/wkarts/argws-connect-hub/releases"
     :href-link-text="$t('GENERAL_SETTINGS.LEARN_MORE')"
     has-close-button
     @close="dismissUpdateBanner"

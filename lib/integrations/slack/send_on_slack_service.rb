@@ -163,7 +163,7 @@ class Integrations::Slack::SendOnSlackService < Base::SendOnChannelService
   def update_external_source_id_slack
     return unless @slack_message['message']
 
-    message.update!(external_source_id_slack: "cw-origin-#{@slack_message['message']['ts']}")
+    message.update!(external_source_id_slack: "hub-origin-#{@slack_message['message']['ts']}")
   end
 
   def slack_client

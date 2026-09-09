@@ -13,29 +13,29 @@ describe('#Campaigns Helper', () => {
     it('returns correct value if a valid URL is passed', () => {
       expect(
         isPatternMatchingWithURL(
-          'https://hub.com/pricing*',
-          'https://hub.com/pricing/'
+          'https://hub.invalid/pricing*',
+          'https://hub.invalid/pricing/'
         )
       ).toBe(true);
 
       expect(
         isPatternMatchingWithURL(
-          'https://*.hub.com/pricing/',
-          'https://app.hub.com/pricing/'
+          'https://*.hub.invalid/pricing/',
+          'https://app.hub.invalid/pricing/'
         )
       ).toBe(true);
 
       expect(
         isPatternMatchingWithURL(
           'https://{*.}?hub.com/pricing?test=true',
-          'https://app.hub.com/pricing/?test=true'
+          'https://app.hub.invalid/pricing/?test=true'
         )
       ).toBe(true);
 
       expect(
         isPatternMatchingWithURL(
           'https://{*.}?hub.com/pricing*\\?*',
-          'https://hub.com/pricing/?test=true'
+          'https://hub.invalid/pricing/?test=true'
         )
       ).toBe(true);
     });
@@ -48,13 +48,13 @@ describe('#Campaigns Helper', () => {
           id: 1,
           timeOnPage: 3,
           triggerOnlyDuringBusinessHours: false,
-          url: 'https://www.hub.com/pricing',
+          url: 'https://www.hub.invalid/pricing',
         },
         {
           id: 2,
           triggerOnlyDuringBusinessHours: false,
           timeOnPage: 6,
-          url: 'https://www.hub.com/about',
+          url: 'https://www.hub.invalid/about',
         },
       ]);
     });
@@ -67,23 +67,23 @@ describe('#Campaigns Helper', () => {
             {
               id: 1,
               timeOnPage: 3,
-              url: 'https://www.hub.com/pricing',
+              url: 'https://www.hub.invalid/pricing',
               triggerOnlyDuringBusinessHours: false,
             },
             {
               id: 2,
               timeOnPage: 6,
-              url: 'https://www.hub.com/about',
+              url: 'https://www.hub.invalid/about',
               triggerOnlyDuringBusinessHours: false,
             },
           ],
-          currentURL: 'https://www.hub.com/about/',
+          currentURL: 'https://www.hub.invalid/about/',
         })
       ).toStrictEqual([
         {
           id: 2,
           timeOnPage: 6,
-          url: 'https://www.hub.com/about',
+          url: 'https://www.hub.invalid/about',
           triggerOnlyDuringBusinessHours: false,
         },
       ]);
@@ -95,24 +95,24 @@ describe('#Campaigns Helper', () => {
             {
               id: 1,
               timeOnPage: 3,
-              url: 'https://www.hub.com/pricing',
+              url: 'https://www.hub.invalid/pricing',
               triggerOnlyDuringBusinessHours: false,
             },
             {
               id: 2,
               timeOnPage: 6,
-              url: 'https://www.hub.com/about',
+              url: 'https://www.hub.invalid/about',
               triggerOnlyDuringBusinessHours: true,
             },
           ],
-          currentURL: 'https://www.hub.com/about/',
+          currentURL: 'https://www.hub.invalid/about/',
           isInBusinessHours: true,
         })
       ).toStrictEqual([
         {
           id: 2,
           timeOnPage: 6,
-          url: 'https://www.hub.com/about',
+          url: 'https://www.hub.invalid/about',
           triggerOnlyDuringBusinessHours: true,
         },
       ]);
@@ -124,17 +124,17 @@ describe('#Campaigns Helper', () => {
             {
               id: 1,
               timeOnPage: 3,
-              url: 'https://www.hub.com/pricing',
+              url: 'https://www.hub.invalid/pricing',
               triggerOnlyDuringBusinessHours: true,
             },
             {
               id: 2,
               timeOnPage: 6,
-              url: 'https://www.hub.com/about',
+              url: 'https://www.hub.invalid/about',
               triggerOnlyDuringBusinessHours: true,
             },
           ],
-          currentURL: 'https://www.hub.com/about/',
+          currentURL: 'https://www.hub.invalid/about/',
           isInBusinessHours: false,
         })
       ).toStrictEqual([]);

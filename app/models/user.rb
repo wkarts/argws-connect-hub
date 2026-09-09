@@ -49,6 +49,7 @@ class User < ApplicationRecord
   include Reportable
   include SsoAuthenticatable
   include UserAttributeHelpers
+  include HubPasswordPolicy
 
   devise :database_authenticatable,
          :registerable,
@@ -57,7 +58,6 @@ class User < ApplicationRecord
          :trackable,
          :validatable,
          :confirmable,
-         :password_has_required_content,
          :omniauthable, omniauth_providers: [:google_oauth2]
 
   # TODO: remove in a future version once online status is moved to account users

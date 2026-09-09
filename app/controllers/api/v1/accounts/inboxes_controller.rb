@@ -128,7 +128,7 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
   end
 
   def permitted_params(channel_attributes = [])
-    # We will remove this line after fixing https://linear.app/hub/issue/CW-1567/null-value-passed-as-null-string-to-backend
+    # Preserve explicit nil handling here to avoid serializing a null value as the string "null".
     params.each { |k, v| params[k] = params[k] == 'null' ? nil : v }
 
     params.permit(

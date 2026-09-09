@@ -1,0 +1,10 @@
+@import './base.scss';
+.ProseMirror-hub-style {
+  min-height: 18rem;
+  line-height: 1.65;
+}
+.ProseMirror-hub-style h1 { font-size: 1.75rem; font-weight: 700; }
+.ProseMirror-hub-style h2 { font-size: 1.5rem; font-weight: 700; }
+.ProseMirror-hub-style h3 { font-size: 1.25rem; font-weight: 700; }
+.ProseMirror-hub-style blockquote { border-left: 3px solid #cbd5e1; padding-left: 1rem; }
+.ProseMirror-hub-style pre { overflow: auto; padding: .75rem; border-radius: .5rem; }

@@ -1,0 +1,7 @@
+{
+  "name": "@hub/command-palette",
+  "version": "1.0.0",
+  "private": true,
+  "main": "src/index.js",
+  "license": "UNLICENSED"
+}

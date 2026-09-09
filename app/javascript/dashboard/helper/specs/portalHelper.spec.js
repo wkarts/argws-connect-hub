@@ -4,11 +4,11 @@ describe('PortalHelper', () => {
   describe('buildPortalURL', () => {
     it('returns the correct url', () => {
       window.hubConfig = {
-        hostURL: 'https://app.hub.com',
-        helpCenterURL: 'https://help.hub.com',
+        hostURL: 'https://app.hub.invalid',
+        helpCenterURL: 'https://help.hub.invalid',
       };
       expect(buildPortalURL('handbook')).toEqual(
-        'https://help.hub.com/hc/handbook'
+        'https://help.hub.invalid/hc/handbook'
       );
       window.hubConfig = {};
     });
@@ -17,12 +17,12 @@ describe('PortalHelper', () => {
   describe('buildPortalArticleURL', () => {
     it('returns the correct url', () => {
       window.hubConfig = {
-        hostURL: 'https://app.hub.com',
-        helpCenterURL: 'https://help.hub.com',
+        hostURL: 'https://app.hub.invalid',
+        helpCenterURL: 'https://help.hub.invalid',
       };
       expect(
         buildPortalArticleURL('handbook', 'culture', 'fr', 'article-slug')
-      ).toEqual('https://help.hub.com/hc/handbook/articles/article-slug');
+      ).toEqual('https://help.hub.invalid/hc/handbook/articles/article-slug');
       window.hubConfig = {};
     });
   });

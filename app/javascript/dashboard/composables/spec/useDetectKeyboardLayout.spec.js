@@ -7,11 +7,11 @@ import {
 
 describe('useDetectKeyboardLayout', () => {
   beforeEach(() => {
-    window.cw_keyboard_layout = null;
+    window.hub_keyboard_layout = null;
   });
 
   it('returns cached layout if available', async () => {
-    window.cw_keyboard_layout = LAYOUT_QWERTY;
+    window.hub_keyboard_layout = LAYOUT_QWERTY;
     const layout = await useDetectKeyboardLayout();
     expect(layout).toBe(LAYOUT_QWERTY);
   });

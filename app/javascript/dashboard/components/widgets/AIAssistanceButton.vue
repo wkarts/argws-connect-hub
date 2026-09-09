@@ -95,8 +95,8 @@ export default {
         });
       }
       this.initializeMessage(this.draftMessage);
-      const ninja = document.querySelector('ninja-keys');
-      ninja.open({ parent: 'ai_assist' });
+      const commandPalette = document.querySelector('hub-command-palette');
+      commandPalette.open({ parent: 'ai_assist' });
     },
     hideAICtaModal() {
       this.showAICtaModal = false;

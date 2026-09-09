@@ -31,9 +31,9 @@ export default {
     CONDENSED: 'condensed',
     EXPANDED: 'expanded',
   },
-  DOCS_URL: '//www.hub.com/docs/product/',
-  HELP_CENTER_DOCS_URL: '//www.hub.com/docs/product/others/help-center',
-  TESTIMONIAL_URL: 'https://testimonials.cdn.hub.com/content.json',
+  DOCS_URL: '/help/',
+  HELP_CENTER_DOCS_URL: '/help/?feature=help-center',
+  TESTIMONIAL_URL: '/assets/data/testimonials.json',
   SMALL_SCREEN_BREAKPOINT: 1024,
   AVAILABILITY_STATUS_KEYS: ['online', 'busy', 'offline'],
   SNOOZE_OPTIONS: {

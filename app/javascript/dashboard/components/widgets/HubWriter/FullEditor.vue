@@ -7,7 +7,7 @@ import {
   ArticleMarkdownTransformer,
   EditorState,
   Selection,
-} from '@hub/prosemirror-schema';
+} from '@hub/editor';
 import { checkFileSizeLimit } from 'shared/helpers/FileHelper';
 import { useAlert } from 'dashboard/composables';
 import { useUISettings } from 'dashboard/composables/useUISettings';
@@ -236,7 +236,7 @@ export default {
 </template>
 
 <style lang="scss">
-@import '~@hub/prosemirror-schema/src/styles/article.scss';
+@import '~@hub/editor/src/styles/article.scss';
 
 .ProseMirror-menubar-wrapper {
   display: flex;

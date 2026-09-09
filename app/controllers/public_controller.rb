@@ -15,7 +15,7 @@ class PublicController < ActionController::Base
 
     render json: {
       error: "Domain: #{domain} is not registered with us. \
-      Please send us an email at support@hub.com with the custom domain name and account API key"
+      Please contact #{ENV.fetch('HUB_SUPPORT_EMAIL', 'support@hub.invalid')} with the custom domain name and account API key"
     }, status: :unauthorized and return
   end
 end

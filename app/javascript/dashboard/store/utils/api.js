@@ -25,14 +25,14 @@ export const getHeaderExpiry = response =>
 
 export const setAuthCredentials = response => {
   const expiryDate = getHeaderExpiry(response);
-  Cookies.set('cw_d_session_info', JSON.stringify(response.headers), {
+  Cookies.set('hub_d_session_info', JSON.stringify(response.headers), {
     expires: differenceInDays(expiryDate, new Date()),
   });
   setUser(response.data.data, expiryDate);
 };
 
 export const clearBrowserSessionCookies = () => {
-  Cookies.remove('cw_d_session_info');
+  Cookies.remove('hub_d_session_info');
   Cookies.remove('auth_data');
   Cookies.remove('user');
 };
@@ -47,7 +47,7 @@ export const deleteIndexedDBOnLogout = async () => {
     dbs = await window.indexedDB.databases();
     dbs = dbs.map(db => db.name);
   } catch (e) {
-    dbs = JSON.parse(localStorage.getItem('cw-idb-names') || '[]');
+    dbs = JSON.parse(localStorage.getItem('hub-idb-names') || '[]');
   }
 
   dbs.forEach(dbName => {
@@ -64,7 +64,7 @@ export const deleteIndexedDBOnLogout = async () => {
     };
   });
 
-  localStorage.removeItem('cw-idb-names');
+  localStorage.removeItem('hub-idb-names');
 };
 
 export const clearCookiesOnLogout = () => {

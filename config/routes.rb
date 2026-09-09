@@ -9,7 +9,7 @@ Rails.application.routes.draw do
   }, via: [:get, :post]
 
   ## renders the frontend paths only if its not an api only server
-  if ActiveModel::Type::Boolean.new.cast(ENV.fetch('HUB_API_ONLY_SERVER', ENV.fetch('CW_API_ONLY_SERVER', false)))
+  if ActiveModel::Type::Boolean.new.cast(ENV.fetch('HUB_API_ONLY_SERVER', false))
     root to: 'api#index'
   else
     root to: 'dashboard#index'

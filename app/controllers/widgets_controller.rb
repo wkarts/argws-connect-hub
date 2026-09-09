@@ -25,7 +25,7 @@ class WidgetsController < ActionController::Base
   end
 
   def set_token
-    @token = permitted_params[:cw_conversation]
+    @token = permitted_params[:hub_conversation]
     @auth_token_params = if @token.present?
                            ::Widget::TokenService.new(token: @token).decode_token
                          else
@@ -66,7 +66,7 @@ class WidgetsController < ActionController::Base
   end
 
   def permitted_params
-    params.permit(:website_token, :cw_conversation)
+    params.permit(:website_token, :hub_conversation)
   end
 
   def allow_iframe_requests

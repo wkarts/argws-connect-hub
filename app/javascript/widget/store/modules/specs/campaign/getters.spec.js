@@ -60,7 +60,7 @@ describe('#getters', () => {
         message: 'Begin your onboarding campaign with a welcome message',
         enabled: true,
         trigger_rules: {
-          url: 'https://hub.com',
+          url: 'https://hub.invalid',
           time_on_page: '20',
         },
         created_at: '2021-05-03T08:15:35.828Z',

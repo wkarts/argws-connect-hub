@@ -29,11 +29,11 @@ export default {
     return fetchPromise;
   },
   hasAuthCookie() {
-    return !!Cookies.get('cw_d_session_info');
+    return !!Cookies.get('hub_d_session_info');
   },
   getAuthData() {
     if (this.hasAuthCookie()) {
-      const savedAuthInfo = Cookies.get('cw_d_session_info');
+      const savedAuthInfo = Cookies.get('hub_d_session_info');
       return JSON.parse(savedAuthInfo || '{}');
     }
     return false;

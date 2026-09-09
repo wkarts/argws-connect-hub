@@ -44,7 +44,7 @@ module Hub
 
   def self.redis_ssl_verify_mode
     # Introduced this method to fix the issue in heroku where redis connections fail for redis 6
-    # ref: upstream compatibility note
+    # ref: compatibility note
     #
     # unless the redis verify mode is explicitly specified as none, we will fall back to the default 'verify peer'
     # ref: https://www.rubydoc.info/stdlib/openssl/OpenSSL/SSL/SSLContext#DEFAULT_PARAMS-constant

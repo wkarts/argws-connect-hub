@@ -1,0 +1,195 @@
+name: GHCR - HUB Immutable Base Images
+
+on:
+  push:
+    branches: [develop, main]
+    paths:
+      - 'docker/base/**'
+      - 'Gemfile'
+      - 'Gemfile.lock'
+      - 'package.json'
+      - 'yarn.lock'
+      - 'packages/**'
+      - '.github/workflows/hub-base-images.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: argws-connect-hub-base-images
+  cancel-in-progress: false
+
+jobs:
+  os-bases:
+    name: Publish HUB ${{ matrix.kind }} base / amd64
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - kind: build
+            dockerfile: docker/base/build/Dockerfile
+            image: argws-connect-hub-build-base
+          - kind: runtime
+            dockerfile: docker/base/runtime/Dockerfile
+            image: argws-connect-hub-runtime-base
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Resolve immutable metadata
+        id: base
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(tr -d '[:space:]' < docker/base/VERSION)"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || exit 1
+          definition_sha="$(cat docker/base/VERSION '${{ matrix.dockerfile }}' | sha256sum | awk '{print $1}')"
+          image="ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:${version}"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "definition_sha=$definition_sha" >> "$GITHUB_OUTPUT"
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v4.3.0
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Enforce immutable tag
+        id: existing
+        shell: bash
+        run: |
+          set -euo pipefail
+          image='${{ steps.base.outputs.image }}'
+          expected='${{ steps.base.outputs.definition_sha }}'
+          if docker pull "$image" >/dev/null 2>&1; then
+            actual="$(docker inspect --format '{{ index .Config.Labels "org.argws.hub.base.definition-sha" }}' "$image")"
+            [[ "$actual" == "$expected" ]] || {
+              echo "Immutable base tag $image already exists with a different definition." >&2
+              echo "Bump docker/base/VERSION before changing base inputs." >&2
+              exit 1
+            }
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build and publish immutable base
+        if: steps.existing.outputs.exists != 'true'
+        uses: docker/build-push-action@v7.3.0
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.base.outputs.image }}
+          build-args: |
+            BASE_DEFINITION_SHA=${{ steps.base.outputs.definition_sha }}
+          labels: |
+            org.opencontainers.image.title=HUB ${{ matrix.kind }} base
+            org.opencontainers.image.version=${{ steps.base.outputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.argws.hub.base.kind=${{ matrix.kind }}
+            org.argws.hub.base.definition-sha=${{ steps.base.outputs.definition_sha }}
+          cache-from: type=gha,scope=hub-base-${{ matrix.kind }}-amd64
+          cache-to: type=gha,mode=max,scope=hub-base-${{ matrix.kind }}-amd64
+          provenance: true
+          sbom: true
+
+  deps-base:
+    name: Publish HUB dependency base / amd64
+    needs: os-bases
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Resolve immutable dependency metadata
+        id: deps
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(tr -d '[:space:]' < docker/base/VERSION)"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || exit 1
+          package_deps="$(node -e 'const fs=require("fs"); const p=JSON.parse(fs.readFileSync("package.json","utf8")); process.stdout.write(JSON.stringify({dependencies:p.dependencies||{},devDependencies:p.devDependencies||{},resolutions:p.resolutions||{},engines:p.engines||{}}));')"
+          definition_sha="$({
+            cat docker/base/VERSION docker/base/deps/Dockerfile Gemfile Gemfile.lock yarn.lock
+            printf '%s' "$package_deps"
+            find packages -type f -print0 | sort -z | xargs -0 sha256sum
+          } | sha256sum | awk '{print $1}')"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "definition_sha=$definition_sha" >> "$GITHUB_OUTPUT"
+          echo "build_image=ghcr.io/${{ github.repository_owner }}/argws-connect-hub-build-base:${version}" >> "$GITHUB_OUTPUT"
+          echo "image=ghcr.io/${{ github.repository_owner }}/argws-connect-hub-deps-base:${version}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v4.3.0
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Wait for immutable build base
+        shell: bash
+        env:
+          BUILD_BASE: ${{ steps.deps.outputs.build_image }}
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 60); do
+            docker buildx imagetools inspect "$BUILD_BASE" >/dev/null 2>&1 && exit 0
+            echo "Waiting for $BUILD_BASE ($attempt/60)..."
+            sleep 10
+          done
+          echo "Required build base unavailable: $BUILD_BASE" >&2
+          exit 1
+
+      - name: Enforce immutable dependency tag
+        id: existing
+        shell: bash
+        run: |
+          set -euo pipefail
+          image='${{ steps.deps.outputs.image }}'
+          expected='${{ steps.deps.outputs.definition_sha }}'
+          if docker pull "$image" >/dev/null 2>&1; then
+            actual="$(docker inspect --format '{{ index .Config.Labels "org.argws.hub.base.definition-sha" }}' "$image")"
+            [[ "$actual" == "$expected" ]] || {
+              echo "Immutable dependency tag $image already exists with a different definition." >&2
+              echo "Bump docker/base/VERSION before changing dependency inputs." >&2
+              exit 1
+            }
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build and publish immutable dependency base
+        if: steps.existing.outputs.exists != 'true'
+        uses: docker/build-push-action@v7.3.0
+        with:
+          context: .
+          file: docker/base/deps/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.deps.outputs.image }}
+          build-args: |
+            HUB_BUILD_BASE_IMAGE=${{ steps.deps.outputs.build_image }}
+            BASE_DEFINITION_SHA=${{ steps.deps.outputs.definition_sha }}
+          labels: |
+            org.opencontainers.image.title=HUB dependency base
+            org.opencontainers.image.version=${{ steps.deps.outputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.argws.hub.base.kind=deps
+            org.argws.hub.base.definition-sha=${{ steps.deps.outputs.definition_sha }}
+          cache-from: type=gha,scope=hub-base-deps-amd64
+          cache-to: type=gha,mode=max,scope=hub-base-deps-amd64
+          provenance: true
+          sbom: true

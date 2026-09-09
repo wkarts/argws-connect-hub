@@ -97,7 +97,7 @@ describe Integrations::Slack::SendOnSlackService do
 
         builder.perform
 
-        expect(message.external_source_id_slack).to eq 'cw-origin-6789.12345'
+        expect(message.external_source_id_slack).to eq 'hub-origin-6789.12345'
       end
 
       it 'sent message will send to the the previous thread if the slack disconnects and connects to a same channel.' do
@@ -141,7 +141,7 @@ describe Integrations::Slack::SendOnSlackService do
         unflur_payload = { :channel => 'channel',
                            :ts => 'timestamp',
                            :unfurls =>
-           { :'https://qa.hub.com/app/accounts/1/conversations/1' =>
+           { :'https://qa.hub.invalid/app/accounts/1/conversations/1' =>
              { :blocks => [{ :type => 'section',
                              :text => { :type => 'plain_text', :text => 'This is a plain text section block.', :emoji => true } }] } } }
         allow(slack_client).to receive(:chat_unfurl).with(unflur_payload)
@@ -176,7 +176,7 @@ describe Integrations::Slack::SendOnSlackService do
 
         builder.perform
 
-        expect(message.external_source_id_slack).to eq 'cw-origin-6789.12345'
+        expect(message.external_source_id_slack).to eq 'hub-origin-6789.12345'
         expect(message.attachments).to be_any
       end
 
@@ -195,7 +195,7 @@ describe Integrations::Slack::SendOnSlackService do
 
         builder.perform
 
-        expect(template_message.external_source_id_slack).to eq 'cw-origin-6789.12345'
+        expect(template_message.external_source_id_slack).to eq 'hub-origin-6789.12345'
       end
 
       it 'sent a activity message on slack' do
@@ -213,7 +213,7 @@ describe Integrations::Slack::SendOnSlackService do
         ).and_return(slack_message)
 
         builder.perform
-        expect(template_message.external_source_id_slack).to eq 'cw-origin-6789.12345'
+        expect(template_message.external_source_id_slack).to eq 'hub-origin-6789.12345'
       end
 
       it 'disables hook on Slack AccountInactive error' do
