@@ -20,7 +20,7 @@ Use um token GitHub com permissão read:packages (e acesso ao repositório/pacot
 
   export GHCR_USERNAME=wkarts
   export GHCR_TOKEN='SEU_TOKEN'
-  ./scripts/ghcr-login.sh
+  bash ./scripts/ghcr-login.sh
 
 O token nunca deve ser gravado no compose ou commitado no repositório.
 EOF
