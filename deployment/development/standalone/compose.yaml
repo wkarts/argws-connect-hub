@@ -13,7 +13,7 @@ x-hub-base: &hub-base
   env_file: .env
   restart: unless-stopped
   volumes:
-    - storage-connec-hub-develop:/app/storage
+    - ${HUB_STORAGE_DATA_PATH:-./volumes/storage}:/app/storage
   networks:
     - network-connec-hub-develop
   logging: *default-logging
@@ -84,7 +84,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USERNAME}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
-      - postgres-data-connec-hub-develop:/var/lib/postgresql/data
+      - ${HUB_POSTGRES_DATA_PATH:-./volumes/postgres}:/var/lib/postgresql/data
     networks:
       - network-connec-hub-develop
     healthcheck:
@@ -103,7 +103,7 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD}
     command: ['sh', '-c', 'redis-server --appendonly yes --requirepass "$$REDIS_PASSWORD"']
     volumes:
-      - redis-data-connec-hub-develop:/data
+      - ${HUB_REDIS_DATA_PATH:-./volumes/redis}:/data
     networks:
       - network-connec-hub-develop
     healthcheck:
@@ -112,14 +112,6 @@ services:
       timeout: 5s
       retries: 15
     logging: *default-logging
-
-volumes:
-  storage-connec-hub-develop:
-    name: ${HUB_STORAGE_VOLUME_NAME:-storage-connec-hub-develop}
-  postgres-data-connec-hub-develop:
-    name: ${HUB_POSTGRES_VOLUME_NAME:-postgres-data-connec-hub-develop}
-  redis-data-connec-hub-develop:
-    name: ${HUB_REDIS_VOLUME_NAME:-redis-data-connec-hub-develop}
 
 networks:
   network-connec-hub-develop:

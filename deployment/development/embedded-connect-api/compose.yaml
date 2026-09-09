@@ -13,7 +13,7 @@ x-hub-base: &hub-base
   env_file: .env
   restart: unless-stopped
   volumes:
-    - storage-connec-hub-develop:/app/storage
+    - ${HUB_STORAGE_DATA_PATH:-./volumes/storage}:/app/storage
   networks:
     - network-connec-hub-develop
   logging: *default-logging
@@ -78,7 +78,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USERNAME}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
-      - postgres-data-connec-hub-develop:/var/lib/postgresql/data
+      - ${HUB_POSTGRES_DATA_PATH:-./volumes/postgres}:/var/lib/postgresql/data
     networks:
       - network-connec-hub-develop
     healthcheck:
@@ -97,7 +97,7 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD}
     command: ['sh', '-c', 'redis-server --appendonly yes --requirepass "$$REDIS_PASSWORD"']
     volumes:
-      - redis-data-connec-hub-develop:/data
+      - ${HUB_REDIS_DATA_PATH:-./volumes/redis}:/data
     networks:
       - network-connec-hub-develop
     healthcheck:
@@ -191,7 +191,7 @@ services:
     ports:
       - '${CONNECT_API_BIND_ADDRESS:-127.0.0.1}:${CONNECT_API_PORT:-39080}:8080'
     volumes:
-      - connect_instances:/argws-connect/instances
+      - ${ARGWS_CONNECT_INSTANCES_DATA_PATH:-./volumes/connect-api/instances}:/argws-connect/instances
     networks:
       - network-connec-hub-develop
     healthcheck:
@@ -227,7 +227,7 @@ services:
       POSTGRES_PASSWORD: ${CONNECT_POSTGRES_PASSWORD}
       TZ: ${TZ:-America/Bahia}
     volumes:
-      - connect_postgres:/var/lib/postgresql/data
+      - ${ARGWS_CONNECT_POSTGRES_DATA_PATH:-./volumes/connect-api/postgres}:/var/lib/postgresql/data
     networks:
       - network-connec-hub-develop
     healthcheck:
@@ -246,7 +246,7 @@ services:
       REDIS_PASSWORD: ${CONNECT_REDIS_PASSWORD}
     command: ['redis-server', '--appendonly', 'yes', '--requirepass', '${CONNECT_REDIS_PASSWORD}']
     volumes:
-      - connect_redis:/data
+      - ${ARGWS_CONNECT_REDIS_DATA_PATH:-./volumes/connect-api/redis}:/data
     networks:
       - network-connec-hub-develop
     healthcheck:
@@ -266,7 +266,7 @@ services:
       RABBITMQ_DEFAULT_USER: ${CONNECT_RABBITMQ_USER}
       RABBITMQ_DEFAULT_PASS: ${CONNECT_RABBITMQ_PASSWORD}
     volumes:
-      - connect_rabbitmq:/var/lib/rabbitmq
+      - ${ARGWS_CONNECT_RABBITMQ_DATA_PATH:-./volumes/connect-api/rabbitmq}:/var/lib/rabbitmq
     networks:
       - network-connec-hub-develop
     healthcheck:
@@ -287,7 +287,7 @@ services:
       MINIO_ROOT_USER: ${CONNECT_MINIO_USER}
       MINIO_ROOT_PASSWORD: ${CONNECT_MINIO_PASSWORD}
     volumes:
-      - connect_minio:/data
+      - ${ARGWS_CONNECT_MINIO_DATA_PATH:-./volumes/connect-api/minio}:/data
     networks:
       - network-connec-hub-develop
     healthcheck:
@@ -306,7 +306,7 @@ services:
     restart: unless-stopped
     command: ['-js', '-m', '8222', '--store_dir', '/data']
     volumes:
-      - connect_nats:/data
+      - ${ARGWS_CONNECT_NATS_DATA_PATH:-./volumes/connect-api/nats}:/data
     networks:
       - network-connec-hub-develop
     logging: *default-logging
@@ -321,8 +321,8 @@ services:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
     volumes:
-      - connect_zookeeper_data:/var/lib/zookeeper/data
-      - connect_zookeeper_log:/var/lib/zookeeper/log
+      - ${ARGWS_CONNECT_ZOOKEEPER_DATA_PATH:-./volumes/connect-api/zookeeper/data}:/var/lib/zookeeper/data
+      - ${ARGWS_CONNECT_ZOOKEEPER_LOG_PATH:-./volumes/connect-api/zookeeper/log}:/var/lib/zookeeper/log
     networks:
       - network-connec-hub-develop
     logging: *default-logging
@@ -345,27 +345,10 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'false'
     volumes:
-      - connect_kafka:/var/lib/kafka/data
+      - ${ARGWS_CONNECT_KAFKA_DATA_PATH:-./volumes/connect-api/kafka}:/var/lib/kafka/data
     networks:
       - network-connec-hub-develop
     logging: *default-logging
-
-volumes:
-  storage-connec-hub-develop:
-    name: ${HUB_STORAGE_VOLUME_NAME:-storage-connec-hub-develop}
-  postgres-data-connec-hub-develop:
-    name: ${HUB_POSTGRES_VOLUME_NAME:-postgres-data-connec-hub-develop}
-  redis-data-connec-hub-develop:
-    name: ${HUB_REDIS_VOLUME_NAME:-redis-data-connec-hub-develop}
-  connect_instances:
-  connect_postgres:
-  connect_redis:
-  connect_rabbitmq:
-  connect_minio:
-  connect_nats:
-  connect_zookeeper_data:
-  connect_zookeeper_log:
-  connect_kafka:
 
 networks:
   network-connec-hub-develop:
