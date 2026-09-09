@@ -20,7 +20,7 @@ attempts="${HUB_IMAGE_VERIFY_ATTEMPTS:-6}"
 delay="${HUB_IMAGE_VERIFY_DELAY:-5}"
 [[ "$attempts" =~ ^[1-9][0-9]*$ ]] || fail 'Invalid retry count.'
 [[ "$delay" =~ ^[0-9]+$ ]] || fail 'Invalid retry delay.'
-for tool in docker timeout mktemp; do
+for tool in docker timeout mktemp jq; do
   command -v "$tool" >/dev/null || fail "Missing command: $tool"
 done
 
@@ -38,9 +38,15 @@ fi
 verify_tag() {
   local tag="$1" actual='' attempt
   for ((attempt=1; attempt<=attempts; attempt++)); do
-    if actual="$(timeout 45s docker buildx imagetools inspect "$tag" --format '{{.Manifest.Digest}}' 2>"$work/inspect-error")"; then
-      [[ "$actual" == "$EXPECTED_DIGEST" ]] && return 0
-      printf 'Unexpected digest for %s: %s (expected %s)\n' "$tag" "$actual" "$EXPECTED_DIGEST" > "$work/inspect-error"
+    # Manifest is a Buildx template wrapper, not a Go struct with a Digest field.
+    # Its documented JSON representation exposes the top-level registry digest.
+    if actual="$(timeout 45s docker buildx imagetools inspect "$tag" --format '{{json .Manifest}}' 2>"$work/inspect-error")"; then
+      if actual="$(jq -er '.digest | select(type == "string")' <<<"$actual" 2>"$work/inspect-error")"; then
+        [[ "$actual" == "$EXPECTED_DIGEST" ]] && return 0
+        printf 'Unexpected digest for %s: %s (expected %s)\n' "$tag" "$actual" "$EXPECTED_DIGEST" > "$work/inspect-error"
+      else
+        printf 'Invalid manifest JSON or missing top-level digest for %s\n' "$tag" >> "$work/inspect-error"
+      fi
     fi
     (( attempt == attempts )) || sleep "$delay"
   done
