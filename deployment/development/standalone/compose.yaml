@@ -22,7 +22,6 @@ services:
   migrate-connec-hub-develop:
     <<: *hub-base
     container_name: migrate-connec-hub-develop
-    restart: "no"
     depends_on:
       postgres-connec-hub-develop:
         condition: service_healthy
@@ -33,14 +32,27 @@ services:
       RAILS_ENV: production
       INSTALLATION_ENV: docker
     entrypoint: docker/entrypoints/rails.sh
-    command: ['bundle', 'exec', 'rails', 'db:prepare']
+    command:
+      - sh
+      - -lc
+      - |
+        rm -f /tmp/hub-migration-ready
+        bundle exec rails db:prepare
+        touch /tmp/hub-migration-ready
+        exec tail -f /dev/null
+    healthcheck:
+      test: ['CMD-SHELL', 'test -f /tmp/hub-migration-ready']
+      interval: 5s
+      timeout: 2s
+      retries: 60
+      start_period: 10s
 
   rails-connec-hub-develop:
     <<: *hub-base
     container_name: rails-connec-hub-develop
     depends_on:
       migrate-connec-hub-develop:
-        condition: service_completed_successfully
+        condition: service_healthy
     ports:
       - '${HUB_BIND_ADDRESS:-127.0.0.1}:${HUB_PORT:-33000}:3000'
     environment:
@@ -55,7 +67,7 @@ services:
     container_name: sidekiq-connec-hub-develop
     depends_on:
       migrate-connec-hub-develop:
-        condition: service_completed_successfully
+        condition: service_healthy
     environment:
       NODE_ENV: production
       RAILS_ENV: production
