@@ -7,7 +7,7 @@ x-hub-base: &hub-base
   env_file: .env
   restart: unless-stopped
   volumes:
-    - ./data/storage:/app/storage
+    - ${HUB_STORAGE_DATA_PATH:-./volumes/storage}:/app/storage
 
 services:
   rails:
@@ -48,7 +48,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USERNAME:-hub}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD obrigatória}
     volumes:
-      - ./data/postgres:/var/lib/postgresql/data
+      - ${HUB_POSTGRES_DATA_PATH:-./volumes/postgres}:/var/lib/postgresql/data
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USERNAME:-hub} -d ${POSTGRES_DATABASE:-hub_production}']
       interval: 10s
@@ -62,7 +62,7 @@ services:
     env_file: .env
     command: ['sh', '-c', 'redis-server --appendonly yes --requirepass "$$REDIS_PASSWORD"']
     volumes:
-      - ./data/redis:/data
+      - ${HUB_REDIS_DATA_PATH:-./volumes/redis}:/data
     healthcheck:
       test: ['CMD-SHELL', 'redis-cli -a "$$REDIS_PASSWORD" ping | grep PONG']
       interval: 10s
