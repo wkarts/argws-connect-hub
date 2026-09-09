@@ -54,15 +54,21 @@ if grep -RniIE --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=spec 
 fi
 
 
-# Shipped HUB runtime must not depend on placeholder HUB domains or old product short-links.
+# Shipped HUB runtime must not depend on placeholder/legacy product URLs or stale product repositories.
+# Legitimate technical references to Rails, Redis, Slack, Rack, Audited and other real dependencies are intentionally allowed.
+legacy_short_domain="$(printf '%s%s' 'ch' 'wt.app')"
+legacy_repo_a="$(printf '%s%s' 'github.com/hub/' 'hub')"
+legacy_repo_b="$(printf '%s%s' 'github.com/sending' 'tk/hub')"
+private_repo_web="$(printf '%s%s' 'github.com/wkarts/' 'argws-connect-hub')"
+legacy_runtime_regex="https?://([^/]*\.)?hub\.(com|invalid)|https?://${legacy_short_domain}|${legacy_repo_a}|${legacy_repo_b}|${private_repo_web}"
 if grep -RniIE --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=spec --exclude-dir=specs --exclude-dir=test --exclude-dir=stories --exclude-dir=chromium \
   --exclude='Gemfile.lock' --exclude='yarn.lock' --exclude='LICENSE' --exclude='THIRD_PARTY_NOTICES.md' --exclude='audit-hub.sh' \
-  'https?://([^/]*\.)?hub\.com|https?://chwt\.app' app config lib public scripts 2>/dev/null; then
-  say_fail 'URL remota legada/fictícia encontrada no runtime do HUB'
+  "${legacy_runtime_regex}" app config lib public scripts swagger 2>/dev/null; then
+  say_fail 'URL/repositório legado ou exposição direta do repositório do HUB encontrada no runtime/documentação distribuída'
 fi
 
 # Published/runtime images are GHCR and AMD64 only.
-if grep -RniIE 'docker\.io|dockerhub|hub/hub|linux/arm64|platforms:.*arm64|^[[:space:]]*image:[[:space:]]*(postgres|redis|mailhog)/?' \
+if grep -RniIE 'docker\.io|dockerhub|linux/arm64|platforms:.*arm64|^[[:space:]]*image:[[:space:]]*(postgres|redis|mailhog)/?' \
   .github docker-compose*.y*ml docker .devcontainer 2>/dev/null; then
   say_fail 'DockerHub/imagem não-GHCR ou ARM64 encontrado na superfície de build/deploy'
 fi

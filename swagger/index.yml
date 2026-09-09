@@ -3,13 +3,8 @@ info:
   description: This is the API documentation for Hub server.
   version: 1.0.0
   title: Hub
-  termsOfService:	https://www.hub.invalid/terms-of-service/
-  contact:
-    email: hello@hub.com
   license:
-    name: MIT License
-    url: https://opensource.org/licenses/MIT
-host: app.hub.com
+    name: Proprietary
 basePath: /
 schemes:
   - https

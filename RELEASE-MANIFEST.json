@@ -3,7 +3,6 @@
   "display_name": "🅷🆄🅱",
   "version": "1.0.0",
   "release_channel": "develop",
-  "repository": "wkarts/argws-connect-hub",
   "image": "ghcr.io/wkarts/argws-connect-hub",
   "architecture": "linux/amd64",
   "ruby": "3.3.10",

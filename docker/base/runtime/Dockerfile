@@ -8,7 +8,6 @@ ARG BASE_DEFINITION_SHA=unknown
 
 LABEL org.opencontainers.image.title="HUB Runtime Base" \
       org.opencontainers.image.description="Immutable runtime dependencies for ARGWS Connect HUB" \
-      org.opencontainers.image.source="https://github.com/wkarts/argws-connect-hub" \
       org.argws.hub.base.kind="runtime" \
       org.argws.hub.base.definition-sha="${BASE_DEFINITION_SHA}"
 

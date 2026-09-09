@@ -27,9 +27,8 @@ body:
     id: environment
     attributes:
       label: Environment
-      description: Describe whether you are using Hub Cloud (app.hub.com) or a self-hosted installation of Hub. If you are using a self-hosted installation of Hub, describe the type of deployment (Docker/Linux VM installation/Heroku/Kubernetes/Other).
+      description: Describe the HUB installation and deployment type (Docker/Linux VM/Kubernetes/Heroku/Other).
       options:
-        - app.hub.com
         - Linux VM
         - Docker
         - Kubernetes

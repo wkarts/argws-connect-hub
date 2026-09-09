@@ -1,6 +1,6 @@
 class ConversationReplyMailer < ApplicationMailer
   include ConversationReplyMailerHelper
-  default from: ENV.fetch('MAILER_SENDER_EMAIL', 'HUB <no-reply@example.com>')
+  default from: -> { HubDefaults.mailer_sender }
   layout :choose_layout
 
   def reply_with_summary(conversation, last_queued_id)

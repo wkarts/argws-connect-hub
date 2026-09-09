@@ -52,7 +52,7 @@ describe Messages::Facebook::MessageBuilder do
       message_builder
 
       contact = facebook_channel.inbox.contacts.first
-      # Refer: https://github.com/hub/hub/pull/3016 for this check
+      # Keep the default-name fallback covered by this regression check.
       default_name = 'John Doe'
 
       expect(facebook_channel.inbox.reload.contacts.count).to eq(1)

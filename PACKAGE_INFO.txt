@@ -1,12 +1,16 @@
-HUB 1.0.0 develop - pacote completo corrigido
-Gerado: 2026-09-08
+HUB 1.0.0 develop - pacote v5 corrigido
+Gerado: 2026-09-09
+Base de trabalho: v2 (v3 e v4 ignoradas)
 Arquitetura de imagem: linux/amd64
 Ruby alvo: 3.3.10
-Arquivos: 3744
-Diretorios: 936
+Arquivos: 3801
+Diretorios: 972
 Tamanho descompactado: 103M
 Auditoria: HUB AUDIT: OK
-Ruby syntax: 1121 arquivos OK
-Storybook: restaurado, telemetria desabilitada
-Codespace: restaurado, GHCR-only
-Analytics de produto de terceiros: removidos
+Ruby syntax: 1129 arquivos OK
+GHCR: preservado integralmente
+GitHub Actions bot identity: preservada
+Referencias tecnicas de dependencias reais: preservadas
+Repositorios/short-links derivados do produto: removidos da superficie distribuida
+Documentacao interna: /docs/
+URL operacional canonica: FRONTEND_URL

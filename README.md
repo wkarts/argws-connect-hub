@@ -43,6 +43,13 @@ Cookies, parâmetros, IDs DOM, caches e chaves internas usam prefixos `hub_` / `
 
 Não existe camada de compatibilidade com os identificadores antigos: novas instalações começam com dados novos.
 
+## Documentação interna
+
+A documentação operacional do HUB é servida pela própria instalação em `/docs/`.
+Links internos usam a mesma origem de `FRONTEND_URL`; não dependem de um domínio público fixo nem de um repositório GitHub navegável.
+
+Referências técnicas para bibliotecas e dependências reais (Rails, Redis, Slack, Rack, Audited e outras) permanecem preservadas no código quando documentam comportamento ou compatibilidade.
+
 ## Containers
 
 Consulte `docs/HUB-DEPLOYMENT.md`.

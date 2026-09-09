@@ -183,7 +183,7 @@ describe Whatsapp::IncomingMessageService do
       end
     end
 
-    # ref: https://github.com/hub/hub/issues/3795#issuecomment-1018057318
+    # Regression coverage for template button message parameters.
     context 'when valid template button message params' do
       it 'creates appropriate conversations, message and contacts' do
         params = {
@@ -283,7 +283,7 @@ describe Whatsapp::IncomingMessageService do
       end
     end
 
-    # ref: https://github.com/hub/hub/issues/5840
+    # Regression coverage for Brazilian WAID normalization.
     describe 'When the incoming waid is a brazilian number in new format with 9 included' do
       let(:wa_id) { '5541988887777' }
 

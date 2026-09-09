@@ -8,7 +8,6 @@ ARG BUNDLER_VERSION=2.5.16
 
 LABEL org.opencontainers.image.title="HUB Dependency Base" \
       org.opencontainers.image.description="Immutable Ruby and JavaScript dependency layer for HUB" \
-      org.opencontainers.image.source="https://github.com/wkarts/argws-connect-hub" \
       org.argws.hub.base.kind="deps" \
       org.argws.hub.base.definition-sha="${BASE_DEFINITION_SHA}"
 

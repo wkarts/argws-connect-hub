@@ -27,7 +27,6 @@ const title = item => t(`KEYBOARD_SHORTCUTS.TITLE.${item.label}`);
 // This is used to display the shift key in the modal
 // If the current layout is QWERTZ and the keySet contains a key that needs a shift key
 // If layout is QWERTZ then we add the Shift+keysToModify to fix an known issue
-// https://github.com/hub/hub/issues/9492
 const needsShiftKey = keySet => {
   return (
     currentLayout.value === LAYOUT_QWERTZ &&
