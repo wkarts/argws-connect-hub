@@ -13,6 +13,10 @@ if [[ -x ./scripts/audit-hub.sh ]]; then
   bash ./scripts/audit-hub.sh
 fi
 
+# VERSION is the single release-version source of truth. package.json and
+# RELEASE-MANIFEST.json are mirrors and must never drift from it.
+bash ./scripts/validate-version-sync.sh
+
 if command -v ruby >/dev/null 2>&1; then
   echo "Validating Ruby syntax..."
   ruby ./scripts/check-ruby-syntax.rb app config lib db/migrate spec
@@ -38,7 +42,6 @@ grep -Fq "argws-connect-hub-deps-base:${base_version}" docker/Dockerfile \
   || fail "docker/Dockerfile does not reference dependency base ${base_version}"
 grep -Fq "argws-connect-hub-runtime-base:${base_version}" docker/Dockerfile \
   || fail "docker/Dockerfile does not reference runtime base ${base_version}"
-
 
 # HUB source policy: no operational dependency or runtime namespace may point back
 # to the historical vendor project. Legal notices are intentionally not rewritten
