@@ -140,7 +140,10 @@ const marks = {
   },
 };
 
-const nodesWithLists = addListNodes(baseNodes, 'paragraph block*', 'block');
+// prosemirror-schema-list expects an OrderedMap and calls nodes.append().
+// Schema normalizes the plain node-spec object to OrderedMap in spec.nodes.
+const baseSchema = new Schema({ nodes: baseNodes, marks });
+const nodesWithLists = addListNodes(baseSchema.spec.nodes, 'paragraph block*', 'block');
 export const messageSchema = new Schema({ nodes: nodesWithLists, marks });
 export const fullSchema = messageSchema;
 
