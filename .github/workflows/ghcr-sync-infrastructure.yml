@@ -1,28 +1,102 @@
-name: GHCR - Verify HUB Infrastructure Images
+name: GHCR - Publish HUB Infrastructure Mirrors
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '17 4 * * 1'
+  push:
+    branches: [develop]
+    paths:
+      - '.github/workflows/ghcr-sync-infrastructure.yml'
 
 permissions:
   contents: read
-  packages: read
+  packages: write
+
+concurrency:
+  group: hub-infrastructure-mirrors
+  cancel-in-progress: false
 
 jobs:
-  verify:
-    runs-on: ubuntu-latest
+  mirror:
+    name: Mirror PostgreSQL and Redis to HUB GHCR
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
       - name: Install skopeo
+        shell: bash
         run: |
+          set -euo pipefail
           sudo apt-get update
           sudo apt-get install -y skopeo
+
       - name: Login GHCR
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | skopeo login ghcr.io -u "${{ github.actor }}" --password-stdin
-      - name: Verify production infrastructure images
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s' "${{ secrets.GITHUB_TOKEN }}" | \
+            skopeo login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Mirror PostgreSQL
+        shell: bash
         env:
           OWNER: ${{ github.repository_owner }}
         run: |
           set -euo pipefail
-          skopeo inspect --override-arch amd64 docker://ghcr.io/${OWNER}/hub-postgres:16-alpine >/dev/null
-          skopeo inspect --override-arch amd64 docker://ghcr.io/${OWNER}/hub-redis:7-alpine >/dev/null
+          source_image='docker://docker.io/library/postgres:16-alpine'
+          target_image="docker://ghcr.io/${OWNER}/hub-postgres:16-alpine"
+          alias_image="docker://ghcr.io/${OWNER}/hub-postgres:16"
+
+          skopeo copy --all --retry-times 3 "$source_image" "$target_image"
+          skopeo copy --all --retry-times 3 "$target_image" "$alias_image"
+          skopeo inspect --override-arch amd64 "$target_image" >/dev/null
+
+      - name: Mirror Redis
+        shell: bash
+        env:
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          set -euo pipefail
+          source_image='docker://docker.io/library/redis:7-alpine'
+          target_image="docker://ghcr.io/${OWNER}/hub-redis:7-alpine"
+          alias_image="docker://ghcr.io/${OWNER}/hub-redis:7"
+
+          skopeo copy --all --retry-times 3 "$source_image" "$target_image"
+          skopeo copy --all --retry-times 3 "$target_image" "$alias_image"
+          skopeo inspect --override-arch amd64 "$target_image" >/dev/null
+
+      - name: Verify anonymous pull readiness
+        shell: bash
+        env:
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          set -euo pipefail
+          skopeo logout ghcr.io >/dev/null 2>&1 || true
+
+          anonymous_ok=true
+          for image in \
+            "docker://ghcr.io/${OWNER}/hub-postgres:16-alpine" \
+            "docker://ghcr.io/${OWNER}/hub-redis:7-alpine"; do
+            if ! skopeo inspect --override-arch amd64 "$image" >/dev/null 2>&1; then
+              anonymous_ok=false
+              echo "::warning::${image#docker://} foi publicado, mas ainda não aceita pull anônimo. No GitHub Package Settings, altere a visibilidade desse pacote para Public uma única vez."
+            fi
+          done
+
+          if [[ "$anonymous_ok" == true ]]; then
+            echo 'As imagens de infraestrutura do HUB aceitam pull anônimo.'
+          fi
+
+      - name: Publish summary
+        shell: bash
+        env:
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          {
+            echo '## HUB infrastructure mirrors'
+            echo
+            echo "- ghcr.io/${OWNER}/hub-postgres:16-alpine"
+            echo "- ghcr.io/${OWNER}/hub-postgres:16"
+            echo "- ghcr.io/${OWNER}/hub-redis:7-alpine"
+            echo "- ghcr.io/${OWNER}/hub-redis:7"
+            echo
+            echo 'Atualizações futuras são controladas: execute este workflow manualmente quando quiser atualizar os espelhos.'
+          } >> "$GITHUB_STEP_SUMMARY"
