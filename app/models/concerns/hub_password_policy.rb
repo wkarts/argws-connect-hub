@@ -12,12 +12,12 @@ module HubPasswordPolicy
   def hub_password_meets_policy
     return if password.blank?
 
-    requirements = Rails.configuration.x.hub.password_policy
+    requirements = Rails.configuration.x.fetch(:hub, {}).fetch(:password_policy, {})
     checks = {
-      uppercase: [password.scan(/[A-Z]/).length, requirements.uppercase],
-      lowercase: [password.scan(/[a-z]/).length, requirements.lowercase],
-      number: [password.scan(/[0-9]/).length, requirements.number],
-      special: [password.scan(/[^A-Za-z0-9\s]/).length, requirements.special]
+      uppercase: [password.scan(/[A-Z]/).length, requirements[:uppercase]],
+      lowercase: [password.scan(/[a-z]/).length, requirements[:lowercase]],
+      number: [password.scan(/[0-9]/).length, requirements[:number]],
+      special: [password.scan(/[^A-Za-z0-9\s]/).length, requirements[:special]]
     }
 
     checks.each do |type, (actual, required)|
