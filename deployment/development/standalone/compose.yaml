@@ -63,7 +63,7 @@ services:
     command: ['bundle', 'exec', 'sidekiq', '-C', 'config/sidekiq.yml']
 
   postgres-connec-hub-develop:
-    image: ${HUB_POSTGRES_IMAGE:-ghcr.io/wkarts/hub-postgres:16-alpine}
+    image: ${HUB_POSTGRES_IMAGE:-postgres:16-alpine}
     container_name: postgres-connec-hub-develop
     platform: linux/amd64
     restart: unless-stopped
@@ -83,7 +83,7 @@ services:
     logging: *default-logging
 
   redis-connec-hub-develop:
-    image: ${HUB_REDIS_IMAGE:-ghcr.io/wkarts/hub-redis:7-alpine}
+    image: ${HUB_REDIS_IMAGE:-redis:7-alpine}
     container_name: redis-connec-hub-develop
     platform: linux/amd64
     restart: unless-stopped
