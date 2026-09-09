@@ -181,7 +181,8 @@ const tokenMap = {
       const src = token.attrGet('src') || '';
       let height = null;
       try {
-        const url = new URL(src, 'https://hub.invalid');
+        const baseUrl = typeof window !== 'undefined' && window.location?.origin ? window.location.origin : 'http://localhost';
+        const url = new URL(src, baseUrl);
         height = url.searchParams.get('hub_image_height');
       } catch (_error) {
         const match = src.match(/[?&]hub_image_height=([^&#]+)/);

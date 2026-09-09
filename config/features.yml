@@ -3,10 +3,10 @@
   enabled: true
 - name: channel_email
   enabled: true
-  help_url: /help/?feature=channel-email
+  help_url: /docs/?feature=channel-email
 - name: channel_facebook
   enabled: true
-  help_url: /help/?feature=channel-facebook
+  help_url: /docs/?feature=channel-facebook
 - name: channel_twitter
   enabled: true
 - name: ip_lookup
@@ -18,33 +18,33 @@
   enabled: true
 - name: help_center
   enabled: true
-  help_url: /help/?feature=help-center
+  help_url: /docs/?feature=help-center
 - name: agent_bots
   enabled: true
-  help_url: /help/?feature=agent-bots
+  help_url: /docs/?feature=agent-bots
 - name: macros
   enabled: true
 - name: agent_management
   enabled: true
 - name: team_management
   enabled: true
-  help_url: /help/?feature=team-management
+  help_url: /docs/?feature=team-management
 - name: inbox_management
   enabled: true
 - name: labels
   enabled: true
-  help_url: /help/?feature=labels
+  help_url: /docs/?feature=labels
 - name: custom_attributes
   enabled: true
-  help_url: /help/?feature=custom-attributes
+  help_url: /docs/?feature=custom-attributes
 - name: automations
   enabled: true
 - name: canned_responses
   enabled: true
-  help_url: /help/?feature=canned-responses
+  help_url: /docs/?feature=canned-responses
 - name: integrations
   enabled: true
-  help_url: /help/?feature=integrations
+  help_url: /docs/?feature=integrations
 - name: voice_recorder
   enabled: true
 - name: mobile_v2
@@ -53,10 +53,10 @@
   enabled: true
 - name: campaigns
   enabled: true
-  help_url: /help/?feature=campaigns
+  help_url: /docs/?feature=campaigns
 - name: reports
   enabled: true
-  help_url: /help/?feature=reports
+  help_url: /docs/?feature=reports
 - name: crm
   enabled: true
 - name: auto_resolve_conversations
@@ -73,7 +73,7 @@
   premium: true
 - name: message_reply_to
   enabled: true
-  help_url: /help/?feature=message-reply-to
+  help_url: /docs/?feature=message-reply-to
 - name: insert_article_in_reply
   enabled: true
 - name: inbox_view
@@ -81,7 +81,7 @@
 - name: sla
   enabled: true
   premium: true
-  help_url: /help/?feature=sla
+  help_url: /docs/?feature=sla
 - name: help_center_embedding_search
   enabled: true
   premium: true

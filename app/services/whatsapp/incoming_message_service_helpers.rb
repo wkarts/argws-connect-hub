@@ -52,7 +52,7 @@ module Whatsapp::IncomingMessageServiceHelpers
     phone_number.match(/^55/)
   end
 
-  # ref: https://github.com/hub/hub/issues/5840
+  # Brazil mobile-number normalization for WhatsApp identifiers.
   def normalised_brazil_mobile_number(phone_number)
     # DDD : Area codes in Brazil are popularly known as "DDD codes" (códigos DDD) or simply "DDD", from the initials of "direct distance dialing"
     # https://en.wikipedia.org/wiki/Telephone_numbers_in_Brazil
@@ -67,7 +67,7 @@ module Whatsapp::IncomingMessageServiceHelpers
 
   def processed_waid(waid)
     # in case of Brazil, we need to do additional processing
-    # https://github.com/hub/hub/issues/5840
+    # Brazil numbers require additional identifier normalization.
     if brazil_phone_number?(waid)
       # check if there is an existing contact inbox with the normalised waid
       # We will create conversation against it

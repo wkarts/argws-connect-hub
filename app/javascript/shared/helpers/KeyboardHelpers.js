@@ -23,7 +23,6 @@ export const hasPressedCommandAndEnter = e => {
 };
 
 // If layout is QWERTZ then we add the Shift+keysToModify to fix an known issue
-// https://github.com/hub/hub/issues/9492
 export const keysToModifyInQWERTZ = new Set(['Alt+KeyP', 'Alt+KeyL']);
 
 export const LAYOUT_QWERTY = 'QWERTY';

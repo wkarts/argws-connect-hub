@@ -67,11 +67,20 @@ jobs:
           set -euo pipefail
           app_version="$(tr -d '[:space:]' < VERSION)"
           base_version="$(tr -d '[:space:]' < docker/base/VERSION)"
+          [[ "$app_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+            echo "VERSION must be SemVer X.Y.Z, got: $app_version" >&2
+            exit 1
+          }
           [[ "$base_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          short_sha="${GITHUB_SHA:0:12}"
+          develop_version="${app_version}-develop.${short_sha}"
           echo "app=$app_version" >> "$GITHUB_OUTPUT"
+          echo "develop=$develop_version" >> "$GITHUB_OUTPUT"
+          echo "short_sha=$short_sha" >> "$GITHUB_OUTPUT"
           echo "base=$base_version" >> "$GITHUB_OUTPUT"
           echo "deps_base=ghcr.io/${{ github.repository_owner }}/argws-connect-hub-deps-base:${base_version}" >> "$GITHUB_OUTPUT"
           echo "runtime_base=ghcr.io/${{ github.repository_owner }}/argws-connect-hub-runtime-base:${base_version}" >> "$GITHUB_OUTPUT"
+          echo "Develop build version: $develop_version"
 
       - name: Set up Buildx
         uses: docker/setup-buildx-action@v4.3.0
@@ -115,16 +124,19 @@ jobs:
           push: true
           build-args: |
             GIT_SHA=${{ github.sha }}
+            HUB_VERSION=${{ steps.versions.outputs.develop }}
             HUB_DEPS_BASE_IMAGE=${{ steps.versions.outputs.deps_base }}
             HUB_RUNTIME_BASE_IMAGE=${{ steps.versions.outputs.runtime_base }}
           tags: |
             ghcr.io/${{ github.repository_owner }}/argws-connect-hub:develop
+            ghcr.io/${{ github.repository_owner }}/argws-connect-hub:develop-${{ steps.versions.outputs.short_sha }}
             ghcr.io/${{ github.repository_owner }}/argws-connect-hub:sha-${{ github.sha }}
           labels: |
             org.opencontainers.image.title=HUB
-            org.opencontainers.image.version=${{ steps.versions.outputs.app }}-develop
+            org.opencontainers.image.version=${{ steps.versions.outputs.develop }}
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.argws.hub.channel=develop
             org.argws.hub.base.version=${{ steps.versions.outputs.base }}
           cache-from: type=gha,scope=hub-develop-amd64
           cache-to: type=gha,mode=max,scope=hub-develop-amd64

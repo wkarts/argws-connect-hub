@@ -105,7 +105,7 @@ export default {
           'profile-settings-notifications'
         );
         if (audioSettings) {
-          // TODO [ref](https://github.com/hub/hub/pull/6233#discussion_r1069636890)
+          // TODO: revisit scroll positioning when notification settings are refactored
           audioSettings.scrollIntoView(
             { behavior: 'smooth', block: 'start' },
             150
