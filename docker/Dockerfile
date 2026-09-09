@@ -10,6 +10,7 @@ ARG RAILS_SERVE_STATIC_FILES=true
 ARG RAILS_ENV=production
 ARG NODE_OPTIONS="--openssl-legacy-provider"
 ARG GIT_SHA=release
+ARG HUB_VERSION=0.0.0
 
 ENV BUNDLE_WITHOUT=${BUNDLE_WITHOUT} \
     BUNDLER_VERSION=2.5.16 \
@@ -35,6 +36,7 @@ RUN if [ "$RAILS_ENV" = "production" ]; then \
     fi
 
 RUN printf '%s\n' "${GIT_SHA}" > /app/.git_sha \
+ && printf '%s\n' "${HUB_VERSION}" > /app/.hub_version \
  && rm -rf /gems/ruby/3.3.0/cache/*.gem \
  && find /gems/ruby/3.3.0/gems/ \( -name "*.c" -o -name "*.o" \) -delete \
  && rm -rf .git \
@@ -47,6 +49,7 @@ ARG EXECJS_RUNTIME="Disabled"
 ARG RAILS_SERVE_STATIC_FILES=true
 ARG BUNDLE_FORCE_RUBY_PLATFORM=1
 ARG RAILS_ENV=production
+ARG HUB_VERSION=0.0.0
 
 ENV BUNDLE_WITHOUT=${BUNDLE_WITHOUT} \
     BUNDLER_VERSION=2.5.16 \
@@ -54,6 +57,7 @@ ENV BUNDLE_WITHOUT=${BUNDLE_WITHOUT} \
     RAILS_SERVE_STATIC_FILES=${RAILS_SERVE_STATIC_FILES} \
     BUNDLE_FORCE_RUBY_PLATFORM=${BUNDLE_FORCE_RUBY_PLATFORM} \
     RAILS_ENV=${RAILS_ENV} \
+    HUB_BUILD_VERSION=${HUB_VERSION} \
     BUNDLE_PATH=/gems
 
 COPY --from=pre-builder /gems/ /gems/
