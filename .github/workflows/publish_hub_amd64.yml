@@ -116,6 +116,7 @@ jobs:
           done
 
       - name: Build and publish develop image
+        id: build
         uses: docker/build-push-action@v7.3.0
         with:
           context: .
@@ -142,3 +143,12 @@ jobs:
           cache-to: type=gha,mode=max,scope=hub-develop-amd64
           provenance: true
           sbom: true
+
+      - name: Verify develop tag was published
+        shell: bash
+        run: |
+          set -euo pipefail
+          image="ghcr.io/${{ github.repository_owner }}/argws-connect-hub:develop"
+          docker buildx imagetools inspect "$image" >/dev/null
+          echo "Published $image"
+          echo "Digest: ${{ steps.build.outputs.digest }}"
