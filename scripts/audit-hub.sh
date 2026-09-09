@@ -53,7 +53,6 @@ if grep -RniIE --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=spec 
   say_fail 'marca legada encontrada em código/UI/documentação do HUB'
 fi
 
-
 # Shipped HUB runtime must not depend on placeholder/legacy product URLs or stale product repositories.
 # Legitimate technical references to Rails, Redis, Slack, Rack, Audited and other real dependencies are intentionally allowed.
 legacy_short_domain="$(printf '%s%s' 'ch' 'wt.app')"
@@ -67,8 +66,11 @@ if grep -RniIE --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=spec 
   say_fail 'URL/repositório legado ou exposição direta do repositório do HUB encontrada no runtime/documentação distribuída'
 fi
 
-# Published/runtime images are GHCR and AMD64 only.
-if grep -RniIE 'docker\.io|dockerhub|linux/arm64|platforms:.*arm64|^[[:space:]]*image:[[:space:]]*(postgres|redis|mailhog)/?' \
+# Published/runtime images are GHCR and AMD64 only. The infrastructure mirror
+# publisher is intentionally allowed to read the official upstream images from
+# Docker Hub before copying them into the HUB GHCR namespace.
+if grep -RniIE --exclude='ghcr-sync-infrastructure.yml' \
+  'docker\.io|dockerhub|linux/arm64|platforms:.*arm64|^[[:space:]]*image:[[:space:]]*(postgres|redis|mailhog)/?' \
   .github docker-compose*.y*ml docker .devcontainer 2>/dev/null; then
   say_fail 'DockerHub/imagem não-GHCR ou ARM64 encontrado na superfície de build/deploy'
 fi
