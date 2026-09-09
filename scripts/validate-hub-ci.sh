@@ -43,6 +43,45 @@ grep -Fq "argws-connect-hub-deps-base:${base_version}" docker/Dockerfile \
 grep -Fq "argws-connect-hub-runtime-base:${base_version}" docker/Dockerfile \
   || fail "docker/Dockerfile does not reference runtime base ${base_version}"
 
+# HUB-owned infrastructure mirrors are the deployment contract. PostgreSQL and
+# Redis stay configurable through .env, but their defaults must resolve to the
+# HUB GHCR mirrors in every supported deployment variant.
+infra_envs=(
+  deployment/production/standalone/.env.example
+  deployment/production/embedded-connect-api/.env.example
+  deployment/development/standalone/.env.example
+  deployment/development/embedded-connect-api/.env.example
+)
+infra_composes=(
+  deployment/production/standalone/compose.yaml
+  deployment/production/embedded-connect-api/compose.yaml
+  deployment/development/standalone/compose.yaml
+  deployment/development/embedded-connect-api/compose.yaml
+)
+
+for env_example in "${infra_envs[@]}"; do
+  grep -Fq 'HUB_POSTGRES_IMAGE=ghcr.io/wkarts/hub-postgres:16-alpine' "$env_example" \
+    || fail "$env_example must default HUB_POSTGRES_IMAGE to the HUB GHCR mirror"
+  grep -Fq 'HUB_REDIS_IMAGE=ghcr.io/wkarts/hub-redis:7-alpine' "$env_example" \
+    || fail "$env_example must default HUB_REDIS_IMAGE to the HUB GHCR mirror"
+done
+
+for compose in "${infra_composes[@]}"; do
+  grep -Fq 'image: ${HUB_POSTGRES_IMAGE:-ghcr.io/wkarts/hub-postgres:16-alpine}' "$compose" \
+    || fail "$compose must use HUB_POSTGRES_IMAGE with the HUB GHCR mirror default"
+  grep -Fq 'image: ${HUB_REDIS_IMAGE:-ghcr.io/wkarts/hub-redis:7-alpine}' "$compose" \
+    || fail "$compose must use HUB_REDIS_IMAGE with the HUB GHCR mirror default"
+done
+
+[[ -f .github/workflows/ghcr-sync-infrastructure.yml ]] \
+  || fail "missing GHCR infrastructure mirror publisher workflow"
+grep -Fq 'packages: write' .github/workflows/ghcr-sync-infrastructure.yml \
+  || fail "GHCR infrastructure mirror publisher needs packages: write"
+grep -Fq 'hub-postgres:16-alpine' .github/workflows/ghcr-sync-infrastructure.yml \
+  || fail "GHCR infrastructure mirror publisher does not publish hub-postgres"
+grep -Fq 'hub-redis:7-alpine' .github/workflows/ghcr-sync-infrastructure.yml \
+  || fail "GHCR infrastructure mirror publisher does not publish hub-redis"
+
 # HUB source policy: no operational dependency or runtime namespace may point back
 # to the historical vendor project. Legal notices are intentionally not rewritten
 # by this technical gate.
