@@ -145,6 +145,7 @@ jobs:
           node .github/scripts/apply-version.mjs "${{ needs.plan.outputs.version }}"
           expected='${{ needs.plan.outputs.version }}'
           [[ "$(tr -d '[:space:]' < VERSION)" == "$expected" ]]
+          bash ./scripts/validate-version-sync.sh
           node - "$expected" <<'NODE'
           const fs = require('fs');
           const expected = process.argv[2];
@@ -289,6 +290,7 @@ jobs:
           push: true
           build-args: |
             GIT_SHA=${{ needs.version-source.outputs.sha }}
+            HUB_VERSION=${{ needs.plan.outputs.version }}
             HUB_DEPS_BASE_IMAGE=${{ steps.bases.outputs.deps }}
             HUB_RUNTIME_BASE_IMAGE=${{ steps.bases.outputs.runtime }}
           tags: ${{ steps.meta.outputs.tags }}
@@ -297,6 +299,7 @@ jobs:
             org.opencontainers.image.version=${{ needs.plan.outputs.version }}
             org.opencontainers.image.revision=${{ needs.version-source.outputs.sha }}
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.argws.hub.channel=stable
             org.argws.hub.base.version=${{ steps.bases.outputs.version }}
           cache-from: type=gha,scope=hub-release-amd64
           cache-to: type=gha,mode=max,scope=hub-release-amd64
@@ -346,15 +349,10 @@ jobs:
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "GitHub Release $TAG already exists; keeping it."
           else
-            notes="$(mktemp)"
-            {
-              echo "HUB ${TAG}"
-              echo
-              echo "Image: ghcr.io/${{ github.repository_owner }}/argws-connect-hub:${{ needs.plan.outputs.version }}"
-              echo "Digest: ${IMAGE_DIGEST}"
-            } > "$notes"
-            gh release create "$TAG" "$notes" \
+            release_header="$(printf 'Image: ghcr.io/%s/argws-connect-hub:%s\nDigest: %s' '${{ github.repository_owner }}' '${{ needs.plan.outputs.version }}' "$IMAGE_DIGEST")"
+            gh release create "$TAG" \
               --target "$RELEASE_SHA" \
               --title "HUB $TAG" \
-              --generate-notes
+              --generate-notes \
+              --notes "$release_header"
           fi
