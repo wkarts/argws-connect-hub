@@ -48,6 +48,11 @@ coverage
 
 /storage
 
+# Persistent bind-mount data created by Docker Compose deployments.
+# This pattern intentionally matches volumes/ at the repository root and inside
+# deployment/* variants.
+volumes/
+
 # ignore packages
 node_modules
 package-lock.json
