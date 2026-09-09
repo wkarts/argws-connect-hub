@@ -125,7 +125,7 @@ export default {
           <a
             target="_blank"
             rel="noopener noreferrer"
-            href="https://www.hub.com/docs/product/channels/live-chat/sdk/identity-validation/"
+            href="/help/?feature=identity-validation"
           >
             {{ $t('INBOX_MGMT.SETTINGS_POPUP.HMAC_LINK_TO_DOCS') }}
           </a>

@@ -59,4 +59,7 @@ argws-connect-hub-runtime-base
 
 ## Licenciamento
 
-O produto HUB é mantido como produto privado. Bibliotecas de terceiros continuam sujeitas às respectivas licenças. Avisos legais existentes devem ser avaliados pela origem efetiva do código antes de qualquer remoção.
+HUB é um produto privado mantido pela ARGWS. Código e ativos próprios do HUB
+são proprietários. Componentes de terceiros eventualmente presentes continuam
+sujeitos exclusivamente às respectivas licenças, documentadas separadamente em
+`THIRD_PARTY_NOTICES.md`.

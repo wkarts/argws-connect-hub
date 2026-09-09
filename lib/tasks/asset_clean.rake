@@ -1,4 +1,4 @@
-# Asset clean logic taken from the article https://chwt.app/heroku-slug-size
+# HUB asset cleanup task.
 
 namespace :assets do
   desc "Remove 'node_modules' folder"

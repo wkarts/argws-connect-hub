@@ -53,6 +53,14 @@ if grep -RniIE --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=spec 
   say_fail 'marca legada encontrada em código/UI/documentação do HUB'
 fi
 
+
+# Shipped HUB runtime must not depend on placeholder HUB domains or old product short-links.
+if grep -RniIE --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=spec --exclude-dir=specs --exclude-dir=test --exclude-dir=stories --exclude-dir=chromium \
+  --exclude='Gemfile.lock' --exclude='yarn.lock' --exclude='LICENSE' --exclude='THIRD_PARTY_NOTICES.md' --exclude='audit-hub.sh' \
+  'https?://([^/]*\.)?hub\.com|https?://chwt\.app' app config lib public scripts 2>/dev/null; then
+  say_fail 'URL remota legada/fictícia encontrada no runtime do HUB'
+fi
+
 # Published/runtime images are GHCR and AMD64 only.
 if grep -RniIE 'docker\.io|dockerhub|hub/hub|linux/arm64|platforms:.*arm64|^[[:space:]]*image:[[:space:]]*(postgres|redis|mailhog)/?' \
   .github docker-compose*.y*ml docker .devcontainer 2>/dev/null; then

@@ -4,7 +4,7 @@
     "description": "This is the API documentation for Hub server.",
     "version": "1.0.0",
     "title": "Hub",
-    "termsOfService": "https://www.hub.com/terms-of-service/",
+    "termsOfService": "https://www.hub.invalid/terms-of-service/",
     "contact": {
       "email": "hello@hub.com"
     },
@@ -6793,7 +6793,7 @@
         "homepage_link": {
           "type": "string",
           "description": "link to main dashboard",
-          "example": "https://www.hub.com/"
+          "example": "https://www.hub.invalid/"
         },
         "name": {
           "type": "string",

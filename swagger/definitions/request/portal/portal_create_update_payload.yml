@@ -22,7 +22,7 @@ properties:
   homepage_link:
     type: string
     description: link to main dashboard
-    example: https://www.hub.com/
+    example: https://www.hub.invalid/
   name:
     type: string
     description: Name for the portal

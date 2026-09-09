@@ -71,10 +71,10 @@ export default {
     ...mapGetters({ globalConfig: 'globalConfig/get' }),
     termsLink() {
       return this.$t('REGISTER.TERMS_ACCEPT')
-        .replace('https://www.hub.com/terms', this.globalConfig.termsURL)
+        .replace('__HUB_TERMS_URL__', this.globalConfig.termsURL || '/terms/')
         .replace(
-          'https://www.hub.com/privacy-policy',
-          this.globalConfig.privacyURL
+          '__HUB_PRIVACY_URL__',
+          this.globalConfig.privacyURL || '/privacy-policy/'
         );
     },
     hasAValidCaptcha() {

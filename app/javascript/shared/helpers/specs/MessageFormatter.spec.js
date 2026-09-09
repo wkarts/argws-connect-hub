@@ -4,16 +4,16 @@ describe('#MessageFormatter', () => {
   describe('content with links', () => {
     it('should format correctly', () => {
       const message =
-        'Hub is an opensource tool. [Hub](https://www.hub.com)';
+        'Hub is an opensource tool. [Hub](https://hub.invalid)';
       expect(new MessageFormatter(message).formattedMessage).toMatch(
-        '<p>Hub is an opensource tool. <a href="https://www.hub.com" class="link" rel="noreferrer noopener nofollow" target="_blank">Hub</a></p>'
+        '<p>Hub is an opensource tool. <a href="https://hub.invalid" class="link" rel="noreferrer noopener nofollow" target="_blank">Hub</a></p>'
       );
     });
     it('should format correctly', () => {
       const message =
-        'Hub is an opensource tool. https://www.hub.com';
+        'Hub is an opensource tool. https://hub.invalid';
       expect(new MessageFormatter(message).formattedMessage).toMatch(
-        '<p>Hub is an opensource tool. <a href="https://www.hub.com" class="link" rel="noreferrer noopener nofollow" target="_blank">https://www.hub.com</a></p>'
+        '<p>Hub is an opensource tool. <a href="https://hub.invalid" class="link" rel="noreferrer noopener nofollow" target="_blank">https://hub.invalid</a></p>'
       );
     });
   });
@@ -31,25 +31,25 @@ describe('#MessageFormatter', () => {
   describe('content with image and has "hub_image_height" query at the end of URL', () => {
     it('should set image height correctly', () => {
       const message =
-        'Hub is an opensource tool. ![](http://hub.com/hub.png?hub_image_height=24px)';
+        'Hub is an opensource tool. ![](/brand-assets/logo.svg?hub_image_height=24px)';
       expect(new MessageFormatter(message).formattedMessage).toMatch(
-        '<p>Hub is an opensource tool. <img src="http://hub.com/hub.png?hub_image_height=24px" alt="" style="height: 24px;" /></p>'
+        '<p>Hub is an opensource tool. <img src="/brand-assets/logo.svg?hub_image_height=24px" alt="" style="height: 24px;" /></p>'
       );
     });
 
     it('should set image height correctly if its original size', () => {
       const message =
-        'Hub is an opensource tool. ![](http://hub.com/hub.png?hub_image_height=auto)';
+        'Hub is an opensource tool. ![](/brand-assets/logo.svg?hub_image_height=auto)';
       expect(new MessageFormatter(message).formattedMessage).toMatch(
-        '<p>Hub is an opensource tool. <img src="http://hub.com/hub.png?hub_image_height=auto" alt="" style="height: auto;" /></p>'
+        '<p>Hub is an opensource tool. <img src="/brand-assets/logo.svg?hub_image_height=auto" alt="" style="height: auto;" /></p>'
       );
     });
 
     it('should not set height', () => {
       const message =
-        'Hub is an opensource tool. ![](http://hub.com/hub.png)';
+        'Hub is an opensource tool. ![](/brand-assets/logo.svg)';
       expect(new MessageFormatter(message).formattedMessage).toMatch(
-        '<p>Hub is an opensource tool. <img src="http://hub.com/hub.png" alt="" /></p>'
+        '<p>Hub is an opensource tool. <img src="/brand-assets/logo.svg" alt="" /></p>'
       );
     });
   });
@@ -105,9 +105,9 @@ describe('#MessageFormatter', () => {
   describe('plain text content', () => {
     it('returns the plain text without HTML', () => {
       const message =
-        '<b>Hub is an opensource tool. https://www.hub.com</b>';
+        '<b>Hub is an opensource tool. https://hub.invalid</b>';
       expect(new MessageFormatter(message).plainText).toMatch(
-        'Hub is an opensource tool. https://www.hub.com'
+        'Hub is an opensource tool. https://hub.invalid'
       );
     });
   });

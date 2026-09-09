@@ -27,7 +27,7 @@ Please try your best to describe a clear and realistic impact for your report, a
 - Performing limited admin actions without authorization
 - CSRF
 
-You can learn more about our triaging process [here](https://www.hub.com/docs/contributing-guide/security-reports).
+You can learn more about our triaging process [here](https://www.hub.invalid/docs/contributing-guide/security-reports).
 
 ## Non-Qualifying Vulnerabilities
 

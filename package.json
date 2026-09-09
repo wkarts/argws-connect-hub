@@ -1,7 +1,7 @@
 {
   "name": "@wkarts/hub",
   "version": "1.0.0",
-  "license": "MIT",
+  "license": "UNLICENSED",
   "scripts": {
     "eslint": "eslint app/**/*.{js,vue}",
     "eslint:fix": "eslint app/**/*.{js,vue} --fix",

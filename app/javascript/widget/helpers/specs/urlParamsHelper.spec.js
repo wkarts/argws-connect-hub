@@ -39,13 +39,13 @@ describe('#buildPopoutURL', () => {
   it('returns popout URL', () => {
     expect(
       buildPopoutURL({
-        origin: 'https://hub.com',
+        origin: 'https://hub.invalid',
         conversationCookie: 'random-jwt-token',
         websiteToken: 'random-website-token',
         locale: 'ar',
       })
     ).toEqual(
-      'https://hub.com/widget?hub_conversation=random-jwt-token&website_token=random-website-token&locale=ar'
+      'https://hub.invalid/widget?hub_conversation=random-jwt-token&website_token=random-website-token&locale=ar'
     );
   });
 });

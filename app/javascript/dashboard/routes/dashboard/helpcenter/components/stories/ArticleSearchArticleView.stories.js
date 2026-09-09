@@ -29,5 +29,5 @@ const Template = (args, { argTypes }) => ({
 export const ArticleHeaderView = Template.bind({});
 ArticleHeaderView.args = {
   title: 'Insert article',
-  url: 'https://staging.hub.com/hc/home-rental-app/articles/filter-your-housing-search-results-0',
+  url: 'https://staging.hub.invalid/hc/home-rental-app/articles/filter-your-housing-search-results-0',
 };
