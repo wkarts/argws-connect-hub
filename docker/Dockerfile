@@ -1,7 +1,7 @@
 # HUB application image.
 # OS/toolchain and dependency installation live in immutable HUB base images.
-ARG HUB_DEPS_BASE_IMAGE=ghcr.io/wkarts/argws-connect-hub-deps-base:1.1.0
-ARG HUB_RUNTIME_BASE_IMAGE=ghcr.io/wkarts/argws-connect-hub-runtime-base:1.1.0
+ARG HUB_DEPS_BASE_IMAGE=ghcr.io/wkarts/argws-connect-hub-deps-base:1.1.1
+ARG HUB_RUNTIME_BASE_IMAGE=ghcr.io/wkarts/argws-connect-hub-runtime-base:1.1.1
 
 FROM ${HUB_DEPS_BASE_IMAGE} AS pre-builder
 
@@ -26,7 +26,10 @@ RUN mkdir -p /app/log
 
 # The dependency base contains the superset required by develop and release.
 # Production removes development/test gems only after copying the immutable layer.
-RUN if [ "$RAILS_ENV" = "production" ]; then \
+# Keep `set -e` here: an assets:precompile failure must fail the image build instead
+# of being hidden by a later cleanup command.
+RUN set -eux; \
+    if [ "$RAILS_ENV" = "production" ]; then \
       bundle config set without 'development test'; \
       bundle clean --force; \
       SECRET_KEY_BASE=precompile_placeholder \

@@ -2,7 +2,7 @@ name: GHCR - HUB Immutable Base Images
 
 on:
   push:
-    branches: [develop, main]
+    branches: [develop]
     paths:
       - 'docker/base/**'
       - 'Gemfile'
@@ -50,9 +50,11 @@ jobs:
           [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || exit 1
           definition_sha="$(cat docker/base/VERSION '${{ matrix.dockerfile }}' | sha256sum | awk '{print $1}')"
           image="ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:${version}"
+          latest="ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:latest"
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "definition_sha=$definition_sha" >> "$GITHUB_OUTPUT"
           echo "image=$image" >> "$GITHUB_OUTPUT"
+          echo "latest=$latest" >> "$GITHUB_OUTPUT"
 
       - uses: docker/setup-buildx-action@v4.3.0
       - uses: docker/login-action@v4
@@ -61,7 +63,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Enforce immutable tag
+      - name: Enforce immutable version tag
         id: existing
         shell: bash
         run: |
@@ -72,7 +74,7 @@ jobs:
             actual="$(docker inspect --format '{{ index .Config.Labels "org.argws.hub.base.definition-sha" }}' "$image")"
             [[ "$actual" == "$expected" ]] || {
               echo "Immutable base tag $image already exists with a different definition." >&2
-              echo "Bump docker/base/VERSION before changing base inputs." >&2
+              echo "Do not delete the existing tag. Bump docker/base/VERSION before changing base inputs." >&2
               exit 1
             }
             echo "exists=true" >> "$GITHUB_OUTPUT"
@@ -103,6 +105,15 @@ jobs:
           provenance: true
           sbom: true
 
+      - name: Point latest to current immutable base
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker buildx imagetools create \
+            --tag '${{ steps.base.outputs.latest }}' \
+            '${{ steps.base.outputs.image }}'
+          docker buildx imagetools inspect '${{ steps.base.outputs.latest }}' >/dev/null
+
   deps-base:
     name: Publish HUB dependency base / amd64
     needs: os-bases
@@ -129,6 +140,7 @@ jobs:
           echo "definition_sha=$definition_sha" >> "$GITHUB_OUTPUT"
           echo "build_image=ghcr.io/${{ github.repository_owner }}/argws-connect-hub-build-base:${version}" >> "$GITHUB_OUTPUT"
           echo "image=ghcr.io/${{ github.repository_owner }}/argws-connect-hub-deps-base:${version}" >> "$GITHUB_OUTPUT"
+          echo "latest=ghcr.io/${{ github.repository_owner }}/argws-connect-hub-deps-base:latest" >> "$GITHUB_OUTPUT"
 
       - uses: docker/setup-buildx-action@v4.3.0
       - uses: docker/login-action@v4
@@ -151,7 +163,7 @@ jobs:
           echo "Required build base unavailable: $BUILD_BASE" >&2
           exit 1
 
-      - name: Enforce immutable dependency tag
+      - name: Enforce immutable dependency version tag
         id: existing
         shell: bash
         run: |
@@ -162,7 +174,7 @@ jobs:
             actual="$(docker inspect --format '{{ index .Config.Labels "org.argws.hub.base.definition-sha" }}' "$image")"
             [[ "$actual" == "$expected" ]] || {
               echo "Immutable dependency tag $image already exists with a different definition." >&2
-              echo "Bump docker/base/VERSION before changing dependency inputs." >&2
+              echo "Do not delete the existing tag. Bump docker/base/VERSION before changing dependency inputs." >&2
               exit 1
             }
             echo "exists=true" >> "$GITHUB_OUTPUT"
@@ -193,3 +205,12 @@ jobs:
           cache-to: type=gha,mode=max,scope=hub-base-deps-amd64
           provenance: true
           sbom: true
+
+      - name: Point latest to current immutable dependency base
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker buildx imagetools create \
+            --tag '${{ steps.deps.outputs.latest }}' \
+            '${{ steps.deps.outputs.image }}'
+          docker buildx imagetools inspect '${{ steps.deps.outputs.latest }}' >/dev/null

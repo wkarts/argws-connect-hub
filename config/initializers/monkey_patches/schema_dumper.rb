@@ -1,3 +1,13 @@
+# frozen_string_literal: true
+
+# The schema dumper classes are lazily loaded by Active Record. During tasks such
+# as assets:precompile there may be no database connection, so the PostgreSQL
+# adapter has not loaded them yet. Load the exact Rails schema-dumper hierarchy
+# before reopening PostgreSQL::SchemaDumper.
+require 'active_record/schema_dumper'
+require 'active_record/connection_adapters/abstract/schema_dumper'
+require 'active_record/connection_adapters/postgresql/schema_dumper'
+
 # When working with experimental extensions, which doesn't have support on all providers
 # This monkey patch will help us to ignore the extensions when dumping the schema
 # Additionally we will also ignore the tables associated with those features and exentions
