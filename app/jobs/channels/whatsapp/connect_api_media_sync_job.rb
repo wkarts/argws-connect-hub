@@ -91,6 +91,12 @@ class Channels::Whatsapp::ConnectApiMediaSyncJob < ApplicationJob
     from_me = ActiveModel::Type::Boolean.new.cast(key['fromMe'])
     payload = synthetic_webhook(record, key, id, peer_phone, from_me, media_type, media_node)
     Whatsapp::IncomingMessageConnectApiService.new(inbox: @channel.inbox, params: payload.with_indifferent_access).perform
+
+    # The synthetic webhook still tries the normal Graph media path first. If
+    # that path is unavailable, repair the just-created message in the same run
+    # instead of waiting for the next one-minute reconciliation cycle.
+    created = Message.find_by(inbox_id: @channel.inbox.id, source_id: id)
+    recover_existing_attachment(created, record, media_type, media_node) if created && created.attachments.empty?
   end
 
   def recover_existing_attachment(message, record, media_type, media_node)
