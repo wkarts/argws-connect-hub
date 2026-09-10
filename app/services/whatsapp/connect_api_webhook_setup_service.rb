@@ -84,7 +84,7 @@ class Whatsapp::ConnectApiWebhookSetupService
 
     unless response.success?
       # A persisted instance may already exist after a HUB restart. Verify using
-      # the per-instance credential before treating create conflict as failure.
+      # the installation credential before treating create conflict as failure.
       raise response_body(response) unless instance_accessible?
     end
 
@@ -225,7 +225,10 @@ class Whatsapp::ConnectApiWebhookSetupService
   end
 
   def instance_headers
-    { 'apikey' => config['api_key'], 'Authorization' => "Bearer #{config['api_key']}", 'Content-Type' => 'application/json' }
+    # HUB controls Connect|API as a trusted installation-level client. Using the
+    # global credential here avoids coupling lifecycle operations to a
+    # per-instance token that may have been rotated outside HUB.
+    { 'apikey' => admin_token, 'Authorization' => "Bearer #{admin_token}", 'Content-Type' => 'application/json' }
   end
 
   def response_body(response)
