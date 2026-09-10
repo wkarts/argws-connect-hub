@@ -25,6 +25,25 @@ class Whatsapp::IncomingMessageConnectApiService < Whatsapp::IncomingMessageWhat
     resolve_duplicate_active_conversations!
   end
 
+  def create_message(message)
+    super
+
+    context = message[:connect_api].to_h.deep_stringify_keys
+    return @message if context.blank?
+    return @message unless ActiveModel::Type::Boolean.new.cast(context['from_me'])
+
+    source = context['source'].to_s.strip.downcase.presence
+    origin = source == 'api' ? 'bot' : 'mobile'
+
+    @message.content_attributes = @message.content_attributes.to_h.merge(
+      'connect_api_external_outgoing' => true,
+      'connect_api_origin' => origin,
+      'connect_api_source' => source
+    ).compact
+
+    @message
+  end
+
   def refresh_connect_api_contact!
     contact_params = @processed_params[:contacts]&.first
     return if contact_params.blank?
