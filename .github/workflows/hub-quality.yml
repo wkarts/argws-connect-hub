@@ -1,6 +1,8 @@
 name: HUB Quality
 
 on:
+  push:
+    branches: [develop]
   pull_request:
     branches: [develop, main]
   workflow_dispatch:
@@ -21,4 +23,57 @@ jobs:
           ruby-version: '3.3.10'
           bundler-cache: false
       - name: Ruby syntax
-        run: ruby ./scripts/check-ruby-syntax.rb app config lib db/migrate
+        run: ruby ./scripts/check-ruby-syntax.rb app config lib db/migrate enterprise/app enterprise/lib
+      - name: Enterprise runtime contracts
+        run: ruby ./scripts/check-enterprise-contracts.rb
+
+  enterprise-boot:
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: hub_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d hub_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      RAILS_ENV: test
+      NODE_ENV: test
+      FRONTEND_URL: http://localhost:3000
+      SECRET_KEY_BASE: hub-ci-enterprise-boot-secret-key-base
+      POSTGRES_HOST: 127.0.0.1
+      POSTGRES_PORT: '5432'
+      POSTGRES_DATABASE: hub_test
+      POSTGRES_USERNAME: postgres
+      POSTGRES_PASSWORD: postgres
+      REDIS_URL: redis://127.0.0.1:6379
+      REDIS_PASSWORD: ''
+      ENABLE_ACCOUNT_SIGNUP: 'false'
+      BUNDLE_WITHOUT: development
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install Ruby 3.3.10
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3.10'
+          bundler-cache: true
+      - name: Prepare database
+        run: bundle exec rails db:prepare
+      - name: Eager load Rails and Enterprise runtime
+        run: bundle exec rails runner 'Rails.application.eager_load!; puts "HUB Enterprise eager load OK"'
