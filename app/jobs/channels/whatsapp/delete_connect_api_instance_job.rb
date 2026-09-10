@@ -3,10 +3,6 @@
 class Channels::Whatsapp::DeleteConnectApiInstanceJob < ApplicationJob
   queue_as :low
 
-  retry_on ConnectApi::Error, wait: :polynomially_longer, attempts: 8 do |job, error|
-    Rails.logger.error("[HUB Connect|API] permanent instance delete failure args=#{job.arguments.inspect}: #{error.message}")
-  end
-
   def perform(instance_name)
     name = instance_name.to_s.strip
     return if name.blank?
@@ -19,6 +15,8 @@ class Channels::Whatsapp::DeleteConnectApiInstanceJob < ApplicationJob
       return
     end
 
+    # Re-raise transient/server failures. Sidekiq keeps its normal retry policy,
+    # without resolving ConnectApi::Error at class-load time during eager_load.
     raise
   end
 end
