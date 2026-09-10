@@ -2,11 +2,7 @@
 GlobalConfig.clear_cache
 ConfigLoader.new.process
 
-## Seeds productions
-if Rails.env.production?
-  # Setup Onboarding flow
-  Redis::Alfred.set(Redis::Alfred::HUB_INSTALLATION_ONBOARDING, true)
-end
+## Production installation onboarding is derived from persistent database state.
 
 ## Seeds for Local Development
 unless Rails.env.production?

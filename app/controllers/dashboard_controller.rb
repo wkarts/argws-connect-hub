@@ -41,7 +41,7 @@ class DashboardController < ActionController::Base
   end
 
   def ensure_installation_onboarding
-    redirect_to '/installation/onboarding' if ::Redis::Alfred.get(::Redis::Alfred::HUB_INSTALLATION_ONBOARDING)
+    redirect_to '/installation/onboarding' unless User.exists?
   end
 
   def render_hc_if_custom_domain

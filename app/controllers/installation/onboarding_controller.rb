@@ -14,9 +14,9 @@ class Installation::OnboardingController < ApplicationController
         confirmed: true
       ).perform
     rescue StandardError => e
-      redirect_to '/', flash: { error: e.message } and return
+      redirect_to '/installation/onboarding', flash: { error: e.message } and return
     end
-    finish_onboarding
+
     redirect_to '/'
   end
 
@@ -26,11 +26,7 @@ class Installation::OnboardingController < ApplicationController
     params.permit(user: [:name, :company, :email])
   end
 
-  def finish_onboarding
-    ::Redis::Alfred.delete(::Redis::Alfred::HUB_INSTALLATION_ONBOARDING)
-  end
-
   def ensure_installation_onboarding
-    redirect_to '/' unless ::Redis::Alfred.get(::Redis::Alfred::HUB_INSTALLATION_ONBOARDING)
+    redirect_to '/' if User.exists?
   end
 end

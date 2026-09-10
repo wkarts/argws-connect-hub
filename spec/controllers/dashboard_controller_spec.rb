@@ -1,20 +1,34 @@
 require 'rails_helper'
 
 describe '/app/login', type: :request do
-  context 'without DEFAULT_LOCALE' do
-    it 'renders the dashboard' do
-      get '/app/login'
-      expect(response).to have_http_status(:success)
+  context 'with an initialized installation' do
+    before do
+      create(:user)
+    end
+
+    context 'without DEFAULT_LOCALE' do
+      it 'renders the dashboard' do
+        get '/app/login'
+        expect(response).to have_http_status(:success)
+      end
+    end
+
+    context 'with DEFAULT_LOCALE' do
+      it 'renders the dashboard' do
+        with_modified_env DEFAULT_LOCALE: 'pt_BR' do
+          get '/app/login'
+          expect(response).to have_http_status(:success)
+          expect(response.body).to include "selectedLocale: 'pt_BR'"
+        end
+      end
     end
   end
 
-  context 'with DEFAULT_LOCALE' do
-    it 'renders the dashboard' do
-      with_modified_env DEFAULT_LOCALE: 'pt_BR' do
-        get '/app/login'
-        expect(response).to have_http_status(:success)
-        expect(response.body).to include "selectedLocale: 'pt_BR'"
-      end
+  context 'with a fresh installation' do
+    it 'redirects to first-administrator onboarding without depending on Redis state' do
+      get '/app/login'
+
+      expect(response).to redirect_to('/installation/onboarding')
     end
   end
 
