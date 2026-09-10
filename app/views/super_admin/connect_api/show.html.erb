@@ -5,7 +5,7 @@
 <header class="main-content__header" role="banner">
   <div>
     <h1 class="main-content__page-title" id="page-title"><%= content_for(:title) %></h1>
-    <p style="margin-top: 6px; color: #64748b;">Administração central das instâncias Connect|API vinculadas ao HUB.</p>
+    <p style="margin-top: 6px; color: #64748b;">Administração central das instâncias Connect|API pertencentes a esta instalação do HUB.</p>
   </div>
   <% if @overview[:manager_url].present? %>
     <%= link_to 'Abrir administração completa', @overview[:manager_url], target: '_blank', rel: 'noopener', class: 'button' %>
@@ -21,8 +21,8 @@
 
   <div class="report--list" style="margin-bottom: 24px;">
     <div class="report-card"><div class="metric"><%= @overview[:version].presence || '-' %></div><div>Versão</div></div>
-    <div class="report-card"><div class="metric"><%= @overview[:total_instances] %></div><div>Total Connect|API</div></div>
-    <div class="report-card"><div class="metric"><%= @overview[:hub_instances] %></div><div>Instâncias do HUB</div></div>
+    <div class="report-card"><div class="metric"><%= @overview[:total_instances] %></div><div>Instâncias desta instalação</div></div>
+    <div class="report-card"><div class="metric"><%= @overview[:hub_instances] %></div><div>Vinculadas a caixas</div></div>
     <div class="report-card"><div class="metric"><%= @overview[:connected_instances] %></div><div>Conectadas</div></div>
     <div class="report-card"><div class="metric"><%= @overview[:call_capable_instances] %></div><div>Com chamadas</div></div>
   </div>
@@ -53,7 +53,7 @@
                 <strong><%= instance[:account_name] %></strong><br>
                 <small>Caixa de entrada #<%= instance[:inbox_id] %> · <%= instance[:inbox_name] %></small>
               <% else %>
-                <span style="color:#94a3b8;">Externa à gestão do HUB</span>
+                <span style="color:#64748b;">Instância HUB sem caixa vinculada</span>
               <% end %>
             </td>
             <td><%= instance[:provider_label] %></td>
@@ -82,54 +82,57 @@
                 <span>Mensageria</span>
               <% end %>
             </td>
-            <td style="min-width: 260px;">
-              <% if instance[:hub_managed] %>
-                <div style="display:flex; flex-wrap:wrap; gap:6px;">
-                  <%= button_to 'Reiniciar', instance_action_super_admin_connect_api_path,
-                                method: :post,
-                                params: { instance_name: instance[:name], operation: 'restart' },
-                                class: 'button' %>
-                  <%= button_to 'Desconectar', instance_action_super_admin_connect_api_path,
-                                method: :post,
-                                params: { instance_name: instance[:name], operation: 'logout' },
-                                class: 'button' %>
+            <td style="min-width: 300px;">
+              <div style="display:flex; flex-wrap:wrap; gap:6px;">
+                <%= button_to 'Reiniciar', instance_action_super_admin_connect_api_path,
+                              method: :post,
+                              params: { instance_name: instance[:name], operation: 'restart' },
+                              class: 'button' %>
+                <%= button_to 'Desconectar', instance_action_super_admin_connect_api_path,
+                              method: :post,
+                              params: { instance_name: instance[:name], operation: 'logout' },
+                              class: 'button' %>
 
-                  <% if instance[:provider] == 'WHATSAPP-BAILEYS' %>
-                    <%= button_to 'Simular migração → ZAPO', migrate_provider_super_admin_connect_api_path,
-                                  method: :post,
-                                  params: { instance_name: instance[:name], target_provider: 'WHATSAPP-ZAPO', dry_run: true },
-                                  class: 'button' %>
-                    <%= button_to 'Migrar → ZAPO', migrate_provider_super_admin_connect_api_path,
-                                  method: :post,
-                                  params: { instance_name: instance[:name], target_provider: 'WHATSAPP-ZAPO', dry_run: false },
-                                  data: { confirm: 'Migrar esta sessão de Baileys para ZAPO? Faça backup da Connect|API antes da operação.' },
-                                  class: 'button' %>
-                  <% elsif instance[:provider] == 'WHATSAPP-ZAPO' %>
-                    <%= button_to 'Simular migração → Baileys', migrate_provider_super_admin_connect_api_path,
-                                  method: :post,
-                                  params: { instance_name: instance[:name], target_provider: 'WHATSAPP-BAILEYS', dry_run: true },
-                                  class: 'button' %>
-                    <%= button_to 'Migrar → Baileys', migrate_provider_super_admin_connect_api_path,
-                                  method: :post,
-                                  params: { instance_name: instance[:name], target_provider: 'WHATSAPP-BAILEYS', dry_run: false },
-                                  data: { confirm: 'Migrar esta sessão de ZAPO para Baileys? Faça backup da Connect|API antes da operação.' },
-                                  class: 'button' %>
-                  <% end %>
-                </div>
-              <% else %>
-                <small style="color:#94a3b8;">Somente inventário; não gerenciada pelo HUB.</small>
-              <% end %>
+                <% if instance[:provider] == 'WHATSAPP-BAILEYS' %>
+                  <%= button_to 'Simular migração → ZAPO', migrate_provider_super_admin_connect_api_path,
+                                method: :post,
+                                params: { instance_name: instance[:name], target_provider: 'WHATSAPP-ZAPO', dry_run: true },
+                                class: 'button' %>
+                  <%= button_to 'Migrar → ZAPO', migrate_provider_super_admin_connect_api_path,
+                                method: :post,
+                                params: { instance_name: instance[:name], target_provider: 'WHATSAPP-ZAPO', dry_run: false },
+                                data: { confirm: 'Migrar esta sessão de Baileys para ZAPO? Faça backup da Connect|API antes da operação.' },
+                                class: 'button' %>
+                <% elsif instance[:provider] == 'WHATSAPP-ZAPO' %>
+                  <%= button_to 'Simular migração → Baileys', migrate_provider_super_admin_connect_api_path,
+                                method: :post,
+                                params: { instance_name: instance[:name], target_provider: 'WHATSAPP-BAILEYS', dry_run: true },
+                                class: 'button' %>
+                  <%= button_to 'Migrar → Baileys', migrate_provider_super_admin_connect_api_path,
+                                method: :post,
+                                params: { instance_name: instance[:name], target_provider: 'WHATSAPP-BAILEYS', dry_run: false },
+                                data: { confirm: 'Migrar esta sessão de ZAPO para Baileys? Faça backup da Connect|API antes da operação.' },
+                                class: 'button' %>
+                <% end %>
+
+                <%= button_to 'Excluir instância', instance_action_super_admin_connect_api_path,
+                              method: :post,
+                              params: { instance_name: instance[:name], operation: 'delete', confirmation: instance[:name] },
+                              data: { confirm: "Excluir definitivamente a instância #{instance[:name]} da Connect|API? Se houver caixa vinculada, ela ficará marcada para reconciliação manual." },
+                              class: 'button',
+                              style: 'background:#dc2626;color:white;border-color:#dc2626;' %>
+              </div>
             </td>
           </tr>
         <% end %>
         <% if @overview[:instances].empty? %>
-          <tr><td colspan="8">Nenhuma instância foi retornada pela Connect|API.</td></tr>
+          <tr><td colspan="8">Nenhuma instância pertencente a esta instalação do HUB foi encontrada.</td></tr>
         <% end %>
       </tbody>
     </table>
   </div>
 
   <p style="margin-top: 18px; color:#64748b; font-size: 12px;">
-    Tokens administrativos e tokens de instância nunca são renderizados nesta tela. A exclusão definitiva permanece disponível pela API administrativa, mas não é exposta como ação de um clique nesta interface.
+    Tokens administrativos e tokens de instância nunca são renderizados nesta tela. A exclusão exige confirmação e somente instâncias pertencentes a esta instalação do HUB são exibidas.
   </p>
 </section>

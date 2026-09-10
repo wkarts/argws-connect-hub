@@ -20,6 +20,21 @@ trigger_imap_email_inboxes_job:
   class: 'Inboxes::FetchImapEmailInboxesJob'
   queue: scheduled_jobs
 
+# Connect|API media is reconciled natively every minute. This covers provider
+# events that arrive before media persistence and media sent by the linked
+# device outside HUB.
+connect_api_media_sync_scheduler_job:
+  cron: '*/1 * * * *'
+  class: 'Channels::Whatsapp::ConnectApiMediaSyncSchedulerJob'
+  queue: low
+
+# Backfill WhatsApp profile pictures without depending on the Meta-compatible
+# webhook to carry profile.picture.
+connect_api_profile_picture_scheduler_job:
+  cron: '*/1 * * * *'
+  class: 'Channels::Whatsapp::ConnectApiProfilePictureSchedulerJob'
+  queue: low
+
 # executed daily at 2230 UTC
 # which is our lowest traffic time
 remove_stale_contact_inboxes_job.rb:

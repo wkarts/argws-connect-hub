@@ -10,6 +10,19 @@ class Whatsapp::ConnectApiWebhookSetupService
   def perform(whatsapp_channel)
     @channel = whatsapp_channel
     normalize_config!
+
+    if ActiveModel::Type::Boolean.new.cast(config.delete('force_reconcile'))
+      config['connect_api_manual_deletion'] = false
+    end
+
+    if ActiveModel::Type::Boolean.new.cast(config['connect_api_manual_deletion'])
+      config['communication_ready'] = false
+      config['connection_status'] = 'deleted'
+      config['last_error'] = 'Instância removida pelo administrador. Use Reconciliar agora para recriá-la.'
+      persist_config!
+      return true
+    end
+
     ensure_instance!
     sync_instance_metadata!
     enable_meta_compatibility!
@@ -50,7 +63,10 @@ class Whatsapp::ConnectApiWebhookSetupService
     config['phone_number'] = channel.phone_number
     config['phone_number_id'] = digits
     config['business_account_id'] = digits
-    config['instance_name'] ||= "hub-#{channel.account_id}-#{digits}"
+    config['instance_name'] ||= ConnectApi::InstanceNamespace.build(
+      inbox_name: config['hub_inbox_name'].presence || channel.inbox&.name.presence || 'whatsapp',
+      phone_number: digits
+    )
     config['api_key'] ||= SecureRandom.hex(32)
     config['auth_mode'] = %w[qrcode pairing_code].include?(config['auth_mode']) ? config['auth_mode'] : 'qrcode'
 
@@ -233,9 +249,6 @@ class Whatsapp::ConnectApiWebhookSetupService
 
     instance = instance.to_h.deep_stringify_keys
 
-    # For an already persisted instance, the remote record is authoritative for
-    # its token. This heals HUB configurations that retained a provisional or
-    # stale token and is required by Graph-scoped media/template operations.
     remote_token = instance['token'].to_s.strip.presence || instance['hash'].to_s.strip.presence
     if remote_token.present? && config['api_key'].to_s != remote_token
       Rails.logger.info("[HUB Connect|API] reconciled instance credential name=#{config['instance_name']}")

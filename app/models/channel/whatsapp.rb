@@ -28,6 +28,8 @@ class Channel::Whatsapp < ApplicationRecord
   # Legacy provider branches remain readable only for upgrade compatibility.
   PROVIDERS = %w[connectapi].freeze
   before_validation :ensure_webhook_verify_token
+  before_destroy :remember_connect_api_instance_for_cleanup
+  after_destroy_commit :enqueue_connect_api_instance_cleanup
 
   validates :provider, inclusion: { in: PROVIDERS }
   validates :phone_number, presence: true, uniqueness: true
@@ -79,6 +81,18 @@ class Channel::Whatsapp < ApplicationRecord
 
   def ensure_webhook_verify_token
     provider_config['webhook_verify_token'] ||= SecureRandom.hex(16) if provider == 'connectapi'
+  end
+
+  def remember_connect_api_instance_for_cleanup
+    return unless provider == 'connectapi'
+
+    @connect_api_instance_name_for_cleanup = provider_config.to_h['instance_name'].to_s.strip.presence
+  end
+
+  def enqueue_connect_api_instance_cleanup
+    return if @connect_api_instance_name_for_cleanup.blank?
+
+    Channels::Whatsapp::DeleteConnectApiInstanceJob.perform_later(@connect_api_instance_name_for_cleanup)
   end
 
   def validate_provider_config

@@ -16,6 +16,12 @@
       <div><strong>Chamadas:</strong> {{ callsAvailable ? 'Voz habilitada' : 'Não disponível neste protocolo' }}</div>
       <div v-if="callsAvailable"><strong>Limite da instância:</strong> {{ config.voip_max_concurrent_calls || 'limite global' }}</div>
     </div>
+    <div
+      v-if="config.connect_api_manual_deletion"
+      class="mb-5 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/20 dark:text-amber-300"
+    >
+      A instância foi excluída pelo administrador. Clique em <strong>Reconciliar agora</strong> para recriá-la e reconfigurar o webhook.
+    </div>
     <div v-if="callsAvailable" class="mb-5 rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-800 dark:border-green-900 dark:bg-green-950/20 dark:text-green-300">
       O botão de chamada aparece no cabeçalho das conversas desta caixa. O áudio usa ticket temporário; token da Connect|API não é enviado ao navegador.
     </div>
@@ -54,6 +60,7 @@ export default {
       return this.config.calls_supported || this.config.connect_api_provider === 'WHATSAPP-ZAPO';
     },
     communicationLabel() {
+      if (this.config.connect_api_manual_deletion) return 'Instância removida';
       if (this.config.communication_ready && this.config.meta_compatible_verified) return 'Sincronizada';
       return 'Requer reconciliação';
     },
@@ -86,7 +93,7 @@ export default {
       this.isReconciling = true;
       try {
         await this.update(
-          { connect: false, disconnect: false },
+          { force_reconcile: true, connect: false, disconnect: false },
           'Caixa reconciliada com a Connect|API.'
         );
       } finally {

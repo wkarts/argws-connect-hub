@@ -13,16 +13,18 @@ module ConnectApi
       instances = @client.fetch_instances
       mappings = hub_mappings
       decorated = instances.map { |instance| decorate(instance, mappings) }
+      visible = decorated.select { |item| item[:hub_owned] }
 
       {
         online: true,
         version: root.is_a?(Hash) ? root['version'] : nil,
         manager_url: manager_url(root),
-        total_instances: decorated.size,
-        hub_instances: decorated.count { |item| item[:hub_managed] },
-        connected_instances: decorated.count { |item| connected?(item[:status]) },
-        call_capable_instances: decorated.count { |item| item[:calls_supported] },
-        instances: decorated.sort_by { |item| [item[:hub_managed] ? 0 : 1, item[:name].to_s.downcase] }
+        total_instances: visible.size,
+        remote_total_instances: decorated.size,
+        hub_instances: visible.count { |item| item[:hub_managed] },
+        connected_instances: visible.count { |item| connected?(item[:status]) },
+        call_capable_instances: visible.count { |item| item[:calls_supported] },
+        instances: visible.sort_by { |item| [item[:hub_managed] ? 0 : 1, item[:name].to_s.downcase] }
       }
     rescue ConnectApi::Error => e
       {
@@ -31,6 +33,7 @@ module ConnectApi
         version: nil,
         manager_url: configured_manager_url,
         total_instances: 0,
+        remote_total_instances: 0,
         hub_instances: hub_mappings.size,
         connected_instances: 0,
         call_capable_instances: 0,
@@ -41,6 +44,24 @@ module ConnectApi
     def managed_channel(instance_name)
       mapping = hub_mappings[instance_name.to_s]
       mapping && mapping[:channel]
+    end
+
+    def hub_owned?(instance_name)
+      managed_channel(instance_name).present? || ConnectApi::InstanceNamespace.owned?(instance_name)
+    end
+
+    def mark_manually_deleted!(instance_name)
+      channel = managed_channel(instance_name)
+      return unless channel
+
+      config = channel.provider_config.to_h.deep_stringify_keys
+      config['connect_api_manual_deletion'] = true
+      config['provisioned'] = false
+      config['communication_ready'] = false
+      config['meta_compatible_verified'] = false
+      config['connection_status'] = 'deleted'
+      config['last_error'] = 'Instância removida pelo administrador. Use Reconciliar agora para recriá-la.'
+      channel.update_columns(provider_config: config, updated_at: Time.current) # rubocop:disable Rails/SkipsModelValidations
     end
 
     def sync_provider!(instance_name, provider)
@@ -79,8 +100,9 @@ module ConnectApi
       mapping = mappings[name]
       status = item['connectionStatus'] || item['status'] || item['state'] || item.dig('instance', 'state')
       status = status['state'] if status.is_a?(Hash)
+      owned = mapping.present? || ConnectApi::InstanceNamespace.owned?(name)
 
-      settings = provider == CALL_PROVIDER ? instance_settings(name) : {}
+      settings = provider == CALL_PROVIDER && owned ? instance_settings(name) : {}
 
       {
         id: (item['id'] || item['instanceId'] || name).to_s,
@@ -95,6 +117,7 @@ module ConnectApi
         voice_supported: provider == CALL_PROVIDER,
         voip_max_concurrent_calls: settings['voipMaxConcurrentCalls'],
         voip_max_concurrent_calls_limit: settings['voipMaxConcurrentCallsLimit'],
+        hub_owned: owned,
         hub_managed: mapping.present?,
         inbox_id: mapping&.dig(:inbox)&.id,
         inbox_name: mapping&.dig(:inbox)&.name,

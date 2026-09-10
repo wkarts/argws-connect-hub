@@ -10,7 +10,7 @@ class SuperAdmin::ConnectApiController < SuperAdmin::ApplicationController
 
   def instance_action
     instance_name = required_instance_name
-    ensure_hub_managed!(instance_name)
+    ensure_hub_owned!(instance_name)
     action = params[:operation].to_s
     raise ConnectApi::Error, 'Operação não permitida.' unless ACTIONS.include?(action)
 
@@ -18,9 +18,7 @@ class SuperAdmin::ConnectApiController < SuperAdmin::ApplicationController
              when 'restart' then client.restart(instance_name)
              when 'logout' then client.logout(instance_name)
              when 'connect' then client.connect(instance_name, number: params[:number])
-             when 'delete'
-               ensure_delete_confirmation!(instance_name)
-               client.delete_instance(instance_name)
+             when 'delete' then delete_instance(instance_name)
              end
 
     flash[:notice] = success_message(action, instance_name, result)
@@ -32,7 +30,7 @@ class SuperAdmin::ConnectApiController < SuperAdmin::ApplicationController
 
   def migrate_provider
     instance_name = required_instance_name
-    ensure_hub_managed!(instance_name)
+    ensure_hub_owned!(instance_name)
     target_provider = params[:target_provider].to_s
     raise ConnectApi::Error, 'Provider de destino inválido.' unless PROVIDERS.include?(target_provider)
 
@@ -61,8 +59,6 @@ class SuperAdmin::ConnectApiController < SuperAdmin::ApplicationController
     current_settings = client.find_settings(instance_name).to_h.deep_stringify_keys
     channel_config = channel.provider_config.to_h.deep_stringify_keys
 
-    # Connect|API <= current develop requires the complete settings contract on
-    # /settings/set. Preserve every existing setting and change only the VOIP limit.
     settings_payload = {
       rejectCall: boolean_setting(current_settings, 'rejectCall', false),
       groupsIgnore: boolean_setting(current_settings, 'groupsIgnore', channel_config.fetch('ignore_group_messages', true)),
@@ -98,10 +94,30 @@ class SuperAdmin::ConnectApiController < SuperAdmin::ApplicationController
     params[:instance_name].to_s.presence || raise(ConnectApi::Error, 'Instância é obrigatória.')
   end
 
+  def ensure_hub_owned!(instance_name)
+    return if registry.hub_owned?(instance_name)
+
+    raise ConnectApi::Error, 'Esta instância não pertence a esta instalação do HUB.'
+  end
+
   def ensure_hub_managed!(instance_name)
     return if registry.managed_channel(instance_name)
 
-    raise ConnectApi::Error, 'Esta instância não está vinculada a uma caixa do HUB e é exibida somente para inventário.'
+    raise ConnectApi::Error, 'Esta instância não está vinculada a uma caixa do HUB.'
+  end
+
+  def delete_instance(instance_name)
+    ensure_delete_confirmation!(instance_name)
+    result = client.delete_instance(instance_name)
+    registry.mark_manually_deleted!(instance_name)
+    result
+  rescue ConnectApi::Error => e
+    if e.status.to_i == 404
+      registry.mark_manually_deleted!(instance_name)
+      return { 'status' => 'already_absent' }
+    end
+
+    raise
   end
 
   def ensure_delete_confirmation!(instance_name)

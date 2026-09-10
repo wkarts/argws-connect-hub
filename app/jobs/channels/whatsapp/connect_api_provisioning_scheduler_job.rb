@@ -7,6 +7,7 @@ class Channels::Whatsapp::ConnectApiProvisioningSchedulerJob < ApplicationJob
 
   def perform
     Channel::Whatsapp.where(provider: 'connectapi').find_each do |channel|
+      next if manual_instance_deletion?(channel)
       next unless reconciliation_required?(channel)
 
       reconcile(channel)
@@ -30,20 +31,25 @@ class Channels::Whatsapp::ConnectApiProvisioningSchedulerJob < ApplicationJob
     service = Whatsapp::ConnectApiWebhookSetupService.new
     success = service.perform(channel)
 
-    # The setup service is also used during model validation, where the caller
-    # persists the channel. Here we persist explicitly without triggering the
-    # remote validation again.
     channel.update_columns( # rubocop:disable Rails/SkipsModelValidations
       provider_config: channel.provider_config,
       updated_at: Time.current
     )
 
-    return if success
+    if success
+      Channels::Whatsapp::ConnectApiMediaSyncJob.perform_later(channel.id)
+      Channels::Whatsapp::ConnectApiProfilePictureSchedulerJob.perform_later
+      return
+    end
 
     Rails.logger.warn("[HUB Connect|API] provisioning reconciliation failed channel=#{channel.id}")
   rescue StandardError => e
     Rails.logger.error(
       "[HUB Connect|API] provisioning reconciliation exception channel=#{channel.id}: #{e.class}: #{e.message}"
     )
+  end
+
+  def manual_instance_deletion?(channel)
+    ActiveModel::Type::Boolean.new.cast(channel.provider_config.to_h['connect_api_manual_deletion'])
   end
 end

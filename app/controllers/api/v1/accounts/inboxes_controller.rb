@@ -81,7 +81,20 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
   def create_channel
     return unless %w[web_widget api email line telegram whatsapp sms internal].include?(permitted_params[:channel][:type])
 
-    account_channels_method.create!(permitted_params(channel_type_from_params::EDITABLE_ATTRS)[:channel].except(:type))
+    channel_type = channel_type_from_params
+    channel_params = permitted_params(channel_type::EDITABLE_ATTRS)[:channel].except(:type)
+    prepare_connect_api_channel_params!(channel_params) if channel_type == Channel::Whatsapp
+
+    account_channels_method.create!(channel_params)
+  end
+
+  def prepare_connect_api_channel_params!(channel_params)
+    provider = channel_params[:provider].presence || channel_params['provider'].presence || 'connectapi'
+    return unless provider == 'connectapi'
+
+    provider_config = (channel_params[:provider_config] || channel_params['provider_config'] || {}).to_h.deep_stringify_keys
+    provider_config['hub_inbox_name'] = permitted_params[:name].to_s.strip.presence || 'whatsapp'
+    channel_params[:provider_config] = provider_config
   end
 
   def update_inbox_working_hours
