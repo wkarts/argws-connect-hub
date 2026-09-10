@@ -74,47 +74,29 @@ describe Whatsapp::IncomingMessageConnectApiService do
     }.with_indifferent_access
   end
 
-  def native_media_record(message_id:, from_me: false, source: nil)
-    {
-      'key' => {
-        'id' => message_id,
-        'fromMe' => from_me,
-        'remoteJid' => '22654721644999@lid',
-        'remoteJidAlt' => "#{peer_phone}@s.whatsapp.net"
-      },
-      'source' => source,
-      'messageType' => 'audioMessage',
-      'message' => {
-        'audioMessage' => {
-          'mimetype' => 'audio/ogg; codecs=opus'
-        }
-      }
-    }.compact
-  end
-
   def stub_native_audio(message_id:, from_me: false, source: nil, bytes: 'voice-bytes')
-    native_record = native_media_record(message_id: message_id, from_me: from_me, source: source)
-    lookup_response = double(
-      success?: true,
-      parsed_response: { 'messages' => { 'records' => [native_record] } }
-    )
     media_response = double(
       success?: true,
       code: 201,
       body: '',
       parsed_response: {
-        'mediaType' => 'audioMessage',
+        'mediaType' => 'audio',
         'fileName' => "#{message_id}.ogg",
         'mimetype' => 'audio/ogg; codecs=opus',
-        'base64' => Base64.strict_encode64(bytes)
-      }
+        'base64' => Base64.strict_encode64(bytes),
+        'fromMe' => from_me,
+        'source' => source
+      }.compact
     )
 
-    allow(HTTParty).to receive(:post) do |url, _options|
-      if url.include?('/chat/findMessages/')
-        lookup_response
-      elsif url.include?('/chat/getBase64FromMediaMessage/')
+    allow(HTTParty).to receive(:post) do |url, options|
+      if url.include?('/chat/getBase64FromMediaMessage/')
+        request_body = JSON.parse(options.fetch(:body))
+        expect(request_body['message']).to eq('key' => { 'id' => message_id })
+        expect(request_body['convertToMp4']).to be(false)
         media_response
+      elsif url.include?('/chat/findMessages/')
+        raise 'Media download must not depend on the sanitized findMessages payload'
       else
         raise "Unexpected POST #{url}"
       end
@@ -227,7 +209,7 @@ describe Whatsapp::IncomingMessageConnectApiService do
     expect(Down).to have_received(:download).with('https://storage.example/signed/audio.ogg')
   end
 
-  it 'recovers incoming audio through the native base64 endpoint when Graph media is unavailable' do
+  it 'recovers incoming audio by message key when Graph media is unavailable' do
     descriptor = double(success?: false, code: 500, body: 'descriptor unavailable')
     allow(HTTParty).to receive(:get).and_return(descriptor)
     stub_native_audio(message_id: 'AUDIO-IN-1')
@@ -276,6 +258,36 @@ describe Whatsapp::IncomingMessageConnectApiService do
     expect(message.content_attributes['connect_api_external_outgoing']).to be(true)
     expect(message.content_attributes['connect_api_replied_outside_hub']).to be(true)
     expect(message.content_attributes['connect_api_source']).to eq('android')
+  end
+
+  it 'uses the webhook MIME type when the provider returns only a logical media type' do
+    descriptor = double(success?: false, code: 500, body: 'descriptor unavailable')
+    allow(HTTParty).to receive(:get).and_return(descriptor)
+    media_response = double(
+      success?: true,
+      code: 201,
+      body: '',
+      parsed_response: {
+        'mediaType' => 'audio',
+        'fileName' => 'AUDIO-MIME-1.ogg',
+        'base64' => Base64.strict_encode64('voice-without-native-mime')
+      }
+    )
+    allow(HTTParty).to receive(:post).and_return(media_response)
+
+    described_class.new(
+      inbox: whatsapp_channel.inbox,
+      params: webhook(
+        message_id: 'AUDIO-MIME-1',
+        from: peer_phone,
+        type: 'audio',
+        media: { id: 'AUDIO-MIME-1', mime_type: 'audio/ogg; codecs=opus' }
+      )
+    ).perform
+
+    attachment = whatsapp_channel.inbox.conversations.last.messages.last.attachments.first
+    expect(attachment.file.blob.content_type).to start_with('audio/ogg')
+    expect(attachment.file.download).to eq('voice-without-native-mime')
   end
 
   it 'refreshes a number-only contact with Connect API push name and profile picture metadata' do
