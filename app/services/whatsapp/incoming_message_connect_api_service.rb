@@ -1,15 +1,24 @@
 # frozen_string_literal: true
 
-# Connect|API emits Meta Cloud-compatible webhook envelopes for HUB.
-#
-# This adapter keeps the Meta-compatible processing intact while adding the
-# Connect|API-specific guarantees HUB needs:
-# - phone-number identity remains canonical across PN/LID aliases;
-# - WhatsApp push name/profile picture refresh generic HUB contacts;
-# - only one active conversation is kept for a contact/inbox;
-# - messages emitted by the linked WhatsApp device remain outgoing messages.
+require 'cgi'
+
+# Connect|API exposes a generic Meta-compatible webhook, but HUB additionally
+# reconciles each message with the native message repository when the webhook
+# does not carry provider-specific direction/JID metadata. This keeps HUB
+# correct without requiring a HUB-specific contract in Connect|API.
 class Whatsapp::IncomingMessageConnectApiService < Whatsapp::IncomingMessageWhatsappCloudService
+  MEDIA_LOOKUP_ATTEMPTS = 4
+  MEDIA_LOOKUP_DELAYS = [0, 0.3, 0.8, 1.5].freeze
+  MESSAGE_LOOKUP_DELAYS = [0, 0.15, 0.4, 0.8].freeze
+
   private
+
+  def processed_params
+    value = super
+    enrich_from_native_message!(value) unless @connect_api_message_enriched
+    @connect_api_message_enriched = true
+    value
+  end
 
   def set_contact
     super
@@ -33,15 +42,171 @@ class Whatsapp::IncomingMessageConnectApiService < Whatsapp::IncomingMessageWhat
     return @message unless ActiveModel::Type::Boolean.new.cast(context['from_me'])
 
     source = context['source'].to_s.strip.downcase.presence
-    origin = source == 'api' ? 'bot' : 'mobile'
+    origin = source == 'api' ? 'bot' : 'external'
 
     @message.content_attributes = @message.content_attributes.to_h.merge(
       'connect_api_external_outgoing' => true,
       'connect_api_origin' => origin,
-      'connect_api_source' => source
+      'connect_api_source' => source,
+      'connect_api_replied_outside_hub' => true
     ).compact
 
     @message
+  end
+
+  # The Graph compatibility media descriptor is authenticated with the instance
+  # token. The returned URL is a storage/signed URL and must be downloaded
+  # without forwarding the Connect|API Authorization header.
+  def download_attachment_file(attachment_payload)
+    media_id = attachment_payload[:id].to_s
+    return if media_id.blank?
+
+    descriptor = nil
+    MEDIA_LOOKUP_ATTEMPTS.times do |attempt|
+      sleep(MEDIA_LOOKUP_DELAYS[attempt]) if MEDIA_LOOKUP_DELAYS[attempt].positive?
+      descriptor = HTTParty.get(
+        inbox.channel.media_url(media_id),
+        headers: inbox.channel.api_headers,
+        timeout: request_timeout
+      )
+      break if descriptor.success?
+      break unless descriptor.code.to_i == 404
+    end
+
+    unless descriptor&.success?
+      Rails.logger.warn(
+        "[HUB Connect|API] media descriptor unavailable id=#{media_id} " \
+        "status=#{descriptor&.code || 'n/a'} body=#{descriptor&.body.to_s.slice(0, 300)}"
+      )
+      return
+    end
+
+    media_url = descriptor.parsed_response.to_h.deep_stringify_keys['url'].to_s
+    return if media_url.blank?
+
+    Down.download(media_url)
+  rescue StandardError => e
+    Rails.logger.warn("[HUB Connect|API] media download failed id=#{media_id}: #{e.class}: #{e.message}")
+    nil
+  end
+
+  def enrich_from_native_message!(payload)
+    message = payload&.dig(:messages)&.first
+    return if message.blank? || message[:id].blank?
+
+    existing_context = message[:connect_api].to_h.deep_stringify_keys
+    if existing_context.key?('from_me')
+      apply_existing_context!(payload, message, existing_context)
+      return
+    end
+
+    native = native_message_by_source_id(message[:id])
+
+    if native.present?
+      native = native.deep_stringify_keys
+      key = native['key'].to_h.deep_stringify_keys
+      from_me = key.key?('fromMe') ? ActiveModel::Type::Boolean.new.cast(key['fromMe']) : nil
+      source = native['source'].to_s.strip.presence
+      peer = canonical_peer_phone(key)
+
+      message[:connect_api] = existing_context.merge(
+        'from_me' => from_me,
+        'remote_jid' => key['remoteJid'],
+        'remote_jid_alt' => key['remoteJidAlt'],
+        'participant' => key['participant'],
+        'participant_alt' => key['participantAlt'],
+        'source' => source
+      ).compact
+
+      if peer.present?
+        contact = payload[:contacts]&.first
+        contact[:wa_id] = peer if contact.present?
+
+        if contact.present? && meaningful_profile_name?(native['pushName'].to_s)
+          contact[:profile] ||= {}
+          current_name = contact.dig(:profile, :name).to_s
+          contact[:profile][:name] = native['pushName'].to_s if current_name.blank? || generic_name_value?(current_name)
+        end
+      end
+
+      message[:from] = from_me ? own_phone_number(payload) : peer if !from_me.nil? && (from_me || peer.present?)
+      return
+    end
+  rescue StandardError => e
+    Rails.logger.warn("[HUB Connect|API] native message reconciliation skipped: #{e.class}: #{e.message}")
+  end
+
+  def apply_existing_context!(payload, message, context)
+    from_me = ActiveModel::Type::Boolean.new.cast(context['from_me'])
+    peer = canonical_peer_phone(context)
+
+    if peer.present? && payload[:contacts]&.first.present?
+      payload[:contacts].first[:wa_id] = peer
+    end
+
+    message[:from] = from_me ? own_phone_number(payload) : peer if from_me || peer.present?
+  end
+
+  def native_message_by_source_id(source_id)
+    MESSAGE_LOOKUP_DELAYS.each do |delay_seconds|
+      sleep(delay_seconds) if delay_seconds.positive?
+      response = HTTParty.post(
+        "#{connect_api_base_url}/chat/findMessages/#{CGI.escape(instance_name)}",
+        headers: native_headers,
+        body: {
+          where: { key: { id: source_id.to_s } },
+          page: 1,
+          offset: 1
+        }.to_json,
+        timeout: request_timeout
+      )
+      next unless response.success?
+
+      data = response.parsed_response
+      data = data.deep_stringify_keys if data.respond_to?(:deep_stringify_keys)
+      records = if data.is_a?(Array)
+                  data
+                elsif data.is_a?(Hash)
+                  data.dig('messages', 'records') || data['records'] || data['data'] || []
+                else
+                  []
+                end
+
+      record = Array(records).first
+      return record if record.present?
+    end
+
+    nil
+  rescue StandardError => e
+    Rails.logger.debug("[HUB Connect|API] message lookup failed source_id=#{source_id}: #{e.class}: #{e.message}")
+    nil
+  end
+
+  def canonical_peer_phone(values)
+    values = values.to_h.deep_stringify_keys
+    candidates = [
+      values['remoteJidAlt'],
+      values['remote_jid_alt'],
+      values['remoteJid'],
+      values['remote_jid'],
+      values['participantAlt'],
+      values['participant_alt'],
+      values['participant'],
+      values['senderPn'],
+      values['sender']
+    ].compact_blank.map(&:to_s).uniq
+
+    phone_jid = candidates.find { |value| value.match?(/@(s\.whatsapp\.net|c\.us)\z/i) }
+    candidate = phone_jid || candidates.find { |value| !value.match?(/@(lid|g\.us|broadcast)\z/i) }
+    return if candidate.blank?
+
+    digits = candidate.split('@', 2).first.gsub(/\D/, '')
+    digits.presence
+  end
+
+  def own_phone_number(payload)
+    payload.dig(:metadata, :display_phone_number).to_s.gsub(/\D/, '').presence ||
+      inbox.channel.provider_config['phone_number_id'].to_s.gsub(/\D/, '').presence
   end
 
   def refresh_connect_api_contact!
@@ -88,6 +253,10 @@ class Whatsapp::IncomingMessageConnectApiService < Whatsapp::IncomingMessageWhat
     digits.blank? || digits.length < 8
   end
 
+  def generic_name_value?(name)
+    name.to_s.match?(/\A\+?\d[\d\s().-]{7,}\z/)
+  end
+
   def generic_contact_name?(contact)
     name = contact.name.to_s.strip
     return true if name.blank?
@@ -96,7 +265,7 @@ class Whatsapp::IncomingMessageConnectApiService < Whatsapp::IncomingMessageWhat
     phone_digits = contact.phone_number.to_s.gsub(/\D/, '')
     source_digits = @contact_inbox&.source_id.to_s.gsub(/\D/, '')
 
-    [phone_digits, source_digits].compact_blank.include?(name_digits) || name.match?(/\A\+?\d[\d\s().-]{7,}\z/)
+    [phone_digits, source_digits].compact_blank.include?(name_digits) || generic_name_value?(name)
   end
 
   def resolve_duplicate_active_conversations!
@@ -113,5 +282,36 @@ class Whatsapp::IncomingMessageConnectApiService < Whatsapp::IncomingMessageWhat
       "[HUB Connect|API] resolved duplicate active conversations contact_inbox=#{@contact_inbox.id} " \
       "kept=#{@conversation.id} resolved=#{duplicate_ids.join(',')}"
     )
+  end
+
+  def connect_api_base_url
+    @connect_api_base_url ||= GlobalConfigService.load(
+      'CONNECT_API_BASE_URL',
+      ENV.fetch('CONNECT_API_BASE_URL', '')
+    ).to_s.sub(%r{/+$}, '').tap do |value|
+      raise 'CONNECT_API_BASE_URL is not configured' unless value.start_with?('http://', 'https://')
+    end
+  end
+
+  def native_headers
+    {
+      'apikey' => GlobalConfigService.load(
+        'CONNECT_API_AUTH_TOKEN',
+        ENV.fetch('CONNECT_API_AUTH_TOKEN', '')
+      ).to_s.strip,
+      'Content-Type' => 'application/json'
+    }
+  end
+
+  def instance_name
+    inbox.channel.provider_config['instance_name'].to_s.strip
+  end
+
+  def request_timeout
+    value = GlobalConfigService.load(
+      'CONNECT_API_REQUEST_TIMEOUT',
+      ENV.fetch('CONNECT_API_REQUEST_TIMEOUT', 60)
+    ).to_i
+    value.positive? ? value : 60
   end
 end
