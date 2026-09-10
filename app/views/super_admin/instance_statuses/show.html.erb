@@ -1,5 +1,5 @@
 <% content_for(:title) do %>
-  Instance Status
+  Saúde da instância
 <% end %>
 <header class="main-content__header" role="banner">
   <h1 class="main-content__page-title" id="page-title">
@@ -8,16 +8,15 @@
 </header>
 <section class="main-content__body">
   <table>
-  <tr>
-    <th>Metric</th>
-    <th>Value</th>
-  </tr>
-  <% @metrics.each do |key,value| %>
-   <tr>
-   <td> <%= key %> </td>
-   <td> <%= value %></td>
-  </tr>
-  <% end %>
-</table>
-
+    <tr>
+      <th>Métrica</th>
+      <th>Valor</th>
+    </tr>
+    <% @metrics.each do |key, value| %>
+      <tr>
+        <td><%= key %></td>
+        <td><%= value %></td>
+      </tr>
+    <% end %>
+  </table>
 </section>
