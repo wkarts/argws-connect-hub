@@ -86,7 +86,7 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
     instance_name = channel.provider_config.to_h['instance_name'].to_s.strip
     return if instance_name.blank?
 
-    Channels::Whatsapp::ConnectApiDeleteInstanceJob.perform_later(instance_name)
+    Channels::Whatsapp::DeleteConnectApiInstanceJob.perform_later(instance_name)
   end
 
   def create_channel
