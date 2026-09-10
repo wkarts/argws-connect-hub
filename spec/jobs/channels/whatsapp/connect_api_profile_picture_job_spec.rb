@@ -18,7 +18,6 @@ describe Channels::Whatsapp::ConnectApiProfilePictureJob do
   let(:client) { instance_double(ConnectApi::Client) }
 
   before do
-    contact.update!(phone_number: '+55 75 8844-9231')
     allow(ConnectApi::Client).to receive(:new).and_return(client)
     allow(Avatar::AvatarFromUrlJob).to receive(:perform_later)
   end
