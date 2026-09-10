@@ -1,17 +1,19 @@
 # frozen_string_literal: true
 
+require 'cgi'
+
 class Whatsapp::Providers::ConnectApiService < Whatsapp::Providers::WhatsappCloudService
+  DEFAULT_TIMEOUT = 60
+
   def validate_provider_config?
     Whatsapp::ConnectApiWebhookSetupService.new.perform(whatsapp_channel)
   end
 
-  # HUB is a trusted server-to-server client of Connect|API. Prefer the
-  # installation-level credential for Graph-compatible requests so a stale or
-  # rotated per-instance token cannot break message delivery after an instance
-  # reconnect/migration. The instance token remains a compatibility fallback.
+  # Graph-compatible resources (templates/media descriptors) are scoped to the
+  # Connect|API instance and therefore must use that instance token.
   def api_headers
-    token = hub_graph_token
-    raise 'CONNECT_API_AUTH_TOKEN is not configured' if token.blank?
+    token = instance_token
+    raise 'Connect|API instance token is not configured' if token.blank?
 
     {
       'Authorization' => "Bearer #{token}",
@@ -19,14 +21,26 @@ class Whatsapp::Providers::ConnectApiService < Whatsapp::Providers::WhatsappClou
     }
   end
 
-  # Connect|API Meta-compatible endpoints authenticate with
-  # Authorization: Bearer. Do not rely on Meta's legacy access_token query form.
+  # Message delivery intentionally uses the native Connect|API endpoints. This
+  # keeps HUB aligned with the generic Connect|API contract and avoids coupling
+  # regular sends to the Meta-compatible OAuth facade.
+  def send_message(phone_number, message)
+    if message.attachments.present?
+      send_native_attachment_message(phone_number, message)
+    else
+      send_native_text_message(phone_number, message)
+    end
+  end
+
+  # Templates remain on the Meta-compatible facade because their wire format is
+  # already the Meta template contract and the instance token is valid there.
   def sync_templates
     whatsapp_channel.mark_message_templates_updated
 
     response = HTTParty.get(
       "#{business_account_path}/message_templates",
-      headers: api_headers
+      headers: api_headers,
+      timeout: request_timeout
     )
 
     templates = response.success? ? Array(response['data']) : []
@@ -41,10 +55,143 @@ class Whatsapp::Providers::ConnectApiService < Whatsapp::Providers::WhatsappClou
 
   private
 
-  def hub_graph_token
+  def send_native_text_message(phone_number, message)
+    response = HTTParty.post(
+      native_endpoint('sendText'),
+      headers: native_headers,
+      body: {
+        number: normalize_phone(phone_number),
+        text: format_content(message)
+      }.to_json,
+      timeout: request_timeout
+    )
+
+    process_native_response(message, response)
+  rescue StandardError => e
+    process_native_exception(message, e)
+  end
+
+  def send_native_attachment_message(phone_number, message)
+    attachment = message.attachments.first
+    download_url = attachment.download_url
+    body = { number: normalize_phone(phone_number) }
+
+    endpoint = if attachment.file_type == 'audio'
+                 body[:audio] = download_url
+                 'sendWhatsAppAudio'
+               else
+                 media_type = %w[image video].include?(attachment.file_type) ? attachment.file_type : 'document'
+                 body[:mediatype] = media_type
+                 body[:media] = download_url
+                 body[:caption] = message.content if message.content.present? && media_type != 'audio'
+                 body[:fileName] = attachment.file.filename.to_s if media_type == 'document' && attachment.file.attached?
+                 body[:mimetype] = attachment.file.content_type if attachment.file.attached? && attachment.file.content_type.present?
+                 'sendMedia'
+               end
+
+    response = HTTParty.post(
+      native_endpoint(endpoint),
+      headers: native_headers,
+      body: body.compact.to_json,
+      timeout: request_timeout
+    )
+
+    process_native_response(message, response)
+  rescue StandardError => e
+    process_native_exception(message, e)
+  end
+
+  def process_native_response(message, response)
+    if response.success?
+      message_id = extract_message_id(response.parsed_response)
+      return message_id if message_id.present?
+
+      Rails.logger.warn('[HUB Connect|API] send succeeded without a message id')
+      return nil
+    end
+
+    error = response_error(response)
+    Rails.logger.error("[HUB Connect|API] send failed: #{error}")
+    message.update!(status: :failed, external_error: error)
+    nil
+  end
+
+  def process_native_exception(message, error)
+    safe_error = "#{error.class}: #{error.message}".slice(0, 1000)
+    Rails.logger.error("[HUB Connect|API] send exception: #{safe_error}")
+    message.update!(status: :failed, external_error: safe_error)
+    nil
+  rescue StandardError
+    nil
+  end
+
+  def extract_message_id(payload)
+    data = payload.respond_to?(:to_h) ? payload.to_h.deep_stringify_keys : {}
+
+    data.dig('key', 'id').presence ||
+      data.dig('message', 'key', 'id').presence ||
+      data.dig('data', 'key', 'id').presence ||
+      data.dig('messages', 0, 'id').presence ||
+      data['id'].presence
+  end
+
+  def response_error(response)
+    parsed = response.parsed_response
+    if parsed.is_a?(Hash)
+      parsed = parsed.deep_stringify_keys
+      return parsed.dig('error', 'message').to_s if parsed.dig('error', 'message').present?
+      return parsed['message'].to_s if parsed['message'].present?
+      return parsed['error'].to_s if parsed['error'].present?
+    end
+
+    response.body.to_s.presence || "HTTP #{response.code}"
+  end
+
+  def native_endpoint(action)
+    "#{connect_api_base_url}/message/#{action}/#{CGI.escape(instance_name)}"
+  end
+
+  def native_headers
+    {
+      'apikey' => installation_token,
+      'Content-Type' => 'application/json'
+    }
+  end
+
+  def connect_api_base_url
+    @connect_api_base_url ||= GlobalConfigService.load(
+      'CONNECT_API_BASE_URL',
+      ENV.fetch('CONNECT_API_BASE_URL', '')
+    ).to_s.sub(%r{/+$}, '').tap do |value|
+      raise 'CONNECT_API_BASE_URL is not configured' unless value.start_with?('http://', 'https://')
+    end
+  end
+
+  def installation_token
     GlobalConfigService.load(
       'CONNECT_API_AUTH_TOKEN',
       ENV.fetch('CONNECT_API_AUTH_TOKEN', '')
-    ).to_s.strip.presence || whatsapp_channel.provider_config['api_key'].to_s.strip.presence
+    ).to_s.strip.presence || raise('CONNECT_API_AUTH_TOKEN is not configured')
+  end
+
+  def instance_token
+    whatsapp_channel.provider_config['api_key'].to_s.strip.presence
+  end
+
+  def instance_name
+    whatsapp_channel.provider_config['instance_name'].to_s.strip.presence ||
+      raise('Connect|API instance name is not configured')
+  end
+
+  def request_timeout
+    value = GlobalConfigService.load(
+      'CONNECT_API_REQUEST_TIMEOUT',
+      ENV.fetch('CONNECT_API_REQUEST_TIMEOUT', DEFAULT_TIMEOUT)
+    ).to_i
+    value.positive? ? value : DEFAULT_TIMEOUT
+  end
+
+  def normalize_phone(value)
+    value.to_s.gsub(/\D/, '')
   end
 end
