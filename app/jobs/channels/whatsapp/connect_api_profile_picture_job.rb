@@ -73,8 +73,7 @@ class Channels::Whatsapp::ConnectApiProfilePictureJob < ApplicationJob
 
     values = [contact.phone_number, contact_inbox&.source_id, *aliases]
     digits = values.filter_map do |value|
-      local = value.to_s.split('@', 2).first
-      number = local.gsub(/\D/, '')
+      number = value.to_s.split('@', 2).first.to_s.gsub(/\D/, '')
       number.presence
     end
 
