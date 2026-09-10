@@ -77,8 +77,6 @@ class Whatsapp::ConnectApiWebhookSetupService
       token: config['api_key'],
       integration: config['connect_api_provider'],
       qrcode: false,
-      # The stable number makes the generic Meta-compatible identity available
-      # even before device authentication completes.
       number: config['phone_number_id'],
       groupsIgnore: config.fetch('ignore_group_messages', true),
       syncFullHistory: !config.fetch('ignore_history_messages', true)
@@ -94,11 +92,7 @@ class Whatsapp::ConnectApiWebhookSetupService
       timeout: request_timeout
     )
 
-    unless response.success?
-      # A persisted instance may already exist after a HUB restart. Verify using
-      # the installation credential before treating create conflict as failure.
-      raise response_body(response) unless instance_accessible?
-    end
+    raise response_body(response) unless response.success? || instance_accessible?
 
     config['provisioned'] = true
     persist_config!
@@ -120,9 +114,6 @@ class Whatsapp::ConnectApiWebhookSetupService
     persist_config!
   end
 
-  # Do not assume that a successful PUT means the callback was persisted. Read
-  # the compatibility state back and fail provisioning if the instance points
-  # somewhere else. This is the communication contract HUB actually consumes.
   def verify_meta_compatibility!
     response = HTTParty.get(
       "#{base_url}/compat/meta/#{CGI.escape(config['instance_name'])}",
@@ -235,22 +226,18 @@ class Whatsapp::ConnectApiWebhookSetupService
     instances = response.parsed_response
     instances = [instances] unless instances.is_a?(Array)
     instance = instances.find do |item|
-      item = item.to_h.deep_stringify_keys
-      (item['name'] || item['instanceName']).to_s == config['instance_name'].to_s
+      data = item.to_h.deep_stringify_keys
+      (data['name'] || data['instanceName']).to_s == config['instance_name'].to_s
     end
     return unless instance
 
     instance = instance.to_h.deep_stringify_keys
 
-    # Existing instances are authoritative for their own token. HUB may have
-    # generated a provisional token locally before discovering an already
-    # persisted Connect|API instance. Reconcile it here so Graph-scoped media
-    # and template operations never keep using a stale credential.
+    # For an already persisted instance, the remote record is authoritative for
+    # its token. This heals HUB configurations that retained a provisional or
+    # stale token and is required by Graph-scoped media/template operations.
     remote_token = instance['token'].to_s.strip.presence || instance['hash'].to_s.strip.presence
-    if remote_token.present? && !ActiveSupport::SecurityUtils.secure_compare(
-      Digest::SHA256.hexdigest(config['api_key'].to_s),
-      Digest::SHA256.hexdigest(remote_token)
-    )
+    if remote_token.present? && config['api_key'].to_s != remote_token
       Rails.logger.info("[HUB Connect|API] reconciled instance credential name=#{config['instance_name']}")
       config['api_key'] = remote_token
     end
@@ -299,8 +286,6 @@ class Whatsapp::ConnectApiWebhookSetupService
     { 'apikey' => admin_token, 'Content-Type' => 'application/json' }
   end
 
-  # Lifecycle/configuration endpoints use the normal generic apikey guard. They
-  # are not Graph OAuth endpoints, so do not manufacture a Bearer credential.
   def instance_headers
     admin_headers
   end
