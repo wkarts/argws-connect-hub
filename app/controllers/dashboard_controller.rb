@@ -57,7 +57,7 @@ class DashboardController < ActionController::Base
 
   def app_config
     {
-      APP_VERSION: Hub.config[:version],
+      APP_VERSION: Hub.version,
       VAPID_PUBLIC_KEY: VapidService.public_key,
       ENABLE_ACCOUNT_SIGNUP: GlobalConfigService.load('ENABLE_ACCOUNT_SIGNUP', 'false'),
       FB_APP_ID: GlobalConfigService.load('FB_APP_ID', ''),
@@ -79,12 +79,8 @@ class DashboardController < ActionController::Base
   end
 
   def sensitive_path?
-    # dont load dashboard scripts on sensitive paths like password reset
     sensitive_paths = [edit_user_password_path].freeze
-
-    # remove app prefix
     current_path = request.path.gsub(%r{^/app}, '')
-
     sensitive_paths.include?(current_path)
   end
 end
