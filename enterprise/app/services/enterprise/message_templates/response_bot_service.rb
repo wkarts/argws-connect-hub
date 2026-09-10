@@ -38,8 +38,11 @@ class Enterprise::MessageTemplates::ResponseBotService
       process_response
     end
   rescue StandardError => e
+    Rails.logger.error(
+      "[Enterprise::MessageTemplates::ResponseBotService] #{e.class}: #{e.message} " \
+      "account_id=#{conversation.account_id} conversation_id=#{conversation.id}"
+    )
     process_action('handoff')
-    ChatwootExceptionTracker.new(e, account: conversation.account).capture_exception
     true
   end
 
