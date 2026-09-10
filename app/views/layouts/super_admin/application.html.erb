@@ -1,26 +1,19 @@
-<%#
-# Application Layout
-
-This view template is used as the layout
-for every page that Administrate generates.
-
-By default, it renders:
-- Navigation
-- Content for a search bar
-  (if provided by a `content_for` block in a nested page)
-- Flashes
-- Links to stylesheets and JavaScripts
-%>
-
 <!DOCTYPE html>
-<html lang="<%= I18n.locale %>" class="w-full h-full">
+<html lang="pt-BR" class="w-full h-full">
 <head>
   <meta charset="utf-8">
   <meta name="ROBOTS" content="NOODP">
-  <meta name="viewport" content="initial-scale=1">
-  <title>
-    <%= content_for(:title) %> - <%= application_title %>
-  </title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#2F6FED">
+  <meta name="msapplication-TileColor" content="#2F6FED">
+  <meta name="application-name" content="HUB Admin">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-icon-180x180.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+  <title><%= content_for(:title) %> - <%= application_title %></title>
   <%= render "stylesheet" %>
   <%= javascript_pack_tag 'superadmin' %>
   <%= stylesheet_pack_tag 'superadmin' %>
