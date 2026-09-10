@@ -1,0 +1,55 @@
+pt_BR:
+  administrate:
+    actions:
+      confirm: 'Tem certeza?'
+      destroy: 'Excluir'
+      edit: 'Editar'
+      edit_resource: 'Editar %{name}'
+      show_resource: '%{name}'
+      new_resource: 'Adicionar %{name}'
+      back: 'Voltar'
+    form:
+      error: 'erro'
+      errors: '%{pluralized_errors} impediram que %{resource_name} fosse salvo.'
+    search:
+      clear: 'Limpar busca'
+      label: 'Buscar %{resource}'
+  activerecord:
+    models:
+      account:
+        one: 'Conta'
+        other: 'Contas'
+      user:
+        one: 'Usuário'
+        other: 'Usuários'
+      agent_bot:
+        one: 'Bot de atendimento'
+        other: 'Bots de atendimento'
+      platform_app:
+        one: 'Aplicativo da plataforma'
+        other: 'Aplicativos da plataforma'
+      installation_config:
+        one: 'Configuração do sistema'
+        other: 'Configurações do sistema'
+    attributes:
+      account:
+        id: 'ID'
+        name: 'Nome'
+        locale: 'Idioma'
+        users: 'Usuários'
+        conversations: 'Conversas'
+        status: 'Situação'
+        created_at: 'Criada em'
+        updated_at: 'Atualizada em'
+        account_users: 'Usuários da conta'
+      user:
+        id: 'ID'
+        name: 'Nome'
+        email: 'E-mail'
+        created_at: 'Criado em'
+        updated_at: 'Atualizado em'
+      installation_config:
+        name: 'Configuração'
+        value: 'Valor'
+        created_at: 'Criada em'
+        updated_at: 'Atualizada em'
