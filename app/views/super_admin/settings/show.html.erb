@@ -1,31 +1,70 @@
-<% content_for(:title) do %>HUB — Administração<% end %>
+<% content_for(:title) do %>
+  Settings
+<% end %>
 <header class="flex mx-8 py-4 items-center border-b border-solid border-slate-100" role="banner">
-  <div class="flex flex-col justify-center">
-    <h1 class="text-base font-medium leading-6 text-slate-900" id="page-title">🅷🆄🅱 Administração</h1>
-    <p class="text-sm font-normal leading-5 text-slate-500 m-0">Configuração local da instalação. Nenhum dado de uso é enviado a serviços de analytics ou telemetria.</p>
+  <div class="border border-solid border-slate-100 text-slate-700 mr-4 p-2 rounded-full">
+    <svg width="24" height="24"><use xlink:href="#icon-settings-2-line" /></svg>
+  </div>
+  <div class="flex flex-col h-14 justify-center">
+    <h1 class="text-base font-medium leading-6 text-slate-900" id="page-title"><%= content_for(:title) %></h1>
+    <p class="text-sm font-normal leading-5 text-slate-500 m-0">Configurações da instalação e recursos disponíveis no HUB.</p>
   </div>
 </header>
+
 <section class="main-content__body">
   <div class="bg-white py-2 px-3">
-    <div class="mb-6">
-      <h2 class="text-slate-900 font-medium">Instalação</h2>
-      <div class="flex items-center mt-3">
-        <h4 class="text-sm font-medium text-slate-900 mr-4">Identificador local</h4>
-        <span class="text-sm text-slate-600"><%= HubPlatform.installation_identifier %></span>
+    <div class="mb-4">
+      <div class="flex items-center gap-2">
+        <h2 class="h-5 leading-5 text-slate-900 font-medium">Current plan</h2>
+        <span class="inline-flex rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800">Enterprise</span>
+      </div>
+      <p class="text-slate-600 mt-1"><%= SuperAdmin::FeaturesHelper.plan_details.html_safe %></p>
+      <div class="flex items-center mt-6">
+        <h4 class="text-sm font-medium leading-5 h-5 text-slate-900 mr-4">Installation Identifier</h4>
+        <span class="text-sm leading-5 h-5 text-slate-600"><%= HubPlatform.installation_identifier %></span>
       </div>
       <div class="flex items-center mt-2">
-        <h4 class="text-sm font-medium text-slate-900 mr-4">Plano</h4>
-        <span class="text-sm text-slate-600">Community / Autogerenciado</span>
+        <h4 class="text-sm font-medium leading-5 h-5 text-slate-900 mr-4">HUB Version</h4>
+        <span class="text-sm leading-5 h-5 text-slate-600"><%= Hub.version %></span>
       </div>
     </div>
-    <div class="mt-8 py-4"><h3 class="text-slate-900 font-medium text-base">Recursos</h3></div>
+
+    <div class="flex p-4 border border-solid border-slate-100 rounded-lg mt-8 items-start md:items-center shadow-sm flex-col md:flex-row">
+      <div class="flex flex-col flex-grow gap-1">
+        <h2 class="h-5 leading-5 text-slate-900 text-sm font-medium">Enterprise local</h2>
+        <p class="text-slate-600 m-0 text-sm">O HUB 1.x utiliza a edição Enterprise localmente; não depende de consulta de plano, billing ou telemetria externa.</p>
+      </div>
+      <%= link_to super_admin_installation_configs_path, class: 'mt-4 md:mt-0 flex gap-1 items-center bg-transparent shadow-sm h-9 hover:bg-slate-100 hover:text-slate-800 border border-solid border-slate-100 rounded text-slate-700 font-medium p-2' do %>
+        <svg width="16" height="16"><use xlink:href="#icon-settings-2-line" /></svg>
+        <span class="px-1">System Config</span>
+      <% end %>
+    </div>
+
+    <div class="mt-10 py-4">
+      <h3 class="h-5 leading-5 text-slate-900 font-medium text-base">Features</h3>
+    </div>
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-x-2 gap-y-3">
-      <% SuperAdmin::FeaturesHelper.available_features.each do |feature, attrs| %>
-        <div class="border-slate-100 border p-4 rounded-lg relative shadow-sm">
-          <span class="<%= attrs[:enabled] ? 'bg-green-400 text-white': 'bg-slate-300 text-slate-800' %> absolute rounded-full p-1 inline-flex right-4 top-5">
-            <svg width="14" height="14"><use xlink:href="<%= attrs[:enabled] ? '#icon-tick-line': '#icon-lock-line' %>" /></svg>
+      <% SuperAdmin::FeaturesHelper.available_features.each do |_feature, attrs| %>
+        <div class="group border-slate-100 border p-4 rounded-lg relative shadow-sm">
+          <span class="<%= attrs[:enabled] ? 'bg-green-400 text-white' : 'bg-slate-300 text-slate-800' %> absolute rounded-full p-1 inline-flex right-4 top-5">
+            <svg width="14" height="14"><use xlink:href="<%= attrs[:enabled] ? '#icon-tick-line' : '#icon-lock-line' %>" /></svg>
           </span>
-          <h3 class="text-slate-900 font-medium mt-8"><%= attrs[:name] %></h3>
+          <div class="flex items-center justify-center w-10 h-10 mb-2 border border-slate-100 border-solid text-slate-800 rounded-full">
+            <svg width="20" height="20"><use xlink:href="#<%= attrs[:icon] %>" /></svg>
+          </div>
+          <div class="flex items-center justify-between mb-1.5 mt-4">
+            <div class="flex items-center gap-2">
+              <h3 class="text-slate-900 font-medium"><%= attrs[:name] %></h3>
+              <% if attrs[:enterprise] %>
+                <span class="px-2 h-4 leading-4 rounded-xl text-green-800 font-medium bg-green-100/70 text-xxs">EE</span>
+              <% end %>
+              <% if attrs[:config_key].present? && attrs[:enabled] %>
+                <a class="inline-flex items-center justify-center h-5 w-5 hover:bg-slate-50 rounded-sm" href="/super_admin/app_config?config=<%= attrs[:config_key] %>" title="Configurar">
+                  <svg width="18" height="18"><use xlink:href="#icon-gear" /></svg>
+                </a>
+              <% end %>
+            </div>
+          </div>
           <p class="text-slate-600 mb-0"><%= attrs[:description] %></p>
         </div>
       <% end %>
