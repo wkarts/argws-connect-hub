@@ -1,7 +1,11 @@
 # frozen_string_literal: true
 
-# HUB local installation metadata. No remote registration or usage reporting is performed here.
+# Metadados locais da instalação HUB. Nenhum registro remoto, cobrança ou
+# telemetria é necessário para determinar a edição da aplicação.
 class HubPlatform
+  ENTERPRISE_PLAN = 'enterprise'
+  ENTERPRISE_QUANTITY = HubApp.max_limit
+
   def self.installation_identifier
     identifier = InstallationConfig.find_by(name: 'INSTALLATION_IDENTIFIER')&.value
     identifier ||= InstallationConfig.create!(name: 'INSTALLATION_IDENTIFIER', value: SecureRandom.uuid).value
@@ -9,7 +13,7 @@ class HubPlatform
   end
 
   def self.billing_url = ''
-  def self.pricing_plan = InstallationConfig.find_by(name: 'INSTALLATION_PRICING_PLAN')&.value || 'community'
-  def self.pricing_plan_quantity = InstallationConfig.find_by(name: 'INSTALLATION_PRICING_PLAN_QUANTITY')&.value || 100_000
+  def self.pricing_plan = ENTERPRISE_PLAN
+  def self.pricing_plan_quantity = ENTERPRISE_QUANTITY
   def self.support_config = { support_website_token: nil, support_script_url: nil, support_identifier_hash: nil }
 end
