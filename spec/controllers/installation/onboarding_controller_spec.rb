@@ -18,14 +18,16 @@ RSpec.describe Installation::OnboardingController, type: :controller do
   end
 
   describe 'POST #create' do
-    it 'creates the first administrator through AccountBuilder' do
-      builder = instance_double(AccountBuilder, perform: true)
+    it 'creates and authenticates the first administrator through AccountBuilder' do
+      super_admin = build_stubbed(:super_admin)
+      account = build_stubbed(:account)
+      builder = instance_double(AccountBuilder, perform: [super_admin, account])
       allow(AccountBuilder).to receive(:new).and_return(builder)
-      allow(RestClient).to receive(:post)
+      allow(controller).to receive(:sign_in)
 
       post :create, params: {
         user: {
-          name: 'HUB Admin',
+          name: 'Administrador HUB',
           company: 'HUB',
           email: 'admin@example.com',
           password: 'Password123!'
@@ -34,25 +36,24 @@ RSpec.describe Installation::OnboardingController, type: :controller do
 
       expect(AccountBuilder).to have_received(:new).with(
         account_name: 'HUB',
-        user_full_name: 'HUB Admin',
+        user_full_name: 'Administrador HUB',
         email: 'admin@example.com',
         user_password: 'Password123!',
         super_admin: true,
         confirmed: true
       )
-      expect(builder).to have_received(:perform)
-      expect(RestClient).not_to have_received(:post)
-      expect(response).to redirect_to('/')
+      expect(controller).to have_received(:sign_in).with(:super_admin, super_admin)
+      expect(response).to redirect_to(super_admin_root_path)
     end
 
     it 'keeps the user on onboarding when AccountBuilder rejects the setup' do
       builder = instance_double(AccountBuilder)
-      allow(builder).to receive(:perform).and_raise(StandardError, 'Invalid setup')
+      allow(builder).to receive(:perform).and_raise(StandardError, 'Configuração inválida')
       allow(AccountBuilder).to receive(:new).and_return(builder)
 
       post :create, params: {
         user: {
-          name: 'HUB Admin',
+          name: 'Administrador HUB',
           company: 'HUB',
           email: 'admin@example.com',
           password: 'invalid'
@@ -60,7 +61,7 @@ RSpec.describe Installation::OnboardingController, type: :controller do
       }
 
       expect(response).to redirect_to('/installation/onboarding')
-      expect(flash[:error]).to eq('Invalid setup')
+      expect(flash[:error]).to eq('Configuração inválida')
     end
 
     it 'does not allow a second installation administrator to be created' do
@@ -69,9 +70,9 @@ RSpec.describe Installation::OnboardingController, type: :controller do
 
       post :create, params: {
         user: {
-          name: 'Another Admin',
-          company: 'Another Company',
-          email: 'another@example.com',
+          name: 'Outro administrador',
+          company: 'Outra empresa',
+          email: 'outro@example.com',
           password: 'Password123!'
         }
       }
