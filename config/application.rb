@@ -11,6 +11,10 @@ module Hub
     config.load_defaults 7.0
 
     config.eager_load_paths << Rails.root.join('lib')
+    config.eager_load_paths << Rails.root.join('enterprise/lib')
+    # Mantém a estrutura de extensão Enterprise original do projeto.
+    config.eager_load_paths += Dir["#{Rails.root}/enterprise/app/**"]
+
     config.generators.javascripts = false
     config.generators.stylesheets = false
 
