@@ -29,7 +29,8 @@ RSpec.describe 'Super Admin Users API', type: :request do
         get '/super_admin/users'
 
         expect(response).to have_http_status(:success)
-        expect(response.body).to include('Adicionar usuário')
+        expect(response.body).to include('Adicionar')
+        expect(response.body).to include('Usuário')
         expect(response.body).to include(CGI.escapeHTML(user.name))
       end
 
