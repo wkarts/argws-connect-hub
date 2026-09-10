@@ -18,7 +18,7 @@ describe Whatsapp::IncomingMessageConnectApiService do
   let(:peer_phone) { '557596236940' }
   let(:own_phone) { whatsapp_channel.provider_config['phone_number_id'] }
 
-  def webhook(message_id:, from:, body:, profile_name: 'Cliente WhatsApp', profile_picture: nil, from_me: false)
+  def webhook(message_id:, from:, body:, profile_name: 'Cliente WhatsApp', profile_picture: nil, from_me: false, source: nil)
     {
       phone_number: whatsapp_channel.phone_number,
       object: 'whatsapp_business_account',
@@ -45,8 +45,9 @@ describe Whatsapp::IncomingMessageConnectApiService do
               connect_api: {
                 from_me: from_me,
                 remote_jid: '22654721644999@lid',
-                remote_jid_alt: "#{peer_phone}@s.whatsapp.net"
-              }
+                remote_jid_alt: "#{peer_phone}@s.whatsapp.net",
+                source: source
+              }.compact
             }]
           }
         }]
@@ -57,7 +58,13 @@ describe Whatsapp::IncomingMessageConnectApiService do
   it 'stores physical-device messages as outgoing and reuses the same active conversation' do
     service = described_class.new(
       inbox: whatsapp_channel.inbox,
-      params: webhook(message_id: 'PHONE-OUT-1', from: own_phone, body: 'Enviado pelo celular', from_me: true)
+      params: webhook(
+        message_id: 'PHONE-OUT-1',
+        from: own_phone,
+        body: 'Enviado pelo celular',
+        from_me: true,
+        source: 'android'
+      )
     )
     service.perform
 
@@ -65,6 +72,9 @@ describe Whatsapp::IncomingMessageConnectApiService do
     expect(conversation.messages.last.message_type).to eq('outgoing')
     expect(conversation.messages.last.content).to eq('Enviado pelo celular')
     expect(conversation.messages.last.sender).to be_nil
+    expect(conversation.messages.last.content_attributes['connect_api_external_outgoing']).to be(true)
+    expect(conversation.messages.last.content_attributes['connect_api_origin']).to eq('mobile')
+    expect(conversation.messages.last.content_attributes['connect_api_source']).to eq('android')
 
     described_class.new(
       inbox: whatsapp_channel.inbox,
@@ -74,6 +84,25 @@ describe Whatsapp::IncomingMessageConnectApiService do
     expect(whatsapp_channel.inbox.conversations.reload.count).to eq(1)
     expect(conversation.reload.messages.last.message_type).to eq('incoming')
     expect(conversation.messages.last.content).to eq('Resposta do cliente')
+  end
+
+  it 'marks Connect API generated external replies as bot-originated' do
+    described_class.new(
+      inbox: whatsapp_channel.inbox,
+      params: webhook(
+        message_id: 'BOT-OUT-1',
+        from: own_phone,
+        body: 'Mensagem automática',
+        from_me: true,
+        source: 'api'
+      )
+    ).perform
+
+    message = whatsapp_channel.inbox.conversations.last.messages.last
+    expect(message.message_type).to eq('outgoing')
+    expect(message.content_attributes['connect_api_external_outgoing']).to be(true)
+    expect(message.content_attributes['connect_api_origin']).to eq('bot')
+    expect(message.content_attributes['connect_api_source']).to eq('api')
   end
 
   it 'refreshes a number-only contact with Connect API push name and profile picture metadata' do
