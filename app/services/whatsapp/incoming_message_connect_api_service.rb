@@ -69,8 +69,10 @@ class Whatsapp::IncomingMessageConnectApiService < Whatsapp::IncomingMessageWhat
 
   # Prefer the Meta-compatible descriptor when it is available. When that
   # descriptor cannot resolve the media (for example, storage/S3 is not being
-  # used by the Connect|API instance), recover the original WhatsApp media from
-  # the native generic endpoint using the persisted message record.
+  # used by the Connect|API instance), ask the provider for the original media
+  # using only the WhatsApp message key. Connect|API deliberately resolves that
+  # key against its raw persisted message; /chat/findMessages returns a cleaned
+  # representation and must not be forwarded back as a downloadable message.
   def download_attachment_file(attachment_payload)
     media_id = attachment_payload[:id].to_s
     return if media_id.blank?
@@ -115,31 +117,8 @@ class Whatsapp::IncomingMessageConnectApiService < Whatsapp::IncomingMessageWhat
   end
 
   def download_native_media(media_id, attachment_payload)
-    native_message = native_message_by_source_id(media_id)
-    return if native_message.blank?
-
-    response = HTTParty.post(
-      "#{connect_api_base_url}/chat/getBase64FromMediaMessage/#{CGI.escape(instance_name)}",
-      headers: native_headers,
-      body: {
-        message: native_message,
-        convertToMp4: false
-      }.to_json,
-      timeout: request_timeout
-    )
-
-    unless response.success?
-      Rails.logger.warn(
-        "[HUB Connect|API] native media unavailable id=#{media_id} " \
-        "status=#{response.code} body=#{response.body.to_s.slice(0, 300)}"
-      )
-      return
-    end
-
-    data = response.parsed_response
-    data = data.deep_stringify_keys if data.respond_to?(:deep_stringify_keys)
-    data = data['data'].deep_stringify_keys if data.is_a?(Hash) && data['data'].is_a?(Hash)
-    return unless data.is_a?(Hash)
+    data = native_media_payload_by_source_id(media_id)
+    return if data.blank?
 
     encoded = data['base64'].to_s.strip
     return if encoded.blank?
@@ -147,8 +126,9 @@ class Whatsapp::IncomingMessageConnectApiService < Whatsapp::IncomingMessageWhat
     encoded = encoded.split(',', 2).last if encoded.start_with?('data:')
     binary = Base64.strict_decode64(encoded.gsub(/\s+/, ''))
 
-    mimetype = data['mimetype'].to_s.presence || attachment_payload[:mime_type].to_s.presence || 'application/octet-stream'
+    mimetype = native_media_mimetype(data, attachment_payload)
     filename = File.basename(data['fileName'].to_s)
+    filename = File.basename(attachment_payload[:filename].to_s) if filename.blank?
     filename = "#{media_id}#{extension_for(mimetype)}" if filename.blank?
 
     tempfile = Tempfile.new(['hub-connect-api-media-', File.extname(filename).presence || extension_for(mimetype)])
@@ -167,6 +147,61 @@ class Whatsapp::IncomingMessageConnectApiService < Whatsapp::IncomingMessageWhat
   rescue StandardError => e
     Rails.logger.warn("[HUB Connect|API] native media download failed id=#{media_id}: #{e.class}: #{e.message}")
     nil
+  end
+
+  def native_media_payload_by_source_id(media_id)
+    response = nil
+
+    MESSAGE_LOOKUP_DELAYS.each do |delay_seconds|
+      sleep(delay_seconds) if delay_seconds.positive?
+      response = HTTParty.post(
+        "#{connect_api_base_url}/chat/getBase64FromMediaMessage/#{CGI.escape(instance_name)}",
+        headers: native_headers,
+        body: {
+          message: { key: { id: media_id } },
+          convertToMp4: false
+        }.to_json,
+        timeout: request_timeout
+      )
+
+      data = normalized_native_media_response(response)
+      return data if response.success? && data['base64'].to_s.strip.present?
+    end
+
+    Rails.logger.warn(
+      "[HUB Connect|API] native media unavailable id=#{media_id} " \
+      "status=#{response&.code || 'n/a'} body=#{response&.body.to_s.slice(0, 300)}"
+    )
+    nil
+  rescue StandardError => e
+    Rails.logger.warn("[HUB Connect|API] native media request failed id=#{media_id}: #{e.class}: #{e.message}")
+    nil
+  end
+
+  def normalized_native_media_response(response)
+    data = response&.parsed_response
+    data = data.deep_stringify_keys if data.respond_to?(:deep_stringify_keys)
+    data = data['data'].deep_stringify_keys if data.is_a?(Hash) && data['data'].is_a?(Hash)
+    data.is_a?(Hash) ? data : {}
+  rescue StandardError
+    {}
+  end
+
+  def native_media_mimetype(data, attachment_payload)
+    candidates = [
+      data['mimetype'],
+      data['mimeType'],
+      data['contentType'],
+      attachment_payload[:mime_type],
+      attachment_payload['mime_type']
+    ]
+
+    candidates.each do |candidate|
+      value = candidate.to_s.strip
+      return value if value.include?('/')
+    end
+
+    'application/octet-stream'
   end
 
   def extension_for(mimetype)
