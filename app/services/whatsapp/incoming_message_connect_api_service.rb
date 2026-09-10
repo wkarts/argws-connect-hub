@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
+require 'base64'
 require 'cgi'
+require 'tempfile'
 
 # Connect|API exposes a generic Meta-compatible webhook, but HUB additionally
 # reconciles each message with the native message repository when the webhook
@@ -10,6 +12,17 @@ class Whatsapp::IncomingMessageConnectApiService < Whatsapp::IncomingMessageWhat
   MEDIA_LOOKUP_ATTEMPTS = 4
   MEDIA_LOOKUP_DELAYS = [0, 0.3, 0.8, 1.5].freeze
   MESSAGE_LOOKUP_DELAYS = [0, 0.15, 0.4, 0.8].freeze
+  MEDIA_EXTENSIONS = {
+    'image/jpeg' => '.jpg',
+    'image/png' => '.png',
+    'image/webp' => '.webp',
+    'video/mp4' => '.mp4',
+    'audio/ogg' => '.ogg',
+    'audio/ogg; codecs=opus' => '.ogg',
+    'audio/mpeg' => '.mp3',
+    'audio/mp4' => '.m4a',
+    'application/pdf' => '.pdf'
+  }.freeze
 
   private
 
@@ -54,13 +67,24 @@ class Whatsapp::IncomingMessageConnectApiService < Whatsapp::IncomingMessageWhat
     @message
   end
 
-  # The Graph compatibility media descriptor is authenticated with the instance
-  # token. The returned URL is a storage/signed URL and must be downloaded
-  # without forwarding the Connect|API Authorization header.
+  # Prefer the Meta-compatible descriptor when it is available. When that
+  # descriptor cannot resolve the media (for example, storage/S3 is not being
+  # used by the Connect|API instance), recover the original WhatsApp media from
+  # the native generic endpoint using the persisted message record.
   def download_attachment_file(attachment_payload)
     media_id = attachment_payload[:id].to_s
     return if media_id.blank?
 
+    graph_file = download_graph_media(media_id)
+    return graph_file if graph_file.present?
+
+    download_native_media(media_id, attachment_payload)
+  rescue StandardError => e
+    Rails.logger.warn("[HUB Connect|API] media recovery failed id=#{media_id}: #{e.class}: #{e.message}")
+    nil
+  end
+
+  def download_graph_media(media_id)
     descriptor = nil
     MEDIA_LOOKUP_ATTEMPTS.times do |attempt|
       sleep(MEDIA_LOOKUP_DELAYS[attempt]) if MEDIA_LOOKUP_DELAYS[attempt].positive?
@@ -86,8 +110,68 @@ class Whatsapp::IncomingMessageConnectApiService < Whatsapp::IncomingMessageWhat
 
     Down.download(media_url)
   rescue StandardError => e
-    Rails.logger.warn("[HUB Connect|API] media download failed id=#{media_id}: #{e.class}: #{e.message}")
+    Rails.logger.warn("[HUB Connect|API] Graph media download failed id=#{media_id}: #{e.class}: #{e.message}")
     nil
+  end
+
+  def download_native_media(media_id, attachment_payload)
+    native_message = native_message_by_source_id(media_id)
+    return if native_message.blank?
+
+    response = HTTParty.post(
+      "#{connect_api_base_url}/chat/getBase64FromMediaMessage/#{CGI.escape(instance_name)}",
+      headers: native_headers,
+      body: {
+        message: native_message,
+        convertToMp4: false
+      }.to_json,
+      timeout: request_timeout
+    )
+
+    unless response.success?
+      Rails.logger.warn(
+        "[HUB Connect|API] native media unavailable id=#{media_id} " \
+        "status=#{response.code} body=#{response.body.to_s.slice(0, 300)}"
+      )
+      return
+    end
+
+    data = response.parsed_response
+    data = data.deep_stringify_keys if data.respond_to?(:deep_stringify_keys)
+    data = data['data'].deep_stringify_keys if data.is_a?(Hash) && data['data'].is_a?(Hash)
+    return unless data.is_a?(Hash)
+
+    encoded = data['base64'].to_s.strip
+    return if encoded.blank?
+
+    encoded = encoded.split(',', 2).last if encoded.start_with?('data:')
+    binary = Base64.strict_decode64(encoded.gsub(/\s+/, ''))
+
+    mimetype = data['mimetype'].to_s.presence || attachment_payload[:mime_type].to_s.presence || 'application/octet-stream'
+    filename = File.basename(data['fileName'].to_s)
+    filename = "#{media_id}#{extension_for(mimetype)}" if filename.blank?
+
+    tempfile = Tempfile.new(['hub-connect-api-media-', File.extname(filename).presence || extension_for(mimetype)])
+    tempfile.binmode
+    tempfile.write(binary)
+    tempfile.rewind
+
+    ActionDispatch::Http::UploadedFile.new(
+      tempfile: tempfile,
+      filename: filename,
+      type: mimetype
+    )
+  rescue ArgumentError => e
+    Rails.logger.warn("[HUB Connect|API] invalid base64 media id=#{media_id}: #{e.message}")
+    nil
+  rescue StandardError => e
+    Rails.logger.warn("[HUB Connect|API] native media download failed id=#{media_id}: #{e.class}: #{e.message}")
+    nil
+  end
+
+  def extension_for(mimetype)
+    normalized = mimetype.to_s.downcase
+    MEDIA_EXTENSIONS[normalized] || MEDIA_EXTENSIONS[normalized.split(';', 2).first] || '.bin'
   end
 
   def enrich_from_native_message!(payload)
@@ -148,13 +232,18 @@ class Whatsapp::IncomingMessageConnectApiService < Whatsapp::IncomingMessageWhat
   end
 
   def native_message_by_source_id(source_id)
+    source_id = source_id.to_s
+    if @connect_api_native_message_source_id == source_id && @connect_api_native_message.present?
+      return @connect_api_native_message
+    end
+
     MESSAGE_LOOKUP_DELAYS.each do |delay_seconds|
       sleep(delay_seconds) if delay_seconds.positive?
       response = HTTParty.post(
         "#{connect_api_base_url}/chat/findMessages/#{CGI.escape(instance_name)}",
         headers: native_headers,
         body: {
-          where: { key: { id: source_id.to_s } },
+          where: { key: { id: source_id } },
           page: 1,
           offset: 1
         }.to_json,
@@ -173,7 +262,11 @@ class Whatsapp::IncomingMessageConnectApiService < Whatsapp::IncomingMessageWhat
                 end
 
       record = Array(records).first
-      return record if record.present?
+      if record.present?
+        @connect_api_native_message_source_id = source_id
+        @connect_api_native_message = record
+        return record
+      end
     end
 
     nil

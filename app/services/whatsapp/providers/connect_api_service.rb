@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require 'base64'
 require 'cgi'
 
 class Whatsapp::Providers::ConnectApiService < Whatsapp::Providers::WhatsappCloudService
@@ -73,32 +74,55 @@ class Whatsapp::Providers::ConnectApiService < Whatsapp::Providers::WhatsappClou
 
   def send_native_attachment_message(phone_number, message)
     attachment = message.attachments.first
+    body, endpoint, media_key = native_attachment_payload(phone_number, message, attachment)
+
+    response = post_native_attachment(endpoint, body)
+    if !response.success? && attachment_file_available?(attachment)
+      Rails.logger.warn(
+        "[HUB Connect|API] media URL delivery failed; retrying as base64 " \
+        "instance=#{instance_name} file_type=#{attachment.file_type}"
+      )
+      body[media_key] = Base64.strict_encode64(attachment.file.download)
+      response = post_native_attachment(endpoint, body)
+    end
+
+    process_native_response(message, response)
+  rescue StandardError => e
+    process_native_exception(message, e)
+  end
+
+  def native_attachment_payload(phone_number, message, attachment)
     download_url = attachment.download_url
     body = { number: normalize_phone(phone_number) }
 
-    endpoint = if attachment.file_type == 'audio'
-                 body[:audio] = download_url
-                 'sendWhatsAppAudio'
-               else
-                 media_type = %w[image video].include?(attachment.file_type) ? attachment.file_type : 'document'
-                 body[:mediatype] = media_type
-                 body[:media] = download_url
-                 body[:caption] = message.content if message.content.present? && media_type != 'audio'
-                 body[:fileName] = attachment.file.filename.to_s if media_type == 'document' && attachment.file.attached?
-                 body[:mimetype] = attachment.file.content_type if attachment.file.attached? && attachment.file.content_type.present?
-                 'sendMedia'
-               end
+    if attachment.file_type == 'audio'
+      body[:audio] = download_url
+      return [body, 'sendWhatsAppAudio', :audio]
+    end
 
-    response = HTTParty.post(
+    media_type = %w[image video].include?(attachment.file_type) ? attachment.file_type : 'document'
+    body[:mediatype] = media_type
+    body[:media] = download_url
+    body[:caption] = message.content if message.content.present?
+    if attachment_file_available?(attachment)
+      body[:fileName] = attachment.file.filename.to_s if media_type == 'document'
+      body[:mimetype] = attachment.file.content_type if attachment.file.content_type.present?
+    end
+
+    [body, 'sendMedia', :media]
+  end
+
+  def post_native_attachment(endpoint, body)
+    HTTParty.post(
       native_endpoint(endpoint),
       headers: native_headers,
       body: body.compact.to_json,
       timeout: request_timeout
     )
+  end
 
-    process_native_response(message, response)
-  rescue StandardError => e
-    process_native_exception(message, e)
+  def attachment_file_available?(attachment)
+    attachment.respond_to?(:file) && attachment.file.respond_to?(:attached?) && attachment.file.attached?
   end
 
   def process_native_response(message, response)

@@ -1,5 +1,7 @@
 require 'rails_helper'
 
+require 'base64'
+
 describe Whatsapp::IncomingMessageConnectApiService do
   let!(:whatsapp_channel) do
     create(
@@ -26,14 +28,19 @@ describe Whatsapp::IncomingMessageConnectApiService do
     allow(GlobalConfigService).to receive(:load).with('CONNECT_API_REQUEST_TIMEOUT', anything).and_return(60)
   end
 
-  def webhook(message_id:, from:, body:, profile_name: 'Cliente WhatsApp', profile_picture: nil, from_me: false, source: nil, include_context: true)
+  def webhook(message_id:, from:, body: nil, profile_name: 'Cliente WhatsApp', profile_picture: nil, from_me: false, source: nil,
+              include_context: true, type: 'text', media: nil)
     message = {
       from: from,
       id: message_id,
       timestamp: Time.current.to_i.to_s,
-      type: 'text',
-      text: { body: body }
+      type: type
     }
+    if type == 'text'
+      message[:text] = { body: body }
+    else
+      message[type.to_sym] = media || { id: message_id, mime_type: 'application/octet-stream' }
+    end
     if include_context
       message[:connect_api] = {
         from_me: from_me,
@@ -65,6 +72,53 @@ describe Whatsapp::IncomingMessageConnectApiService do
         }]
       }]
     }.with_indifferent_access
+  end
+
+  def native_media_record(message_id:, from_me: false, source: nil)
+    {
+      'key' => {
+        'id' => message_id,
+        'fromMe' => from_me,
+        'remoteJid' => '22654721644999@lid',
+        'remoteJidAlt' => "#{peer_phone}@s.whatsapp.net"
+      },
+      'source' => source,
+      'messageType' => 'audioMessage',
+      'message' => {
+        'audioMessage' => {
+          'mimetype' => 'audio/ogg; codecs=opus'
+        }
+      }
+    }.compact
+  end
+
+  def stub_native_audio(message_id:, from_me: false, source: nil, bytes: 'voice-bytes')
+    native_record = native_media_record(message_id: message_id, from_me: from_me, source: source)
+    lookup_response = double(
+      success?: true,
+      parsed_response: { 'messages' => { 'records' => [native_record] } }
+    )
+    media_response = double(
+      success?: true,
+      code: 201,
+      body: '',
+      parsed_response: {
+        'mediaType' => 'audioMessage',
+        'fileName' => "#{message_id}.ogg",
+        'mimetype' => 'audio/ogg; codecs=opus',
+        'base64' => Base64.strict_encode64(bytes)
+      }
+    )
+
+    allow(HTTParty).to receive(:post) do |url, _options|
+      if url.include?('/chat/findMessages/')
+        lookup_response
+      elsif url.include?('/chat/getBase64FromMediaMessage/')
+        media_response
+      else
+        raise "Unexpected POST #{url}"
+      end
+    end
   end
 
   it 'stores physical-device messages as outgoing and reuses the same active conversation' do
@@ -171,6 +225,57 @@ describe Whatsapp::IncomingMessageConnectApiService do
 
     expect(result).to eq(downloaded)
     expect(Down).to have_received(:download).with('https://storage.example/signed/audio.ogg')
+  end
+
+  it 'recovers incoming audio through the native base64 endpoint when Graph media is unavailable' do
+    descriptor = double(success?: false, code: 500, body: 'descriptor unavailable')
+    allow(HTTParty).to receive(:get).and_return(descriptor)
+    stub_native_audio(message_id: 'AUDIO-IN-1')
+
+    described_class.new(
+      inbox: whatsapp_channel.inbox,
+      params: webhook(
+        message_id: 'AUDIO-IN-1',
+        from: peer_phone,
+        type: 'audio',
+        media: { id: 'AUDIO-IN-1', mime_type: 'audio/ogg; codecs=opus' }
+      )
+    ).perform
+
+    message = whatsapp_channel.inbox.conversations.last.messages.last
+    expect(message.message_type).to eq('incoming')
+    expect(message.attachments.count).to eq(1)
+    attachment = message.attachments.first
+    expect(attachment.file_type).to eq('audio')
+    expect(attachment.file.filename.to_s).to eq('AUDIO-IN-1.ogg')
+    expect(attachment.file.download).to eq('voice-bytes')
+  end
+
+  it 'recovers audio sent outside HUB and keeps it marked as an external outgoing reply' do
+    descriptor = double(success?: false, code: 500, body: 'descriptor unavailable')
+    allow(HTTParty).to receive(:get).and_return(descriptor)
+    stub_native_audio(message_id: 'AUDIO-OUT-1', from_me: true, source: 'android', bytes: 'mobile-voice')
+
+    described_class.new(
+      inbox: whatsapp_channel.inbox,
+      params: webhook(
+        message_id: 'AUDIO-OUT-1',
+        from: own_phone,
+        from_me: true,
+        source: 'android',
+        type: 'audio',
+        media: { id: 'AUDIO-OUT-1', mime_type: 'audio/ogg; codecs=opus' }
+      )
+    ).perform
+
+    message = whatsapp_channel.inbox.conversations.last.messages.last
+    expect(message.message_type).to eq('outgoing')
+    expect(message.sender).to be_nil
+    expect(message.attachments.first.file_type).to eq('audio')
+    expect(message.attachments.first.file.download).to eq('mobile-voice')
+    expect(message.content_attributes['connect_api_external_outgoing']).to be(true)
+    expect(message.content_attributes['connect_api_replied_outside_hub']).to be(true)
+    expect(message.content_attributes['connect_api_source']).to eq('android')
   end
 
   it 'refreshes a number-only contact with Connect API push name and profile picture metadata' do

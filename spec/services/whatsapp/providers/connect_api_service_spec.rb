@@ -1,5 +1,7 @@
 require 'rails_helper'
 
+require 'base64'
+
 describe Whatsapp::Providers::ConnectApiService do
   let!(:whatsapp_channel) do
     create(
@@ -34,7 +36,7 @@ describe Whatsapp::Providers::ConnectApiService do
   end
 
   it 'sends text through the native Connect API endpoint using the installation apikey' do
-    message = double(attachments: [], content: 'Olá pelo HUB', sender_name: nil)
+    message = double(attachments: [], content: 'Olá pelo HUB', sender_name: nil, content_type: 'text')
     allow(message).to receive(:update!)
 
     response = double(success?: true, parsed_response: { 'key' => { 'id' => 'MSG-1' } })
@@ -57,7 +59,7 @@ describe Whatsapp::Providers::ConnectApiService do
   it 'sends files through the native media endpoint' do
     file = double(attached?: true, filename: 'arquivo.pdf', content_type: 'application/pdf')
     attachment = double(file_type: 'file', download_url: 'https://hub.example/file.pdf', file: file)
-    message = double(attachments: [attachment], content: 'Documento')
+    message = double(attachments: [attachment], content: 'Documento', content_type: 'text')
     allow(message).to receive(:update!)
 
     response = double(success?: true, parsed_response: { 'key' => { 'id' => 'MEDIA-1' } })
@@ -80,7 +82,7 @@ describe Whatsapp::Providers::ConnectApiService do
 
   it 'sends voice/audio through the native WhatsApp audio endpoint' do
     attachment = double(file_type: 'audio', download_url: 'https://hub.example/audio.ogg')
-    message = double(attachments: [attachment], content: nil)
+    message = double(attachments: [attachment], content: nil, content_type: 'text')
     allow(message).to receive(:update!)
 
     response = double(success?: true, parsed_response: { 'key' => { 'id' => 'AUDIO-1' } })
@@ -94,5 +96,32 @@ describe Whatsapp::Providers::ConnectApiService do
     end
 
     expect(service.send_message('557596236940', message)).to eq('AUDIO-1')
+  end
+
+  it 'retries native media delivery as base64 when Connect API cannot fetch the HUB URL' do
+    file = double(
+      attached?: true,
+      filename: 'arquivo.pdf',
+      content_type: 'application/pdf',
+      download: 'pdf-binary-content'
+    )
+    attachment = double(file_type: 'file', download_url: 'https://hub.example/file.pdf', file: file)
+    message = double(attachments: [attachment], content: 'Documento', content_type: 'text')
+    allow(message).to receive(:update!)
+
+    failed = double(success?: false, parsed_response: { 'message' => 'media fetch failed' }, body: 'media fetch failed', code: 400)
+    success = double(success?: true, parsed_response: { 'key' => { 'id' => 'MEDIA-BASE64-1' } })
+    calls = []
+    allow(HTTParty).to receive(:post) do |url, options|
+      calls << [url, JSON.parse(options[:body])]
+      calls.length == 1 ? failed : success
+    end
+
+    expect(service.send_message('557596236940', message)).to eq('MEDIA-BASE64-1')
+    expect(calls.length).to eq(2)
+    expect(calls.first.last['media']).to eq('https://hub.example/file.pdf')
+    expect(calls.last.last['media']).to eq(Base64.strict_encode64('pdf-binary-content'))
+    expect(calls.last.last['mimetype']).to eq('application/pdf')
+    expect(calls.last.last['fileName']).to eq('arquivo.pdf')
   end
 end

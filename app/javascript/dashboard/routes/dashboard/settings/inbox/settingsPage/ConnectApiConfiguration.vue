@@ -11,6 +11,7 @@
       <div><strong>Status:</strong> {{ config.connection_status || 'desconhecido' }}</div>
       <div><strong>Número:</strong> {{ inbox.phone_number }}</div>
       <div><strong>Meta-compatible:</strong> {{ config.meta_compatible ? 'Ativo' : 'Pendente' }}</div>
+      <div><strong>Comunicação:</strong> {{ communicationLabel }}</div>
       <div><strong>Protocolo:</strong> {{ providerLabel }}</div>
       <div><strong>Chamadas:</strong> {{ callsAvailable ? 'Voz habilitada' : 'Não disponível neste protocolo' }}</div>
       <div v-if="callsAvailable"><strong>Limite da instância:</strong> {{ config.voip_max_concurrent_calls || 'limite global' }}</div>
@@ -32,6 +33,9 @@
       <button type="button" class="button nice" @click="connect('qrcode')">Gerar QR Code</button>
       <button type="button" class="button nice" @click="connect('pairing_code')">Gerar código de pareamento</button>
       <button type="button" class="button nice" @click="refresh">Atualizar status</button>
+      <button type="button" class="button nice" :disabled="isReconciling" @click="reconcile">
+        {{ isReconciling ? 'Reconciliando...' : 'Reconciliar agora' }}
+      </button>
       <button type="button" class="button clear alert" @click="disconnect">Desconectar</button>
     </div>
   </div>
@@ -41,10 +45,17 @@
 import { useAlert } from 'dashboard/composables';
 export default {
   props: { inbox: { type: Object, required: true } },
+  data() {
+    return { isReconciling: false };
+  },
   computed: {
     config() { return this.inbox.provider_config || {}; },
     callsAvailable() {
       return this.config.calls_supported || this.config.connect_api_provider === 'WHATSAPP-ZAPO';
+    },
+    communicationLabel() {
+      if (this.config.communication_ready && this.config.meta_compatible_verified) return 'Sincronizada';
+      return 'Requer reconciliação';
     },
     providerLabel() {
       if (this.config.connect_api_provider === 'WHATSAPP-ZAPO') return 'ZAPO';
@@ -53,20 +64,35 @@ export default {
     },
   },
   methods: {
-    async update(extra) {
+    async update(extra, successMessage = '') {
       try {
         await this.$store.dispatch('inboxes/updateInbox', {
           id: this.inbox.id, formData: false,
           channel: { provider_config: { ...this.config, ...extra } },
         });
         await this.$store.dispatch('inboxes/get');
+        if (successMessage) useAlert(successMessage);
+        return true;
       } catch (error) {
         useAlert(error?.response?.data?.message || 'Falha ao comunicar com a Connect|API.');
+        return false;
       }
     },
     connect(authMode) { return this.update({ auth_mode: authMode, connect: true, disconnect: false }); },
     disconnect() { return this.update({ disconnect: true, connect: false }); },
     refresh() { return this.update({ connect: false, disconnect: false }); },
+    async reconcile() {
+      if (this.isReconciling) return;
+      this.isReconciling = true;
+      try {
+        await this.update(
+          { connect: false, disconnect: false },
+          'Caixa reconciliada com a Connect|API.'
+        );
+      } finally {
+        this.isReconciling = false;
+      }
+    },
   },
 };
 </script>
