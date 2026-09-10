@@ -4,20 +4,20 @@ class Installation::OnboardingController < ApplicationController
   def index; end
 
   def create
-    begin
-      AccountBuilder.new(
-        account_name: onboarding_params.dig(:user, :company),
-        user_full_name: onboarding_params.dig(:user, :name),
-        email: onboarding_params.dig(:user, :email),
-        user_password: params.dig(:user, :password),
-        super_admin: true,
-        confirmed: true
-      ).perform
-    rescue StandardError => e
-      redirect_to '/installation/onboarding', flash: { error: e.message } and return
-    end
+    user, = AccountBuilder.new(
+      account_name: onboarding_params.dig(:user, :company),
+      user_full_name: onboarding_params.dig(:user, :name),
+      email: onboarding_params.dig(:user, :email),
+      user_password: params.dig(:user, :password),
+      super_admin: true,
+      confirmed: true
+    ).perform
 
-    redirect_to '/'
+    sign_in(:super_admin, user)
+    redirect_to super_admin_root_path
+  rescue StandardError => e
+    Rails.logger.warn("Falha no onboarding inicial: #{e.message}")
+    redirect_to '/installation/onboarding', flash: { error: e.message }
   end
 
   private
