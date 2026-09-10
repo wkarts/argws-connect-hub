@@ -61,6 +61,17 @@ module ConnectApi
       config['meta_compatible_verified'] = false
       config['connection_status'] = 'deleted'
       config['last_error'] = 'Instância removida pelo administrador. Use Reconciliar agora para recriá-la.'
+
+      # Existing live legacy names are deliberately preserved. Once an
+      # administrator explicitly deletes one of them, however, the next manual
+      # reconciliation is a new provisioning event and must adopt the immutable
+      # HUB namespace contract.
+      unless ConnectApi::InstanceNamespace.owned?(instance_name)
+        config['legacy_instance_name'] = instance_name
+        config.delete('instance_name')
+        config.delete('api_key')
+      end
+
       channel.update_columns(provider_config: config, updated_at: Time.current) # rubocop:disable Rails/SkipsModelValidations
     end
 
