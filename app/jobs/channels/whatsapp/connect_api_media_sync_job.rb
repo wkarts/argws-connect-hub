@@ -81,7 +81,7 @@ class Channels::Whatsapp::ConnectApiMediaSyncJob < ApplicationJob
 
     existing = Message.find_by(inbox_id: @channel.inbox.id, source_id: id)
     if existing
-      recover_existing_attachment(existing, record, media_type, media_node) if existing.attachments.empty?
+      recover_existing_attachment(existing, media_type, media_node) if existing.attachments.empty?
       return
     end
 
@@ -94,13 +94,13 @@ class Channels::Whatsapp::ConnectApiMediaSyncJob < ApplicationJob
 
     # The synthetic webhook still tries the normal Graph media path first. If
     # that path is unavailable, repair the just-created message in the same run
-    # instead of waiting for the next one-minute reconciliation cycle.
+    # instead of waiting for the next reconciliation cycle.
     created = Message.find_by(inbox_id: @channel.inbox.id, source_id: id)
-    recover_existing_attachment(created, record, media_type, media_node) if created && created.attachments.empty?
+    recover_existing_attachment(created, media_type, media_node) if created && created.attachments.empty?
   end
 
-  def recover_existing_attachment(message, record, media_type, media_node)
-    uploaded = download_native_media(record, message.source_id, media_node)
+  def recover_existing_attachment(message, media_type, media_node)
+    uploaded = download_native_media(message.source_id, media_node)
     return unless uploaded
 
     attachment = message.attachments.build(
@@ -120,11 +120,15 @@ class Channels::Whatsapp::ConnectApiMediaSyncJob < ApplicationJob
     Rails.logger.info("[HUB Connect|API] recovered missing media message=#{message.id} source_id=#{message.source_id}")
   end
 
-  def download_native_media(record, media_id, media_node)
+  # /chat/findMessages intentionally returns a sanitized representation of
+  # media messages. Passing that representation back to the media endpoint
+  # removes the native media key/url information needed by both Baileys and
+  # ZAPO. Send only key.id so Connect|API resolves the raw stored message.
+  def download_native_media(media_id, media_node)
     response = client.request(
       :post,
       "/chat/getBase64FromMediaMessage/#{CGI.escape(instance_name)}",
-      body: { message: record, convertToMp4: false },
+      body: { message: { key: { id: media_id } }, convertToMp4: false },
       timeout: 90
     )
     data = response.respond_to?(:deep_stringify_keys) ? response.deep_stringify_keys : {}
@@ -138,7 +142,7 @@ class Channels::Whatsapp::ConnectApiMediaSyncJob < ApplicationJob
     max_bytes = ENV.fetch('CONNECT_API_MEDIA_MAX_BYTES', 40.megabytes).to_i
     raise ConnectApi::Error, "Mídia excede limite do HUB (#{binary.bytesize} bytes)." if max_bytes.positive? && binary.bytesize > max_bytes
 
-    mimetype = data['mimetype'].to_s.presence || media_node['mimetype'].to_s.presence || media_node['mimeType'].to_s.presence || 'application/octet-stream'
+    mimetype = native_media_mimetype(data, media_node)
     filename = File.basename(data['fileName'].to_s.presence || media_node['fileName'].to_s.presence || '')
     filename = "#{media_id}#{extension_for(mimetype)}" if filename.blank?
 
@@ -151,6 +155,16 @@ class Channels::Whatsapp::ConnectApiMediaSyncJob < ApplicationJob
   rescue ArgumentError => e
     Rails.logger.warn("[HUB Connect|API] invalid native media base64 id=#{media_id}: #{e.message}")
     nil
+  end
+
+  def native_media_mimetype(data, media_node)
+    candidates = [data['mimetype'], data['mimeType'], data['contentType'], media_node['mimetype'], media_node['mimeType']]
+    candidates.each do |candidate|
+      value = candidate.to_s.strip
+      return value if value.include?('/')
+    end
+
+    'application/octet-stream'
   end
 
   def synthetic_webhook(record, key, id, peer_phone, from_me, media_type, media_node)
