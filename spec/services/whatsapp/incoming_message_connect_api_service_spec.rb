@@ -9,6 +9,7 @@ describe Whatsapp::IncomingMessageConnectApiService do
       validate_provider_config: false,
       provider_config: {
         'api_key' => 'test_key',
+        'instance_name' => 'hub-test-instance',
         'phone_number_id' => '5575988881111',
         'business_account_id' => '5575988881111'
       }
@@ -18,7 +19,30 @@ describe Whatsapp::IncomingMessageConnectApiService do
   let(:peer_phone) { '557596236940' }
   let(:own_phone) { whatsapp_channel.provider_config['phone_number_id'] }
 
-  def webhook(message_id:, from:, body:, profile_name: 'Cliente WhatsApp', profile_picture: nil, from_me: false, source: nil)
+  before do
+    allow(GlobalConfigService).to receive(:load).and_call_original
+    allow(GlobalConfigService).to receive(:load).with('CONNECT_API_BASE_URL', anything).and_return('https://connect.example')
+    allow(GlobalConfigService).to receive(:load).with('CONNECT_API_AUTH_TOKEN', anything).and_return('global-key')
+    allow(GlobalConfigService).to receive(:load).with('CONNECT_API_REQUEST_TIMEOUT', anything).and_return(60)
+  end
+
+  def webhook(message_id:, from:, body:, profile_name: 'Cliente WhatsApp', profile_picture: nil, from_me: false, source: nil, include_context: true)
+    message = {
+      from: from,
+      id: message_id,
+      timestamp: Time.current.to_i.to_s,
+      type: 'text',
+      text: { body: body }
+    }
+    if include_context
+      message[:connect_api] = {
+        from_me: from_me,
+        remote_jid: '22654721644999@lid',
+        remote_jid_alt: "#{peer_phone}@s.whatsapp.net",
+        source: source
+      }.compact
+    end
+
     {
       phone_number: whatsapp_channel.phone_number,
       object: 'whatsapp_business_account',
@@ -36,19 +60,7 @@ describe Whatsapp::IncomingMessageConnectApiService do
               }.compact,
               wa_id: peer_phone
             }],
-            messages: [{
-              from: from,
-              id: message_id,
-              timestamp: Time.current.to_i.to_s,
-              type: 'text',
-              text: { body: body },
-              connect_api: {
-                from_me: from_me,
-                remote_jid: '22654721644999@lid',
-                remote_jid_alt: "#{peer_phone}@s.whatsapp.net",
-                source: source
-              }.compact
-            }]
+            messages: [message]
           }
         }]
       }]
@@ -56,7 +68,7 @@ describe Whatsapp::IncomingMessageConnectApiService do
   end
 
   it 'stores physical-device messages as outgoing and reuses the same active conversation' do
-    service = described_class.new(
+    described_class.new(
       inbox: whatsapp_channel.inbox,
       params: webhook(
         message_id: 'PHONE-OUT-1',
@@ -65,16 +77,17 @@ describe Whatsapp::IncomingMessageConnectApiService do
         from_me: true,
         source: 'android'
       )
-    )
-    service.perform
+    ).perform
 
     conversation = whatsapp_channel.inbox.conversations.last
-    expect(conversation.messages.last.message_type).to eq('outgoing')
-    expect(conversation.messages.last.content).to eq('Enviado pelo celular')
-    expect(conversation.messages.last.sender).to be_nil
-    expect(conversation.messages.last.content_attributes['connect_api_external_outgoing']).to be(true)
-    expect(conversation.messages.last.content_attributes['connect_api_origin']).to eq('mobile')
-    expect(conversation.messages.last.content_attributes['connect_api_source']).to eq('android')
+    message = conversation.messages.last
+    expect(message.message_type).to eq('outgoing')
+    expect(message.content).to eq('Enviado pelo celular')
+    expect(message.sender).to be_nil
+    expect(message.content_attributes['connect_api_external_outgoing']).to be(true)
+    expect(message.content_attributes['connect_api_origin']).to eq('external')
+    expect(message.content_attributes['connect_api_source']).to eq('android')
+    expect(message.content_attributes['connect_api_replied_outside_hub']).to be(true)
 
     described_class.new(
       inbox: whatsapp_channel.inbox,
@@ -84,6 +97,43 @@ describe Whatsapp::IncomingMessageConnectApiService do
     expect(whatsapp_channel.inbox.conversations.reload.count).to eq(1)
     expect(conversation.reload.messages.last.message_type).to eq('incoming')
     expect(conversation.messages.last.content).to eq('Resposta do cliente')
+  end
+
+  it 'reconciles fromMe through the native message repository when the Meta webhook omits direction metadata' do
+    native_response = double(
+      success?: true,
+      parsed_response: {
+        'messages' => {
+          'records' => [{
+            'key' => {
+              'id' => 'PHONE-OUT-LEGACY',
+              'fromMe' => true,
+              'remoteJid' => '22654721644999@lid',
+              'remoteJidAlt' => "#{peer_phone}@s.whatsapp.net"
+            },
+            'source' => 'android',
+            'pushName' => 'Cliente salvo'
+          }]
+        }
+      }
+    )
+    allow(HTTParty).to receive(:post).and_return(native_response)
+
+    described_class.new(
+      inbox: whatsapp_channel.inbox,
+      params: webhook(
+        message_id: 'PHONE-OUT-LEGACY',
+        from: peer_phone,
+        body: 'Resposta fora do HUB',
+        include_context: false
+      )
+    ).perform
+
+    message = whatsapp_channel.inbox.conversations.last.messages.last
+    expect(message.message_type).to eq('outgoing')
+    expect(message.sender).to be_nil
+    expect(message.content_attributes['connect_api_external_outgoing']).to be(true)
+    expect(message.content_attributes['connect_api_source']).to eq('android')
   end
 
   it 'marks Connect API generated external replies as bot-originated' do
@@ -103,6 +153,24 @@ describe Whatsapp::IncomingMessageConnectApiService do
     expect(message.content_attributes['connect_api_external_outgoing']).to be(true)
     expect(message.content_attributes['connect_api_origin']).to eq('bot')
     expect(message.content_attributes['connect_api_source']).to eq('api')
+  end
+
+  it 'downloads incoming media from the signed storage URL without forwarding OAuth headers' do
+    descriptor = double(
+      success?: true,
+      code: 200,
+      body: '',
+      parsed_response: { 'url' => 'https://storage.example/signed/audio.ogg' }
+    )
+    downloaded = double('downloaded-file')
+    allow(HTTParty).to receive(:get).and_return(descriptor)
+    allow(Down).to receive(:download).with('https://storage.example/signed/audio.ogg').and_return(downloaded)
+
+    service = described_class.new(inbox: whatsapp_channel.inbox, params: webhook(message_id: 'MEDIA-1', from: peer_phone, body: 'x'))
+    result = service.send(:download_attachment_file, { id: 'MEDIA-1' }.with_indifferent_access)
+
+    expect(result).to eq(downloaded)
+    expect(Down).to have_received(:download).with('https://storage.example/signed/audio.ogg')
   end
 
   it 'refreshes a number-only contact with Connect API push name and profile picture metadata' do
