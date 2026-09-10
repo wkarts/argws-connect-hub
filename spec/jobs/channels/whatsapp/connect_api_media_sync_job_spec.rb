@@ -28,9 +28,10 @@ describe Channels::Whatsapp::ConnectApiMediaSyncJob do
       'messageTimestamp' => Time.current.to_i,
       'pushName' => 'Contato Teste',
       'messageType' => 'audioMessage',
+      # findMessages intentionally exposes only the sanitized media shape.
       'message' => {
         'audioMessage' => {
-          'mimetype' => 'audio/ogg; codecs=opus'
+          'seconds' => 3
         }
       }
     }
@@ -41,7 +42,7 @@ describe Channels::Whatsapp::ConnectApiMediaSyncJob do
     allow(Channels::Whatsapp::ConnectApiProfilePictureJob).to receive(:perform_later)
   end
 
-  it 'repairs an existing message that arrived without its media attachment' do
+  it 'repairs an existing message using only key.id even when findMessages returns sanitized media' do
     message = conversation.messages.create!(
       account_id: channel.account_id,
       inbox_id: channel.inbox.id,
@@ -50,11 +51,16 @@ describe Channels::Whatsapp::ConnectApiMediaSyncJob do
       source_id: 'MEDIA-SYNC-1'
     )
 
-    allow(client).to receive(:request) do |method, path, **_options|
+    allow(client).to receive(:request) do |method, path, **options|
       if method == :post && path.include?('/chat/findMessages/')
         { 'messages' => { 'records' => [native_record] } }
       elsif method == :post && path.include?('/chat/getBase64FromMediaMessage/')
+        expect(options[:body]).to eq(
+          message: { key: { id: 'MEDIA-SYNC-1' } },
+          convertToMp4: false
+        )
         {
+          'mediaType' => 'audio',
           'fileName' => 'voice.ogg',
           'mimetype' => 'audio/ogg; codecs=opus',
           'base64' => Base64.strict_encode64('voice-bytes')
