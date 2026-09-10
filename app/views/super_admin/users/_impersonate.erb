@@ -1,8 +1,7 @@
 <section class="main-content__body">
- <hr/>
+  <hr/>
   <div class="form-actions">
-  <p class="text-color-red">Caution: Any actions executed after impersonate will appear as if performed by the impersonated user - [<%= page.resource.name %> ]</p>
-    <a class='button' target='_blank' href='<%= page.resource.generate_sso_link %>'>Impersonate user </a>
+    <p class="text-color-red">Atenção: ações executadas após assumir esta conta aparecerão como realizadas pelo usuário selecionado — [<%= page.resource.name %>].</p>
+    <a class="button" target="_blank" rel="noopener" href="<%= page.resource.generate_sso_link %>">Acessar como usuário</a>
   </div>
 </section>
-
