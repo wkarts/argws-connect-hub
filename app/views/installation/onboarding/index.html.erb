@@ -1,9 +1,11 @@
 <!DOCTYPE html>
-<html>
+<html lang="pt-BR">
   <head>
-    <title>HUB Admin</title>
+    <meta charset="utf-8">
+    <title>HUB Admin — Configuração inicial</title>
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="theme-color" content="#2F6FED">
+    <meta name="msapplication-TileColor" content="#2F6FED">
     <meta name="application-name" content="HUB">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -13,73 +15,63 @@
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
     <%= javascript_pack_tag 'superadmin' %>
     <%= stylesheet_pack_tag 'superadmin' %>
+    <%= csrf_meta_tags %>
   </head>
   <body>
     <div class="h-full w-full antialiased">
       <main class="flex flex-col bg-hub-25 min-h-screen w-full py-20 sm:px-6 lg:px-8 dark:bg-slate-900">
         <section class="max-w-5xl mx-auto">
-          <img src="/brand-assets/logo.svg" alt="🅷🆄🅱" class="mx-auto h-8 w-auto block dark:hidden">
-          <img src="/brand-assets/logo_dark.svg" alt="🅷🆄🅱" class="mx-auto h-8 w-auto hidden dark:block">
-          <h2 class="mt-6 text-center text-3xl font-medium text-slate-900 dark:text-hub-50">
-            Howdy, Welcome to 🅰🅳🅼🅸🅽 👋
-          </h2>
+          <img src="/brand-assets/logo.svg" alt="HUB" class="mx-auto h-8 w-auto block dark:hidden">
+          <img src="/brand-assets/logo_dark.svg" alt="HUB" class="mx-auto h-8 w-auto hidden dark:block">
+          <h2 class="mt-6 text-center text-3xl font-medium text-slate-900 dark:text-hub-50">Bem-vindo à Administração 👋</h2>
+          <p class="mt-2 text-center text-sm text-slate-500">Crie o primeiro administrador desta instalação do HUB.</p>
         </section>
-        <section class="bg-white shadow sm:mx-auto mt-11 sm:w-full sm:max-w-lg dark:bg-slate-800 p-11 sm:shadow-lg sm:rounded-lg mb-8 mt-15">
+        <section class="bg-white shadow sm:mx-auto mt-11 sm:w-full sm:max-w-lg dark:bg-slate-800 p-11 sm:shadow-lg sm:rounded-lg mb-8">
           <div>
             <%= form_tag('/installation/onboarding') do %>
-            <div class="space-y-5">
-              <% if flash[:error].present? %>
-                <div class="rounded-md bg-red-500 p-4 text-white text-sm mb-5"><%= flash[:error] %></div>
-              <% end %>
+              <div class="space-y-5">
+                <% if flash[:error].present? %>
+                  <div class="rounded-md bg-red-500 p-4 text-white text-sm mb-5"><%= flash[:error] %></div>
+                <% end %>
 
-              <div>
-                <label for="name" class="flex justify-between text-sm font-medium leading-6 text-slate-900 dark:text-white">
-                  Name
-                </label>
-                <div class="mt-1">
-                  <%= text_field :user, :name, placeholder: "Enter your full name. eg: Bruce Wayne", required: true, class: "block w-full rounded-md border-0 px-3 py-3 appearance-none shadow-sm ring-1 ring-inset text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-hub-500 sm:text-sm sm:leading-6 outline-none dark:bg-slate-700 dark:ring-slate-600 dark:focus:ring-hub-500 ring-slate-200" %>
+                <div>
+                  <label for="user_name" class="flex justify-between text-sm font-medium leading-6 text-slate-900 dark:text-white">Nome completo</label>
+                  <div class="mt-1">
+                    <%= text_field :user, :name, placeholder: "Digite seu nome completo", required: true, autocomplete: "name", class: "block w-full rounded-md border-0 px-3 py-3 appearance-none shadow-sm ring-1 ring-inset text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-hub-500 sm:text-sm sm:leading-6 outline-none dark:bg-slate-700 dark:ring-slate-600 dark:focus:ring-hub-500 ring-slate-200" %>
+                  </div>
                 </div>
-              </div>
 
-              <div>
-                <label for="name" class="flex justify-between text-sm font-medium leading-6 text-slate-900 dark:text-white">
-                  Company Name
-                </label>
-                <div class="mt-1">
-                  <%= text_field :user, :company, placeholder: "Enter your company name. eg: Wayne Enterprises", required: true, class: "block w-full rounded-md border-0 px-3 py-3 appearance-none shadow-sm ring-1 ring-1 ring-inset text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-hub-500 sm:text-sm sm:leading-6 outline-none dark:bg-slate-700 dark:ring-slate-600 dark:focus:ring-hub-500 ring-slate-200" %>
+                <div>
+                  <label for="user_company" class="flex justify-between text-sm font-medium leading-6 text-slate-900 dark:text-white">Nome da empresa</label>
+                  <div class="mt-1">
+                    <%= text_field :user, :company, placeholder: "Digite o nome da empresa ou organização", required: true, autocomplete: "organization", class: "block w-full rounded-md border-0 px-3 py-3 appearance-none shadow-sm ring-1 ring-inset text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-hub-500 sm:text-sm sm:leading-6 outline-none dark:bg-slate-700 dark:ring-slate-600 dark:focus:ring-hub-500 ring-slate-200" %>
+                  </div>
                 </div>
-              </div>
 
-              <div>
-                <label for="name" class="flex justify-between text-sm font-medium leading-6 text-slate-900 dark:text-white">
-                  Work Email
-                </label>
-                <div class="mt-1">
-                  <%= email_field :user, :email, placeholder: "Enter your work email address. eg: bruce@wayne.enterprises", required: true, class: "block w-full rounded-md border-0 px-3 py-3 appearance-none shadow-sm ring-1 ring-1 ring-inset text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-hub-500 sm:text-sm sm:leading-6 outline-none dark:bg-slate-700 dark:ring-slate-600 dark:focus:ring-hub-500 ring-slate-200" %>
+                <div>
+                  <label for="user_email" class="flex justify-between text-sm font-medium leading-6 text-slate-900 dark:text-white">E-mail de acesso</label>
+                  <div class="mt-1">
+                    <%= email_field :user, :email, placeholder: "Digite seu e-mail de acesso", required: true, autocomplete: "email", class: "block w-full rounded-md border-0 px-3 py-3 appearance-none shadow-sm ring-1 ring-inset text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-hub-500 sm:text-sm sm:leading-6 outline-none dark:bg-slate-700 dark:ring-slate-600 dark:focus:ring-hub-500 ring-slate-200" %>
+                  </div>
                 </div>
-              </div>
 
-              <div>
-                <label for="name" class="flex justify-between text-sm font-medium leading-6 text-slate-900 dark:text-white">
-                  Password
-                </label>
-                <div class="mt-1">
-                  <%= password_field :user, :password, placeholder: "Enter a password with 6 characters or more.", required: true, class: "block w-full rounded-md border-0 px-3 py-3 appearance-none shadow-sm ring-1 ring-inset text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-hub-500 sm:text-sm sm:leading-6 outline-none dark:bg-slate-700 dark:ring-slate-600 dark:focus:ring-hub-500 ring-slate-200" %>
+                <div>
+                  <label for="user_password" class="flex justify-between text-sm font-medium leading-6 text-slate-900 dark:text-white">Senha</label>
+                  <div class="mt-1">
+                    <%= password_field :user, :password, placeholder: "Digite uma senha com pelo menos 6 caracteres", required: true, autocomplete: "new-password", class: "block w-full rounded-md border-0 px-3 py-3 appearance-none shadow-sm ring-1 ring-inset text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-hub-500 sm:text-sm sm:leading-6 outline-none dark:bg-slate-700 dark:ring-slate-600 dark:focus:ring-hub-500 ring-slate-200" %>
+                  </div>
                 </div>
-              </div>
 
-              <div class="text-sm text-slate-900">
-                <%= check_box_tag "subscribe_to_updates", 'true', true %>
-                <label class="ml-2" for="subscribe_to_updates">
-                  Subscribe to release notes, newsletters & product feedback surveys.
-                </label>
-              </div>
+                <div class="text-sm text-slate-900 dark:text-slate-100">
+                  <%= check_box_tag "subscribe_to_updates", 'true', true %>
+                  <label class="ml-2" for="subscribe_to_updates">Receber notas de versão, novidades e pesquisas de melhoria do produto.</label>
+                </div>
 
-              <button type="submit" class="flex items-center w-full justify-center rounded-md bg-hub-500 py-3 px-3 text-base font-medium text-white shadow-sm hover:bg-hub-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-hub-500 cursor-pointer">
-                Finish Setup
-              </button>
-            </div>
-          <% end %>
+                <button type="submit" class="flex items-center w-full justify-center rounded-md bg-hub-500 py-3 px-3 text-base font-medium text-white shadow-sm hover:bg-hub-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-hub-500 cursor-pointer">Concluir configuração</button>
+              </div>
+            <% end %>
+          </div>
+        </section>
       </main>
     </div>
   </body>
