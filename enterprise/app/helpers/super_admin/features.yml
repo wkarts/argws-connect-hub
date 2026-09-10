@@ -1,0 +1,84 @@
+custom_branding:
+  name: 'Custom Branding'
+  description: 'Aplique a identidade visual própria desta instalação.'
+  enabled: true
+  icon: 'icon-paint-brush-line'
+  config_key: 'custom_branding'
+  enterprise: true
+agent_capacity:
+  name: 'Agent Capacity'
+  description: 'Defina limites de capacidade para distribuição automática de conversas aos agentes.'
+  enabled: true
+  icon: 'icon-hourglass-line'
+  enterprise: true
+audit_logs:
+  name: 'Audit Logs'
+  description: 'Acompanhe atividades e alterações da conta por meio de registros detalhados de auditoria.'
+  enabled: true
+  icon: 'icon-menu-search-line'
+  enterprise: true
+disable_branding:
+  name: 'Disable Branding'
+  description: 'Permita ocultar a marca padrão no widget de chat e em e-mails externos.'
+  enabled: true
+  icon: 'icon-sailbot-fill'
+  enterprise: true
+live_chat:
+  name: 'Live Chat'
+  description: 'Atendimento por chat em tempo real incorporado ao site.'
+  enabled: true
+  icon: 'icon-chat-smile-3-line'
+email:
+  name: 'Email'
+  description: 'Gerencie interações de atendimento recebidas e enviadas por e-mail.'
+  enabled: true
+  icon: 'icon-mail-send-fill'
+messenger:
+  name: 'Messenger'
+  description: 'Conecte o atendimento aos canais Facebook e Instagram.'
+  enabled: true
+  icon: 'icon-messenger-line'
+  config_key: 'facebook'
+whatsapp:
+  name: 'WhatsApp'
+  description: 'Gerencie conversas do WhatsApp por meio das integrações habilitadas no HUB.'
+  enabled: true
+  icon: 'icon-whatsapp-line'
+telegram:
+  name: 'Telegram'
+  description: 'Gerencie interações de atendimento provenientes do Telegram.'
+  enabled: true
+  icon: 'icon-telegram-line'
+line:
+  name: 'Line'
+  description: 'Gerencie interações de atendimento provenientes do Line.'
+  enabled: true
+  icon: 'icon-line-line'
+sms:
+  name: 'SMS'
+  description: 'Gerencie interações de atendimento por SMS.'
+  enabled: true
+  icon: 'icon-message-line'
+help_center:
+  name: 'Help Center'
+  description: 'Crie, organize e publique artigos de ajuda em um portal.'
+  enabled: true
+  icon: 'icon-book-2-line'
+microsoft:
+  name: 'Microsoft'
+  description: 'Configuração do canal de e-mail Microsoft.'
+  enabled: true
+  icon: 'icon-microsoft'
+  config_key: 'microsoft'
+captain:
+  name: 'Captain'
+  description: 'Configuração da integração Captain quando utilizada pela instalação.'
+  enabled: true
+  icon: 'captain-outline'
+  config_key: 'captain'
+connect_api:
+  name: 'Connect|API'
+  description: 'Administração da integração oficial de comunicação WhatsApp Connect|API.'
+  enabled: true
+  icon: 'icon-whatsapp-line'
+  config_key: 'connect_api'
