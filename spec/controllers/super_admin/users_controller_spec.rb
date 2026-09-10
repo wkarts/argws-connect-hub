@@ -24,11 +24,12 @@ RSpec.describe 'Super Admin Users API', type: :request do
         } }
       end
 
-      it 'shows the list of users' do
+      it 'shows the localized list of users without navigation route errors' do
         sign_in(super_admin, scope: :super_admin)
         get '/super_admin/users'
+
         expect(response).to have_http_status(:success)
-        expect(response.body).to include('New user')
+        expect(response.body).to include('Adicionar usuário')
         expect(response.body).to include(CGI.escapeHTML(user.name))
       end
 
