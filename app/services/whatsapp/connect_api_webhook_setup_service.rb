@@ -235,10 +235,25 @@ class Whatsapp::ConnectApiWebhookSetupService
     instances = response.parsed_response
     instances = [instances] unless instances.is_a?(Array)
     instance = instances.find do |item|
-      item = item.to_h
+      item = item.to_h.deep_stringify_keys
       (item['name'] || item['instanceName']).to_s == config['instance_name'].to_s
     end
     return unless instance
+
+    instance = instance.to_h.deep_stringify_keys
+
+    # Existing instances are authoritative for their own token. HUB may have
+    # generated a provisional token locally before discovering an already
+    # persisted Connect|API instance. Reconcile it here so Graph-scoped media
+    # and template operations never keep using a stale credential.
+    remote_token = instance['token'].to_s.strip.presence || instance['hash'].to_s.strip.presence
+    if remote_token.present? && !ActiveSupport::SecurityUtils.secure_compare(
+      Digest::SHA256.hexdigest(config['api_key'].to_s),
+      Digest::SHA256.hexdigest(remote_token)
+    )
+      Rails.logger.info("[HUB Connect|API] reconciled instance credential name=#{config['instance_name']}")
+      config['api_key'] = remote_token
+    end
 
     provider = instance['integration'].presence || instance['provider'].presence
     if provider.present?
