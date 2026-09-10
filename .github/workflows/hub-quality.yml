@@ -77,3 +77,8 @@ jobs:
         run: bundle exec rails db:prepare
       - name: Eager load Rails and Enterprise runtime
         run: bundle exec rails runner 'Rails.application.eager_load!; puts "HUB Enterprise eager load OK"'
+      - name: Connect API WhatsApp regression specs
+        run: >-
+          bundle exec rspec
+          spec/services/whatsapp/incoming_message_connect_api_service_spec.rb
+          spec/services/whatsapp/providers/connect_api_service_spec.rb
