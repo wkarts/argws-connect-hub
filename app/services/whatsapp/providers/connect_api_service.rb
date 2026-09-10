@@ -21,10 +21,12 @@ class Whatsapp::Providers::ConnectApiService < Whatsapp::Providers::WhatsappClou
     }
   end
 
-  # Message delivery intentionally uses the native Connect|API endpoints. This
-  # keeps HUB aligned with the generic Connect|API contract and avoids coupling
-  # regular sends to the Meta-compatible OAuth facade.
+  # Regular text/media delivery uses the native Connect|API contract. Keep the
+  # existing Graph-compatible interactive flow for input_select so this repair
+  # does not regress lists/buttons already supported by HUB.
   def send_message(phone_number, message)
+    return super if message.content_type == 'input_select'
+
     if message.attachments.present?
       send_native_attachment_message(phone_number, message)
     else
@@ -32,8 +34,6 @@ class Whatsapp::Providers::ConnectApiService < Whatsapp::Providers::WhatsappClou
     end
   end
 
-  # Templates remain on the Meta-compatible facade because their wire format is
-  # already the Meta template contract and the instance token is valid there.
   def sync_templates
     whatsapp_channel.mark_message_templates_updated
 
