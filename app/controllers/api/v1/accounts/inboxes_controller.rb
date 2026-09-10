@@ -63,6 +63,7 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
   end
 
   def destroy
+    enqueue_connect_api_instance_deletion
     ::DeleteObjectJob.perform_later(@inbox, Current.user, request.ip) if @inbox.present?
     render status: :ok, json: { message: I18n.t('messages.inbox_deletetion_response') }
   end
@@ -76,6 +77,16 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
 
   def fetch_agent_bot
     @agent_bot = AgentBot.find(params[:agent_bot]) if params[:agent_bot]
+  end
+
+  def enqueue_connect_api_instance_deletion
+    channel = @inbox&.channel
+    return unless channel.is_a?(Channel::Whatsapp) && channel.provider == 'connectapi'
+
+    instance_name = channel.provider_config.to_h['instance_name'].to_s.strip
+    return if instance_name.blank?
+
+    Channels::Whatsapp::ConnectApiDeleteInstanceJob.perform_later(instance_name)
   end
 
   def create_channel
