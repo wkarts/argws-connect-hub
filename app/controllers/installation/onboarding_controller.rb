@@ -13,7 +13,8 @@ class Installation::OnboardingController < ApplicationController
       confirmed: true
     ).perform
 
-    sign_in(:super_admin, user)
+    super_admin = SuperAdmin.find(user.id)
+    sign_in(:super_admin, super_admin)
     redirect_to super_admin_root_path
   rescue StandardError => e
     Rails.logger.warn("Falha no onboarding inicial: #{e.message}")
