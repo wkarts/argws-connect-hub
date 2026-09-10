@@ -19,10 +19,12 @@ RSpec.describe Installation::OnboardingController, type: :controller do
 
   describe 'POST #create' do
     it 'creates and authenticates the first administrator through AccountBuilder' do
-      super_admin = build_stubbed(:super_admin)
+      created_user = build_stubbed(:user, id: 101)
+      super_admin = build_stubbed(:super_admin, id: 101)
       account = build_stubbed(:account)
-      builder = instance_double(AccountBuilder, perform: [super_admin, account])
+      builder = instance_double(AccountBuilder, perform: [created_user, account])
       allow(AccountBuilder).to receive(:new).and_return(builder)
+      allow(SuperAdmin).to receive(:find).with(created_user.id).and_return(super_admin)
       allow(controller).to receive(:sign_in)
 
       post :create, params: {
@@ -42,6 +44,7 @@ RSpec.describe Installation::OnboardingController, type: :controller do
         super_admin: true,
         confirmed: true
       )
+      expect(SuperAdmin).to have_received(:find).with(created_user.id)
       expect(controller).to have_received(:sign_in).with(:super_admin, super_admin)
       expect(response).to redirect_to(super_admin_root_path)
     end
