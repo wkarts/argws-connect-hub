@@ -11,10 +11,11 @@ module HubApp
     100_000
   end
 
+  # HUB 1.x é distribuído e executado sempre como edição Enterprise.
+  # A disponibilidade dos recursos continua sendo controlada pelas feature flags
+  # de cada conta; não existe downgrade de edição por variável de ambiente.
   def self.enterprise?
-    return if ENV.fetch('DISABLE_ENTERPRISE', false)
-
-    @enterprise ||= root.join('enterprise').exist?
+    true
   end
 
   def self.custom?
@@ -26,12 +27,6 @@ module HubApp
   end
 
   def self.extensions
-    if custom?
-      %w[enterprise custom]
-    elsif enterprise?
-      %w[enterprise]
-    else
-      %w[]
-    end
+    custom? ? %w[enterprise custom] : %w[enterprise]
   end
 end
