@@ -4,6 +4,8 @@ class Channels::Whatsapp::ConnectApiProfilePictureSchedulerJob < ApplicationJob
   queue_as :low
 
   MAX_CONTACTS_PER_CHANNEL = 200
+  POSITIVE_CACHE = 12.hours
+  NEGATIVE_CACHE = 15.minutes
 
   def perform
     Channel::Whatsapp.where(provider: 'connectapi').includes(:inbox).find_each do |channel|
@@ -29,7 +31,10 @@ class Channels::Whatsapp::ConnectApiProfilePictureSchedulerJob < ApplicationJob
   def profile_check_fresh?(contact)
     value = contact.additional_attributes.to_h.dig('connect_api', 'profile_picture_checked_at')
     checked_at = Time.zone.parse(value.to_s)
-    checked_at.present? && checked_at > 12.hours.ago
+    return false if checked_at.blank?
+
+    cache_window = contact.avatar.attached? ? POSITIVE_CACHE : NEGATIVE_CACHE
+    checked_at > cache_window.ago
   rescue ArgumentError, TypeError
     false
   end
