@@ -173,11 +173,19 @@ export default {
       if (this.isReconciling || this.isDisconnecting) return;
       this.isReconciling = true;
       try {
-        const success = await this.update(
-          { force_reconcile: true, connect: false, disconnect: false },
-          'Caixa e templates reconciliados com a Connect|API.'
-        );
-        if (success) await this.$refs.openingTemplates.loadTemplates();
+        const success = await this.update({ force_reconcile: true, connect: false, disconnect: false });
+        if (!success) return;
+        const catalog = this.$refs.openingTemplates;
+        await catalog.loadTemplates();
+        if (catalog.error) {
+          useAlert('Caixa reconciliada, mas não foi possível carregar o catálogo de templates.');
+          return;
+        }
+        const imported = catalog.templates.filter(template => template.hub_remote_present);
+        const available = imported.filter(template => template.hub_remote_available);
+        useAlert(imported.length
+          ? `Caixa reconciliada. ${imported.length} modelo(s) importado(s), ${available.length} disponível(is).`
+          : 'Caixa reconciliada. Nenhum template foi retornado pela Connect|API.');
       } finally {
         this.isReconciling = false;
       }

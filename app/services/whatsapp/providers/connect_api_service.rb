@@ -36,17 +36,12 @@ class Whatsapp::Providers::ConnectApiService < Whatsapp::Providers::WhatsappClou
   end
 
   def send_template(message, phone_number, template_info)
-    payload = ConnectApi::LocalTemplateDelivery.new(
-      catalog: whatsapp_channel.opening_template_catalog,
-      message: message,
-      template_info: template_info
-    ).payload
-    return super unless payload
+    template = whatsapp_channel.opening_template_catalog.entries.find do |entry|
+      entry['name'] == template_info[:name] && entry['language'] == template_info[:lang_code]
+    end
+    return super unless ConnectApi::LocalTemplateMessage.local?(template)
 
-    send_local_template(message, phone_number, payload)
-  rescue ConnectApi::LocalTemplateDelivery::Error => e
-    message.update!(status: :failed, external_error: e.message)
-    nil
+    send_local_template(message, phone_number, template)
   end
 
   def sync_templates
@@ -61,21 +56,46 @@ class Whatsapp::Providers::ConnectApiService < Whatsapp::Providers::WhatsappClou
   private
 
   def send_local_template(message, phone_number, template)
+    params = message.additional_attributes.to_h['template_params']
+    local = ConnectApi::LocalTemplateMessage.new(template, params)
+    local.validate_content!(message.content)
     response = HTTParty.post(
       "#{phone_id_path}/messages",
       headers: api_headers,
-      body: {
-        messaging_product: 'whatsapp',
-        to: normalize_phone(phone_number),
-        type: 'template',
-        template: template
-      }.to_json,
+      body: { messaging_product: 'whatsapp', to: phone_number, type: 'template', template: local.payload }.to_json,
       timeout: request_timeout,
       follow_redirects: false
     )
-    process_response(message, response)
+    unless response.success?
+      raise ConnectApi::LocalTemplateMessage::Error,
+            "Não foi possível enviar o modelo (HTTP #{response.code}). Reconcilie os templates antes de tentar novamente."
+    end
+
+    data = response.parsed_response
+    id = data.is_a?(Hash) && data['messages'].is_a?(Array) && data['messages'].first.is_a?(Hash) && data['messages'].first['id']
+    unless id.is_a?(String) && !id.empty?
+      raise ConnectApi::LocalTemplateMessage::Error, 'A API não confirmou o identificador da mensagem. Verifique a entrega antes de reenviar.'
+    end
+
+    message.update!(
+      source_id: id,
+      content_attributes: message.content_attributes.to_h.merge(
+        'connect_api_template' => {
+          'id' => template['id'], 'name' => template['name'], 'language' => template['language'],
+          'version' => template['version'], 'source' => 'connectapi_local',
+          'execution' => 'rendered_text', 'meta_approved' => false
+        }
+      )
+    )
+    id
+  rescue ConnectApi::LocalTemplateMessage::Error => e
+    message.update!(status: :failed, external_error: e.message)
+    nil
   rescue StandardError => e
-    process_native_exception(message, e)
+    # Do not retry a possibly delivered message or log credentials/response bodies.
+    Rails.logger.warn("[HUB Connect|API] template delivery interrupted: #{e.class}")
+    message.update!(status: :failed, external_error: 'Envio interrompido. Verifique a entrega antes de reenviar o modelo.')
+    nil
   end
 
   def send_native_text_message(phone_number, message)

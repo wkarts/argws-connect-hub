@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative 'local_template_message'
+
 module ConnectApi
   # Reuse the channel JSONB: one catalog per inbox, with choices scoped to the
   # instance and name/language send identity. Never create remote templates here.
@@ -91,20 +93,13 @@ module ConnectApi
         template[key].is_a?(String) && !template[key].strip.empty?
       end
       valid &&= template['components'].is_a?(Array) && template['components'].all? { |component| component.is_a?(Hash) }
-      if valid && template['origin'] == 'CONNECT_LOCAL'
-        valid &&= template['id'].is_a?(String) && template['id'].start_with?('local_') &&
-                  template['revision'].is_a?(Integer) && template['revision'].positive? && template['meta_approved'] == false
-      end
-      raise InvalidTemplate, 'A Connect|API retornou um template sem nome, idioma, revisão ou componentes válidos.' unless valid
+      raise InvalidTemplate, 'A Connect|API retornou um template sem nome, idioma ou componentes válidos.' unless valid
     end
 
     def remote_available?(template)
-      status = template['status'].to_s.strip
-      if template['origin'] == 'CONNECT_LOCAL'
-        return status == 'LOCAL_READY' && template['enabled'] == true && template['available'] == true &&
-               template['meta_approved'] == false
-      end
+      return LocalTemplateMessage.available?(template) if LocalTemplateMessage.local?(template)
 
+      status = template['status'].to_s.strip
       (status.empty? || status.casecmp('APPROVED').zero?) &&
         ![false, 0, 'false', '0'].include?(template['available']) &&
         ![false, 0, 'false', '0'].include?(template['enabled'])

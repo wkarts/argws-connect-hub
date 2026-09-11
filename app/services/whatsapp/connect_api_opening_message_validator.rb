@@ -20,10 +20,11 @@ class Whatsapp::ConnectApiOpeningMessageValidator
     unless template
       raise Error, 'Escolha um template habilitado e disponível nesta caixa para iniciar a conversa.'
     end
-    if template['origin'] == 'CONNECT_LOCAL' &&
-       (params['connect_template_id'] != template['id'] || params['connect_template_revision'] != template['revision'])
-      raise Error, 'O modelo foi alterado. Atualize o catálogo e selecione-o novamente.'
+    if ConnectApi::LocalTemplateMessage.local?(template)
+      ConnectApi::LocalTemplateMessage.new(template, params).validate_content!(@message.content)
     end
+  rescue ConnectApi::LocalTemplateMessage::Error => e
+    raise Error, e.message
   end
 
   private
