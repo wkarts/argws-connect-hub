@@ -7,8 +7,6 @@ require 'logger'
 require 'timeout'
 require_relative '../app/services/connect_api/opening_template_catalog'
 
-# Minimal host doubles so the real local send method can run without Rails,
-# external HTTP, WhatsApp or production data. Full Rails specs stay in CI.
 class Object
   def blank?; respond_to?(:empty?) ? empty? : !self; end
   def present?; !blank?; end
@@ -16,7 +14,7 @@ class Object
 end
 class GlobalConfigService
   def self.load(key, fallback)
-    raise 'global credential must never be read for local template delivery' if key == 'CONNECT_API_AUTH_TOKEN'
+    raise 'global credential must never be read for template delivery' if key == 'CONNECT_API_AUTH_TOKEN'
     fallback
   end
 end
@@ -53,7 +51,7 @@ class ConnectApiLocalTemplatesTest < Minitest::Test
     {
       'id' => 'lt_fixture', 'name' => name, 'language' => 'pt_BR',
       'source' => 'connectapi_local', 'execution' => 'rendered_text',
-      'meta_approved' => false, 'status' => 'LOCAL_READY', 'version' => 1,
+      'approved' => true, 'status' => 'APPROVED', 'category' => 'OPENING', 'version' => 1,
       'enabled' => true, 'available' => true,
       'components' => [{ 'type' => 'BODY', 'text' => 'Olá! Como podemos ajudar?' }]
     }.merge(extra.transform_keys(&:to_s))
@@ -67,26 +65,27 @@ class ConnectApiLocalTemplatesTest < Minitest::Test
     Catalog.new(entries, instance_name: instance)
   end
 
-  def test_imports_real_local_hello_without_fabricating_meta_approval
+  def test_imports_real_approved_hello
     entries = catalog.reconcile([remote, remote('notice')])
     assert_equal [true, false], entries.map { |item| item['hub_opening_enabled'] }
-    assert_equal 'LOCAL_READY', entries[0]['status']
-    assert_equal false, entries[0]['meta_approved']
+    assert_equal 'APPROVED', entries[0]['status']
+    assert_equal true, entries[0]['approved']
+    assert_equal 'OPENING', entries[0]['category']
     assert_equal [entries[0]], catalog(entries).available_templates(opening_only: true)
   end
 
-  def test_local_status_requires_real_source_and_provenance
-    %w[source status execution meta_approved enabled available version].each do |field|
+  def test_template_status_requires_approved_contract_and_provenance
+    %w[source status execution approved enabled available version].each do |field|
       invalid = remote.reject { |key, _| key == field }
       refute Local.available?(invalid), field
     end
-    refute Local.available?(remote(meta_approved: true))
-    refute Local.available?(remote(status: 'APPROVED'))
+    refute Local.available?(remote(approved: false))
+    refute Local.available?(remote(status: 'PENDING'))
     refute Local.available?(remote(version: '1'))
   end
 
   def test_official_eligibility_stays_unchanged
-    official = remote.reject { |key, _| %w[source execution meta_approved version].include?(key) }.merge('status' => 'APPROVED')
+    official = remote.reject { |key, _| %w[source execution approved version].include?(key) }.merge('status' => 'APPROVED')
     assert catalog(catalog.reconcile([official])).available_templates.any?
     refute catalog(catalog.reconcile([official.merge('status' => 'PENDING')])).available_templates.any?
   end
@@ -95,7 +94,7 @@ class ConnectApiLocalTemplatesTest < Minitest::Test
     entries = catalog.reconcile([remote, remote('notice')])
     entries = catalog(entries).set_enabled(name: 'hello', language: 'pt_BR', enabled: false)
     entries = catalog(entries).set_enabled(name: 'notice', language: 'pt_BR', enabled: true)
-    entries = catalog(entries).reconcile([remote(version: 2), remote('notice', enabled: false, available: false, status: 'LOCAL_DISABLED')])
+    entries = catalog(entries).reconcile([remote(version: 2), remote('notice', enabled: false, available: false)])
     assert_empty catalog(entries).available_templates(opening_only: true)
     entries = catalog(entries).reconcile([])
     assert_empty catalog(entries).available_templates
@@ -174,7 +173,8 @@ class ConnectApiLocalTemplatesTest < Minitest::Test
     assert_equal [], data['template']['components'][0]['parameters']
     assert_equal 1, data['template']['connect_api_version']
     refute data.key?('text')
-    assert_equal false, message.content_attributes['connect_api_template']['meta_approved']
+    assert_equal true, message.content_attributes['connect_api_template']['approved']
+    assert_equal 'APPROVED', message.content_attributes['connect_api_template']['status']
   end
 
   def test_empty_instance_token_does_not_fall_back_to_global_or_send
