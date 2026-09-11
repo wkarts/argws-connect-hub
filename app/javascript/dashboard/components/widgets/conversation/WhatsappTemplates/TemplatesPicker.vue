@@ -24,7 +24,6 @@ export default {
       return this.$store.getters['inboxes/getInbox'](this.inboxId).provider === 'connectapi';
     },
     whatsAppTemplateMessages() {
-      // TODO: Remove the last filter when we support all formats
       return this.$store.getters['inboxes/getWhatsAppTemplates'](this.inboxId, this.openingOnly)
         .filter(template => {
           if (isLocalTemplate(template)) return this.isConnectApi && localTemplateAvailable(template);
@@ -47,6 +46,10 @@ export default {
     isLocalTemplate,
     getTemplatebody(template) {
       return template.components.find(component => component.type === 'BODY')?.text || '';
+    },
+    categoryLabel(template) {
+      if (template.category === 'OPENING' || isLocalTemplate(template)) return 'Abertura de conversa';
+      return template.category;
     },
   },
 };
@@ -91,7 +94,7 @@ export default {
               <p class="strong">
                 {{ $t('WHATSAPP_TEMPLATES.PICKER.LABELS.CATEGORY') }}
               </p>
-              <p>{{ isLocalTemplate(template) ? 'Modelo local Connect|API — não aprovado pela Meta' : template.category }}</p>
+              <p>{{ categoryLabel(template) }}</p>
             </div>
           </div>
         </button>

@@ -4,8 +4,8 @@ RSpec.describe Whatsapp::Providers::ConnectApiService, 'local templates' do
   let(:remote) do
     {
       'id' => 'lt_fixture', 'name' => 'hello', 'language' => 'pt_BR',
-      'source' => 'connectapi_local', 'execution' => 'rendered_text', 'meta_approved' => false,
-      'version' => 1, 'enabled' => true, 'available' => true, 'status' => 'LOCAL_READY',
+      'source' => 'connectapi_local', 'execution' => 'rendered_text', 'approved' => true,
+      'version' => 1, 'enabled' => true, 'available' => true, 'status' => 'APPROVED', 'category' => 'OPENING',
       'components' => [{ 'type' => 'BODY', 'text' => 'Olá! Como podemos ajudar?' }]
     }
   end
@@ -31,7 +31,7 @@ RSpec.describe Whatsapp::Providers::ConnectApiService, 'local templates' do
     allow(message).to receive(:update!)
   end
 
-  it 'sends the local model with the scoped Bearer, revision, empty parameter array and real message ID' do
+  it 'sends the template with the scoped Bearer, revision, empty parameter array and real message ID' do
     request = stub_request(:post, 'https://connect.example/graph/v20.0/5575988881111/messages')
               .with(headers: { 'Authorization' => 'Bearer only-instance-token' }, body: hash_including(
                 'type' => 'template', 'template' => hash_including('connect_api_version' => 1,

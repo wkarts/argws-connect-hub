@@ -47,8 +47,6 @@ class Whatsapp::Providers::ConnectApiService < Whatsapp::Providers::WhatsappClou
   def sync_templates
     Whatsapp::ConnectApiTemplateSyncService.new(whatsapp_channel).sync!
   rescue StandardError => e
-    # Creation/background sync must not destroy the last successful catalog.
-    # Explicit reconciliation uses sync! directly and reports errors to the UI.
     Rails.logger.warn("[HUB Connect|API] template sync skipped: #{e.class}: #{e.message}")
     whatsapp_channel.message_templates || []
   end
@@ -83,7 +81,7 @@ class Whatsapp::Providers::ConnectApiService < Whatsapp::Providers::WhatsappClou
         'connect_api_template' => {
           'id' => template['id'], 'name' => template['name'], 'language' => template['language'],
           'version' => template['version'], 'source' => 'connectapi_local',
-          'execution' => 'rendered_text', 'meta_approved' => false
+          'execution' => 'rendered_text', 'status' => 'APPROVED', 'approved' => true
         }
       )
     )
@@ -92,7 +90,6 @@ class Whatsapp::Providers::ConnectApiService < Whatsapp::Providers::WhatsappClou
     message.update!(status: :failed, external_error: e.message)
     nil
   rescue StandardError => e
-    # Do not retry a possibly delivered message or log credentials/response bodies.
     Rails.logger.warn("[HUB Connect|API] template delivery interrupted: #{e.class}")
     message.update!(status: :failed, external_error: 'Envio interrompido. Verifique a entrega antes de reenviar o modelo.')
     nil

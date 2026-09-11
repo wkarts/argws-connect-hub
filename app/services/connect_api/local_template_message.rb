@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
 module ConnectApi
-  # Models owned by Connect|API, not templates approved by Meta. This validates
-  # the local preview; Connect|API independently renders its persisted version.
+  # Templates owned by Connect|API. This validates the preview while Connect|API
+  # independently renders its persisted version before the actual send.
   class LocalTemplateMessage
     class Error < StandardError; end
 
@@ -15,10 +15,9 @@ module ConnectApi
     end
 
     def self.available?(template)
-      local?(template) && template['status'] == 'LOCAL_READY' &&
-        template['execution'] == 'rendered_text' && template['meta_approved'] == false &&
-        template['available'] == true && template['enabled'] == true &&
-        template['version'].is_a?(Integer) && template['version'].positive?
+      local?(template) && template['status'] == 'APPROVED' && template['approved'] == true &&
+        template['execution'] == 'rendered_text' && template['available'] == true &&
+        template['enabled'] == true && template['version'].is_a?(Integer) && template['version'].positive?
     end
 
     def initialize(template, params)
@@ -42,7 +41,6 @@ module ConnectApi
     def rendered_text
       body_values = payload[:components].first[:parameters].map { |item| item[:text] }
       text = definition.map do |component|
-        # Block replacement is literal and does not recursively interpret values.
         component['text'].gsub(PLACEHOLDER) { body_values[Regexp.last_match(1).to_i - 1] }
       end.join("\n\n")
       raise Error, 'A mensagem completa excede 4096 caracteres.' if text_length(text) > 4096
@@ -57,7 +55,7 @@ module ConnectApi
     private
 
     def validate_identity!
-      raise Error, 'Modelo local indisponível nesta caixa.' unless self.class.available?(@template)
+      raise Error, 'Modelo indisponível nesta caixa.' unless self.class.available?(@template)
       unless @params.is_a?(Hash) && @params['name'] == @template['name'] && @params['language'] == @template['language']
         raise Error, 'O modelo selecionado não pertence a esta mensagem.'
       end
@@ -69,7 +67,7 @@ module ConnectApi
     def definition
       items = @template['components']
       unless items.is_a?(Array) && items.length.between?(1, 3) && items.all? { |item| item.is_a?(Hash) }
-        raise Error, 'Definição do modelo local inválida.'
+        raise Error, 'Definição do modelo inválida.'
       end
       types = items.map { |item| item['type'] }
       unless types.uniq == types && (types - ORDER).empty? && types.include?('BODY')
@@ -80,7 +78,7 @@ module ConnectApi
         text = item['text']
         limit = type == 'BODY' ? 4096 : 60
         unless text.is_a?(String) && !text.strip.empty? && text_length(text) <= limit && !text.include?("\0")
-          raise Error, 'Texto do modelo local inválido.'
+          raise Error, 'Texto do modelo inválido.'
         end
         unless item['format'].nil? || (type == 'HEADER' && item['format'] == 'TEXT')
           raise Error, 'Este modelo contém mídia não suportada.'
