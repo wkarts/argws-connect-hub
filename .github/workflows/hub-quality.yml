@@ -24,6 +24,10 @@ jobs:
           bundler-cache: false
       - name: Ruby syntax
         run: ruby ./scripts/check-ruby-syntax.rb app config lib db/migrate enterprise/app enterprise/lib
+      - name: Opening template catalog and UI contracts
+        run: |
+          ruby ./scripts/test-connect-api-opening-templates.rb
+          node --test ./scripts/test-connect-api-opening-templates.mjs
       - name: Enterprise runtime contracts
         run: ruby ./scripts/check-enterprise-contracts.rb
 
@@ -88,3 +92,6 @@ jobs:
           spec/jobs/channels/whatsapp/connect_api_profile_picture_job_spec.rb
           spec/jobs/channels/whatsapp/connect_api_media_sync_job_spec.rb
           spec/jobs/channels/whatsapp/delete_connect_api_instance_job_spec.rb
+          spec/services/whatsapp/connect_api_template_sync_service_spec.rb
+          spec/services/whatsapp/connect_api_opening_message_validator_spec.rb
+          spec/controllers/api/v1/accounts/connect_api_templates_controller_spec.rb

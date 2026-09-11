@@ -17,6 +17,9 @@ export default {
       selectedWaTemplate: null,
     };
   },
+  watch: {
+    inboxId() { this.onResetTemplate(); },
+  },
   methods: {
     pickTemplate(template) {
       this.$emit('pickTemplate', true);
@@ -41,6 +44,7 @@ export default {
     <TemplatesPicker
       v-if="!selectedWaTemplate"
       :inbox-id="inboxId"
+      opening-only
       @onSelect="pickTemplate"
     />
     <TemplateParser

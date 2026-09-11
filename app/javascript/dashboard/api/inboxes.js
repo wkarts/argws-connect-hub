@@ -11,6 +11,14 @@ class Inboxes extends CacheEnabledApiClient {
     return 'inbox';
   }
 
+  getOpeningTemplates(inboxId) {
+    return axios.get(`${this.url}/${inboxId}/connect_api_templates`);
+  }
+
+  setOpeningTemplate(inboxId, attributes) {
+    return axios.patch(`${this.url}/${inboxId}/connect_api_templates`, attributes);
+  }
+
   getCampaigns(inboxId) {
     return axios.get(`${this.url}/${inboxId}/campaigns`);
   }

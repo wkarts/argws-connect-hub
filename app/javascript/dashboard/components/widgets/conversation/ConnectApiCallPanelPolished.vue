@@ -451,16 +451,19 @@ export default {
                   Recusar
                 </button>
 
-                <hub-button
+                <button
                   v-if="mediaCallId === callId(primaryCall)"
-                  class="flex-1 justify-center"
-                  variant="clear"
-                  color-scheme="secondary"
+                  type="button"
+                  class="inline-flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+                  :class="primaryCall.muted ? 'bg-amber-100 text-amber-900 hover:bg-amber-200 dark:bg-amber-900 dark:text-amber-100' : 'bg-slate-200 text-slate-900 hover:bg-slate-300 dark:bg-slate-700 dark:text-white dark:hover:bg-slate-600'"
+                  :aria-pressed="Boolean(primaryCall.muted)"
+                  :aria-busy="busy"
                   :disabled="busy"
                   @click="action(primaryCall, 'mute')"
                 >
+                  <span v-if="busy" class="inline-block h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-current border-r-transparent" aria-hidden="true" />
                   {{ primaryCall.muted ? 'Ativar microfone' : 'Silenciar' }}
-                </hub-button>
+                </button>
 
                 <button
                   v-if="!canReject(primaryCall)"

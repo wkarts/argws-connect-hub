@@ -8,12 +8,16 @@ class Whatsapp::SendOnWhatsappService < Base::SendOnChannelService
   def perform_reply
     return if message.message_type == :outgoing && message.source_id&.is_present? # is message send by own
 
+    Whatsapp::ConnectApiOpeningMessageValidator.new(message).validate!
+
     should_send_template_message = template_params.present? || !message.conversation.can_reply?
     if should_send_template_message
       send_template_message
     else
       send_session_message
     end
+  rescue Whatsapp::ConnectApiOpeningMessageValidator::Error => e
+    message.update!(status: :failed, external_error: e.message)
   end
 
   def send_template_message
@@ -41,11 +45,14 @@ class Whatsapp::SendOnWhatsappService < Base::SendOnChannelService
       ]
     end
 
+    # Connect|API never infers a template from free text, bypassing the catalog.
+    return [nil, nil, nil, nil] if channel.provider == 'connectapi'
+
     # Delete the following logic once the update for template_params is stable
     # see if we can match the message content to a template
     # An example template may look like "Your package has been shipped. It will be delivered in {{1}} business days.
     # We want to iterate over these templates with our message body and see if we can fit it to any of the templates
-    # Then we use regex to parse the template varibles and convert them into the proper payload
+    # Then we use regex to parse the template variables and convert them into the proper payload
     channel.message_templates&.each do |template|
       match_obj = template_match_object(template)
       next if match_obj.blank?
@@ -73,7 +80,6 @@ class Whatsapp::SendOnWhatsappService < Base::SendOnChannelService
     # the variables are of the format {{num}} ex:{{1}}
 
     # transform the template text into a regex string
-    # we need to replace the {{num}} with matchers that can be used to capture the variables
     template_text = template_text.gsub(/{{\d}}/, '(.*)')
     # escape if there are regex characters in the template text
     template_text = Regexp.escape(template_text)

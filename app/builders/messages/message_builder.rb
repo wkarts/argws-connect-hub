@@ -20,11 +20,19 @@ class Messages::MessageBuilder
     @message = @conversation.messages.build(message_params)
     process_attachments
     process_emails
+    validate_connect_api_opening_message!
     @message.save!
     @message
   end
 
   private
+
+  def validate_connect_api_opening_message!
+    Whatsapp::ConnectApiOpeningMessageValidator.new(@message).validate!
+  rescue Whatsapp::ConnectApiOpeningMessageValidator::Error => e
+    @message.errors.add(:base, e.message)
+    raise ActiveRecord::RecordInvalid, @message
+  end
 
   # Extracts content attributes from the given params.
   # - Converts ActionController::Parameters to a regular hash if needed.

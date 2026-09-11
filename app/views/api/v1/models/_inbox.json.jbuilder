@@ -107,7 +107,14 @@ json.provider resource.channel.try(:provider)
 
 ### WhatsApp Channel
 if resource.whatsapp?
-  json.message_templates resource.channel.try(:message_templates)
+  if resource.channel.provider == 'connectapi'
+    catalog = resource.channel.opening_template_catalog
+    json.message_templates catalog.available_templates
+    json.opening_templates catalog.available_templates(opening_only: true)
+    json.opening_templates_required true
+  else
+    json.message_templates resource.channel.try(:message_templates)
+  end
   if Current.account_user&.administrator?
     provider_config = resource.channel.try(:provider_config) || {}
     provider_config = provider_config.except('api_key') if resource.channel.try(:provider) == 'connectapi'

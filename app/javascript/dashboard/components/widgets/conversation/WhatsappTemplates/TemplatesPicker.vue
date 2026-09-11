@@ -4,6 +4,10 @@ const formatsToRemove = ['DOCUMENT', 'IMAGE', 'VIDEO'];
 
 export default {
   props: {
+    openingOnly: {
+      type: Boolean,
+      default: false,
+    },
     inboxId: {
       type: Number,
       default: undefined,
@@ -15,12 +19,18 @@ export default {
     };
   },
   computed: {
+    isConnectApi() {
+      return this.$store.getters['inboxes/getInbox'](this.inboxId).provider === 'connectapi';
+    },
     whatsAppTemplateMessages() {
       // TODO: Remove the last filter when we support all formats
-      return this.$store.getters['inboxes/getWhatsAppTemplates'](this.inboxId)
-        .filter(template => template.status.toLowerCase() === 'approved')
+      return this.$store.getters['inboxes/getWhatsAppTemplates'](this.inboxId, this.openingOnly)
+        .filter(template =>
+          String(template.status || '').trim().toLowerCase() === 'approved' ||
+          (this.isConnectApi && !String(template.status || '').trim())
+        )
         .filter(template => {
-          return template.components.every(component => {
+          return template.components.some(component => component.type === 'BODY' && typeof component.text === 'string') && template.components.every(component => {
             return !formatsToRemove.includes(component.format);
           });
         });
@@ -33,8 +43,7 @@ export default {
   },
   methods: {
     getTemplatebody(template) {
-      return template.components.find(component => component.type === 'BODY')
-        .text;
+      return template.components.find(component => component.type === 'BODY')?.text || '';
     },
   },
 };
@@ -52,7 +61,7 @@ export default {
       />
     </div>
     <div class="template__list-container">
-      <div v-for="(template, i) in filteredTemplateMessages" :key="template.id">
+      <div v-for="(template, i) in filteredTemplateMessages" :key="`${template.name}:${template.language}`">
         <button
           class="template__list-item"
           @click="$emit('onSelect', template)"
