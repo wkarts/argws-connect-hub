@@ -28,6 +28,37 @@
     <div v-else class="mb-5 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
       Para habilitar chamadas, a migração desta instância para ZAPO deve ser feita explicitamente no HUB Admin. O HUB não migra sessões existentes de forma automática.
     </div>
+
+    <div
+      v-if="callsAvailable"
+      class="mb-5 flex items-center justify-between gap-4 rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900"
+    >
+      <div class="min-w-0">
+        <div class="text-sm font-semibold text-slate-800 dark:text-slate-100">
+          Toque de chamada recebida na conversa
+        </div>
+        <p class="mb-0 mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
+          Reproduz um toque enquanto a conversa estiver aberta e houver uma chamada recebida tocando. O padrão é ativado.
+        </p>
+      </div>
+      <label class="relative inline-flex shrink-0 cursor-pointer items-center">
+        <input
+          type="checkbox"
+          class="peer sr-only"
+          :checked="incomingCallRingEnabled"
+          :disabled="isSavingIncomingCallRing"
+          aria-label="Ativar toque de chamada recebida na conversa"
+          @change="setIncomingCallRing($event.target.checked)"
+        />
+        <span
+          class="h-6 w-11 rounded-full bg-slate-300 transition peer-checked:bg-hub-500 peer-disabled:cursor-not-allowed peer-disabled:opacity-50 dark:bg-slate-600"
+        />
+        <span
+          class="pointer-events-none absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform peer-checked:translate-x-5"
+        />
+      </label>
+    </div>
+
     <div v-if="config.qrcode_base64" class="mb-5">
       <img :src="config.qrcode_base64" alt="QR Code WhatsApp" class="h-72 w-72" />
     </div>
@@ -52,12 +83,26 @@ import { useAlert } from 'dashboard/composables';
 export default {
   props: { inbox: { type: Object, required: true } },
   data() {
-    return { isReconciling: false };
+    return {
+      isReconciling: false,
+      isSavingIncomingCallRing: false,
+    };
   },
   computed: {
     config() { return this.inbox.provider_config || {}; },
     callsAvailable() {
       return this.config.calls_supported || this.config.connect_api_provider === 'WHATSAPP-ZAPO';
+    },
+    incomingCallRingEnabled() {
+      const value = this.config.incoming_call_ring_enabled;
+      if (value === undefined || value === null || value === '') return true;
+
+      return (
+        value === true ||
+        value === 1 ||
+        String(value).toLowerCase() === 'true' ||
+        String(value) === '1'
+      );
     },
     communicationLabel() {
       if (this.config.connect_api_manual_deletion) return 'Instância removida';
@@ -83,6 +128,20 @@ export default {
       } catch (error) {
         useAlert(error?.response?.data?.message || 'Falha ao comunicar com a Connect|API.');
         return false;
+      }
+    },
+    async setIncomingCallRing(enabled) {
+      if (this.isSavingIncomingCallRing) return;
+      this.isSavingIncomingCallRing = true;
+      try {
+        await this.update(
+          { incoming_call_ring_enabled: Boolean(enabled) },
+          enabled
+            ? 'Toque de chamada recebida ativado nesta caixa.'
+            : 'Toque de chamada recebida desativado nesta caixa.'
+        );
+      } finally {
+        this.isSavingIncomingCallRing = false;
       }
     },
     connect(authMode) { return this.update({ auth_mode: authMode, connect: true, disconnect: false }); },
