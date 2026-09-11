@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
 module ConnectApi
-  # The existing channel JSONB is a catalog for one inbox, not a global catalog.
-  # Remote content is never seeded here. Only HUB administration flags are added.
+  # Reuse the channel JSONB: one catalog per inbox, with choices scoped to the
+  # instance and name/language send identity. Never create remote templates here.
   class OpeningTemplateCatalog
     class InvalidTemplate < StandardError; end
     class TemplateNotFound < StandardError; end
@@ -50,23 +50,21 @@ module ConnectApi
           'hub_remote_available' => remote_available?(remote)
         )
       end
-      # Name + language is the send identity, even when the remote id changes.
+      # A changed remote id is not a new administrative choice.
       imported = imported.to_h { |template| [identity(template), template] }
       missing = previous.reject { |key, _| imported.key?(key) }.values.map do |template|
         template.merge('hub_remote_present' => false, 'hub_remote_available' => false)
       end
-      imported.values + missing
+      other_instances + imported.values + missing
     end
 
     def set_enabled(name:, language:, enabled:)
-      unless enabled == true || enabled == false
-        raise ArgumentError, 'Informe enabled como true ou false.'
-      end
+      raise ArgumentError, 'Informe enabled como true ou false.' unless [true, false].include?(enabled)
       unless entries.any? { |template| template['name'] == name && template['language'] == language }
         raise TemplateNotFound, 'Template não encontrado no catálogo desta caixa.'
       end
 
-      entries.map do |template|
+      other_instances + entries.map do |template|
         if template['name'] == name && template['language'] == language
           template.merge('hub_opening_enabled' => enabled)
         else
@@ -76,6 +74,13 @@ module ConnectApi
     end
 
     private
+
+    def other_instances
+      @templates.select do |template|
+        template.is_a?(Hash) && template['hub_instance_name'].is_a?(String) &&
+          !template['hub_instance_name'].empty? && template['hub_instance_name'] != instance_name
+      end
+    end
 
     def identity(template)
       [template['name'], template['language']]

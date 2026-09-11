@@ -19,7 +19,7 @@ class Whatsapp::ConnectApiTemplateSyncService
 
     @channel.with_lock do
       raise Error, 'A instância da caixa mudou durante a sincronização. Reconcilie novamente.' unless channel_identity == identity
-      # An older, slower request must not overwrite a newer completed sync.
+      # A slower, older request cannot overwrite a newer completed sync.
       return @channel.message_templates if @channel.message_templates_last_updated && @channel.message_templates_last_updated > started_at
 
       persist!(catalog.reconcile(templates), message_templates_last_updated: Time.current)
@@ -52,8 +52,8 @@ class Whatsapp::ConnectApiTemplateSyncService
   end
 
   def persist!(templates, **attributes)
-    # Saving/validating the channel here would provision webhooks again. Both
-    # reconciliation and administration merge only these JSONB fields under lock.
+    # Validating the channel again would provision webhooks. Merge only catalog
+    # fields under a row lock, leaving provider configuration and calls untouched.
     @channel.update_columns( # rubocop:disable Rails/SkipsModelValidations
       { message_templates: templates, updated_at: Time.current }.merge(attributes)
     )
@@ -63,6 +63,9 @@ class Whatsapp::ConnectApiTemplateSyncService
   def fetch_templates
     url = templates_url
     first_uri = URI.parse(url)
+    if @channel.provider_config.to_h['api_key'].to_s.strip.empty?
+      raise Error, 'Reconcilie a configuração da caixa: o token da instância não está disponível.'
+    end
     headers = @channel.provider_service.api_headers
     templates = []
     visited = {}
@@ -113,8 +116,8 @@ class Whatsapp::ConnectApiTemplateSyncService
       raise Error, 'A Connect|API retornou uma paginação fora do catálogo desta instância.'
     end
 
-    # Never forward credentials to another host/resource or accept a token from
-    # a pagination link; every page uses this inbox's instance Authorization.
+    # Never forward instance credentials to another host/resource or accept a
+    # token supplied by a pagination link.
     query = URI.decode_www_form(uri.query.to_s).reject { |key, _| %w[access_token apikey].include?(key.downcase) }
     uri.query = query.empty? ? nil : URI.encode_www_form(query)
     uri.fragment = nil

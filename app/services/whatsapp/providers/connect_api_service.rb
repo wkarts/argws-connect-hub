@@ -38,8 +38,10 @@ class Whatsapp::Providers::ConnectApiService < Whatsapp::Providers::WhatsappClou
   def sync_templates
     Whatsapp::ConnectApiTemplateSyncService.new(whatsapp_channel).sync!
   rescue StandardError => e
-    Rails.logger.warn("[HUB Connect|API] template sync failed channel=#{whatsapp_channel.id}: #{e.class}")
-    false
+    # Creation/background sync must not destroy the last successful catalog.
+    # Explicit reconciliation uses sync! directly and reports errors to the UI.
+    Rails.logger.warn("[HUB Connect|API] template sync skipped: #{e.class}: #{e.message}")
+    whatsapp_channel.message_templates || []
   end
 
   private

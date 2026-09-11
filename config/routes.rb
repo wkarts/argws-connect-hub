@@ -164,6 +164,7 @@ Rails.application.routes.draw do
           resources :custom_attribute_definitions, only: [:index, :show, :create, :update, :destroy]
           resources :custom_filters, only: [:index, :show, :create, :update, :destroy]
           resources :inboxes, only: [:index, :show, :create, :update, :destroy] do
+            resource :connect_api_templates, only: [:show, :update]
             get :assignable_agents, on: :member
             get :campaigns, on: :member
             get :response_sources, on: :member

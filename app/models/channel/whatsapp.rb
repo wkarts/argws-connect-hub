@@ -51,12 +51,12 @@ class Channel::Whatsapp < ApplicationRecord
     end
   end
 
-  def messaging_window_enabled?
-    provider_config['url'] == 'https://graph.facebook.com'
-  end
-
   def opening_template_catalog
     ConnectApi::OpeningTemplateCatalog.new(message_templates, instance_name: provider_config.to_h['instance_name'])
+  end
+
+  def messaging_window_enabled?
+    provider_config['url'] == 'https://graph.facebook.com'
   end
 
   def mark_message_templates_updated

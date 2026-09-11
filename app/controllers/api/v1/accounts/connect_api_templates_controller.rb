@@ -9,9 +9,7 @@ class Api::V1::Accounts::ConnectApiTemplatesController < Api::V1::Accounts::Base
 
   def update
     Whatsapp::ConnectApiTemplateSyncService.new(@channel).set_enabled!(
-      name: params.require(:name),
-      language: params.require(:language),
-      enabled: params[:enabled]
+      name: params.require(:name), language: params.require(:language), enabled: params[:enabled]
     )
     render_catalog
   rescue ConnectApi::OpeningTemplateCatalog::TemplateNotFound => e

@@ -111,6 +111,7 @@ if resource.whatsapp?
     catalog = resource.channel.opening_template_catalog
     json.message_templates catalog.available_templates
     json.opening_templates catalog.available_templates(opening_only: true)
+    json.opening_templates_required true
   else
     json.message_templates resource.channel.try(:message_templates)
   end

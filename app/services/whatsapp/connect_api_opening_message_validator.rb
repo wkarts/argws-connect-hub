@@ -28,8 +28,7 @@ class Whatsapp::ConnectApiOpeningMessageValidator
   end
 
   def current_catalog
-    # The message can have a cached channel association; reload the persisted
-    # choices so queued/retried sends cannot use an administratively disabled template.
+    # Reload choices for queued/retried messages, not a cached association.
     Channel::Whatsapp.find(channel.id).opening_template_catalog
   end
 
@@ -42,8 +41,8 @@ class Whatsapp::ConnectApiOpeningMessageValidator
   def opening_message?
     messages = @message.conversation.messages.where(private: false)
     messages = messages.where('id < ?', @message.id) if @message.persisted?
-    # A failed/queued opener is not a reason to allow a free-text fallback.
     incoming = messages.where(message_type: :incoming)
+    # A failed/queued opener does not authorize a free-text fallback.
     delivered = messages.where(message_type: :outgoing).where.not(source_id: [nil, '']).where.not(status: :failed)
     !incoming.or(delivered).exists?
   end

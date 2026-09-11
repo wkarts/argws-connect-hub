@@ -9,6 +9,7 @@ class Whatsapp::SendOnWhatsappService < Base::SendOnChannelService
     return if message.message_type == :outgoing && message.source_id&.is_present? # is message send by own
 
     Whatsapp::ConnectApiOpeningMessageValidator.new(message).validate!
+
     should_send_template_message = template_params.present? || !message.conversation.can_reply?
     if should_send_template_message
       send_template_message
@@ -44,11 +45,14 @@ class Whatsapp::SendOnWhatsappService < Base::SendOnChannelService
       ]
     end
 
+    # Connect|API never infers a template from free text, bypassing the catalog.
+    return [nil, nil, nil, nil] if channel.provider == 'connectapi'
+
     # Delete the following logic once the update for template_params is stable
     # see if we can match the message content to a template
     # An example template may look like "Your package has been shipped. It will be delivered in {{1}} business days.
     # We want to iterate over these templates with our message body and see if we can fit it to any of the templates
-    # Then we use regex to parse the template varibles and convert them into the proper payload
+    # Then we use regex to parse the template variables and convert them into the proper payload
     channel.message_templates&.each do |template|
       match_obj = template_match_object(template)
       next if match_obj.blank?
@@ -82,7 +86,6 @@ class Whatsapp::SendOnWhatsappService < Base::SendOnChannelService
     # ensuring only the variables remain as capture groups
     template_text = template_text.gsub(Regexp.escape('(.*)'), '(.*)')
 
-    # the pattern should match the entire string
     template_match_string = "^#{template_text}$"
     Regexp.new template_match_string
   end
@@ -97,7 +100,7 @@ class Whatsapp::SendOnWhatsappService < Base::SendOnChannelService
   end
 
   def send_session_message
-    uuid_regex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
+    uuid_regex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
     phone_number = if uuid_regex.match?(message.conversation.contact_inbox.source_id)
                      message.conversation.contact_inbox.contact.phone_number.sub('+', '')
                    else
