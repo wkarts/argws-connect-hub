@@ -15,7 +15,13 @@ export default {
       return String(this.call.status || 'unknown').toLowerCase();
     },
     isVideo() {
-      return Boolean(this.call.is_video);
+      const value = this.call.is_video;
+      return (
+        value === true ||
+        value === 1 ||
+        String(value).toLowerCase() === 'true' ||
+        String(value) === '1'
+      );
     },
     title() {
       return this.isVideo ? 'Chamada de vídeo' : 'Chamada de voz';
@@ -40,7 +46,9 @@ export default {
       return labels[this.status] || 'Atualizando';
     },
     statusClasses() {
-      if (['rejected', 'missed', 'unanswered', 'failed'].includes(this.status)) {
+      if (
+        ['rejected', 'missed', 'unanswered', 'failed'].includes(this.status)
+      ) {
         return 'border-red-200 bg-red-50 text-red-700 dark:border-red-900/70 dark:bg-red-950/30 dark:text-red-300';
       }
       if (['ringing', 'answered'].includes(this.status)) {
@@ -71,8 +79,8 @@ export default {
     },
     timestampLabel() {
       const value =
-        this.call.answered_at ||
         this.call.started_at ||
+        this.call.answered_at ||
         this.call.created_at ||
         this.call.received_at ||
         this.messageCreatedAt;
@@ -107,10 +115,16 @@ export default {
       if (!digits) return '';
 
       if (digits.startsWith('55') && digits.length === 13) {
-        return `+55 (${digits.slice(2, 4)}) ${digits.slice(4, 9)}-${digits.slice(9)}`;
+        return `+55 (${digits.slice(2, 4)}) ${digits.slice(
+          4,
+          9
+        )}-${digits.slice(9)}`;
       }
       if (digits.startsWith('55') && digits.length === 12) {
-        return `+55 (${digits.slice(2, 4)}) ${digits.slice(4, 8)}-${digits.slice(8)}`;
+        return `+55 (${digits.slice(2, 4)}) ${digits.slice(
+          4,
+          8
+        )}-${digits.slice(8)}`;
       }
       return `+${digits}`;
     },
