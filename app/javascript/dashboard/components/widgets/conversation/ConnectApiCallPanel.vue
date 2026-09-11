@@ -178,8 +178,15 @@ export default {
     },
     isActive(call) {
       const state = String(call.state || call.status || '').toLowerCase();
-      if (call.terminal === true) return false;
-      return !ENDED_STATES.includes(state);
+      if (call.terminal === true || String(call.terminal).toLowerCase() === 'true') {
+        return false;
+      }
+      return !ENDED_STATES.some(
+        terminalState =>
+          state === terminalState ||
+          state.startsWith(`${terminalState}_`) ||
+          state.startsWith(`${terminalState}-`)
+      );
     },
     isConnected(call) {
       if (!this.isActive(call)) return false;
@@ -239,11 +246,11 @@ export default {
         call.start_time,
       ];
 
-      for (const candidate of candidates) {
-        const parsed = this.timestampToMilliseconds(candidate);
-        if (parsed) return parsed;
-      }
-      return null;
+      return candidates.reduce(
+        (startedAt, candidate) =>
+          startedAt || this.timestampToMilliseconds(candidate),
+        null
+      );
     },
     syncCallTimerStarts() {
       const nextStarts = {};
@@ -464,7 +471,7 @@ export default {
         error?.response?.data?.error ||
         error?.response?.data?.message ||
         error?.message ||
-        'Falha ao comunicar com a Connect|API.'
+        'Falha ao comunicar com o serviço de chamadas.'
       );
     },
   },
@@ -576,6 +583,7 @@ export default {
               —
             </button>
             <hub-button
+              v-if="!primaryCall"
               variant="clear"
               color-scheme="secondary"
               icon="dismiss"
@@ -615,7 +623,7 @@ export default {
           >
             <div>
               <div class="text-sm font-medium text-slate-800 dark:text-slate-100">
-                Áudio do navegador
+                Áudio da chamada
               </div>
               <div
                 class="text-xs"
@@ -628,13 +636,6 @@ export default {
                 {{ mediaStateLabel }}
               </div>
             </div>
-            <span
-              v-if="mediaCallId"
-              class="max-w-[180px] truncate text-xs font-mono text-slate-500"
-              :title="mediaCallId"
-            >
-              {{ mediaCallId }}
-            </span>
           </div>
 
           <div
@@ -709,7 +710,7 @@ export default {
             v-else
             class="mb-4 rounded-lg border border-dashed border-slate-200 p-5 text-center text-sm text-slate-500 dark:border-slate-700"
           >
-            Nenhuma chamada ativa nesta instância.
+            Nenhuma chamada ativa no momento.
           </div>
 
           <div class="flex justify-end gap-2">
