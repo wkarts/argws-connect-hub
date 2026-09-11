@@ -17,7 +17,8 @@ describe Whatsapp::IncomingConnectApiCallService do
     )
   end
 
-  def call_payload(status:, action: 'state', call_id: 'call-1', direction: 'incoming', peer: '557596236940@s.whatsapp.net', terminal: false)
+  def call_payload(status:, action: 'state', call_id: 'call-1', direction: 'incoming', peer: '557596236940@s.whatsapp.net', terminal: false,
+                   call_attributes: {})
     {
       event: 'call',
       instance: 'hub-call-test',
@@ -32,7 +33,7 @@ describe Whatsapp::IncomingConnectApiCallService do
           providerState: status == 'answered' ? 'CONNECTED' : 'OFFER_RECEIVED',
           terminal: terminal,
           isVideo: false
-        }
+        }.merge(call_attributes)
       }
     }.with_indifferent_access
   end
@@ -61,6 +62,44 @@ describe Whatsapp::IncomingConnectApiCallService do
     expect(conversation.messages.where(source_id: 'connect-api-call:call-1').count).to eq(1)
     expect(message.reload.content).to eq('Chamada atendida')
     expect(message.content_attributes.dig('connect_api_call', 'status')).to eq('answered')
+  end
+
+  it 'normalizes call timestamps and stores the connected duration on the same timeline item' do
+    described_class.new(
+      channel: whatsapp_channel,
+      params: call_payload(
+        status: 'ringing',
+        action: 'incoming',
+        call_attributes: { createdAt: '2026-09-11T03:10:00-03:00' }
+      )
+    ).perform
+
+    described_class.new(
+      channel: whatsapp_channel,
+      params: call_payload(
+        status: 'answered',
+        call_attributes: { answeredAt: '2026-09-11T03:10:10-03:00' }
+      )
+    ).perform
+
+    described_class.new(
+      channel: whatsapp_channel,
+      params: call_payload(
+        status: 'ended',
+        action: 'ended',
+        terminal: true,
+        call_attributes: { endedAt: '2026-09-11T03:12:10-03:00' }
+      )
+    ).perform
+
+    message = whatsapp_channel.inbox.messages.find_by(source_id: 'connect-api-call:call-1')
+    call = message.content_attributes.fetch('connect_api_call')
+
+    expect(message.content).to eq('Chamada encerrada')
+    expect(call['started_at']).to eq('2026-09-11T06:10:00.000Z')
+    expect(call['answered_at']).to eq('2026-09-11T06:10:10.000Z')
+    expect(call['ended_at']).to eq('2026-09-11T06:12:10.000Z')
+    expect(call['duration_seconds']).to eq(120)
   end
 
   it 'keeps a terminal missed call from regressing to ringing' do
