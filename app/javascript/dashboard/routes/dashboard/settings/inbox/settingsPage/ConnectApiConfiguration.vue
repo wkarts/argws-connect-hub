@@ -59,6 +59,8 @@
       </label>
     </div>
 
+    <ConnectApiOpeningTemplates ref="openingTemplates" :inbox="inbox" />
+
     <div v-if="config.qrcode_base64" class="mb-5">
       <img :src="config.qrcode_base64" alt="QR Code WhatsApp" class="h-72 w-72" />
     </div>
@@ -73,18 +75,30 @@
       <button type="button" class="button nice" :disabled="isReconciling" @click="reconcile">
         {{ isReconciling ? 'Reconciliando...' : 'Reconciliar agora' }}
       </button>
-      <button type="button" class="button clear alert" @click="disconnect">Desconectar</button>
+      <button
+        type="button"
+        class="relative inline-flex items-center justify-center gap-2 overflow-hidden rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 disabled:cursor-not-allowed disabled:opacity-60"
+        :disabled="isDisconnecting || isReconciling"
+        :aria-busy="isDisconnecting"
+        @click="disconnect"
+      >
+        <span v-if="isDisconnecting" class="inline-block h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-white border-r-transparent" aria-hidden="true" />
+        {{ isDisconnecting ? 'Desconectando...' : 'Desconectar' }}
+      </button>
     </div>
   </div>
 </template>
 
 <script>
 import { useAlert } from 'dashboard/composables';
+import ConnectApiOpeningTemplates from './ConnectApiOpeningTemplates.vue';
 export default {
+  components: { ConnectApiOpeningTemplates },
   props: { inbox: { type: Object, required: true } },
   data() {
     return {
       isReconciling: false,
+      isDisconnecting: false,
       isSavingIncomingCallRing: false,
     };
   },
@@ -126,7 +140,7 @@ export default {
         if (successMessage) useAlert(successMessage);
         return true;
       } catch (error) {
-        useAlert(error?.response?.data?.message || 'Falha ao comunicar com a Connect|API.');
+        useAlert(error?.response?.data?.message || error?.message || 'Falha ao comunicar com a Connect|API.');
         return false;
       }
     },
@@ -145,16 +159,25 @@ export default {
       }
     },
     connect(authMode) { return this.update({ auth_mode: authMode, connect: true, disconnect: false }); },
-    disconnect() { return this.update({ disconnect: true, connect: false }); },
+    async disconnect() {
+      if (this.isDisconnecting || this.isReconciling) return;
+      this.isDisconnecting = true;
+      try {
+        return await this.update({ disconnect: true, connect: false });
+      } finally {
+        this.isDisconnecting = false;
+      }
+    },
     refresh() { return this.update({ connect: false, disconnect: false }); },
     async reconcile() {
-      if (this.isReconciling) return;
+      if (this.isReconciling || this.isDisconnecting) return;
       this.isReconciling = true;
       try {
-        await this.update(
+        const success = await this.update(
           { force_reconcile: true, connect: false, disconnect: false },
-          'Caixa reconciliada com a Connect|API.'
+          'Caixa e templates reconciliados com a Connect|API.'
         );
+        if (success) await this.$refs.openingTemplates.loadTemplates();
       } finally {
         this.isReconciling = false;
       }

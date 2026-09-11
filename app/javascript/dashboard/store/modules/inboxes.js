@@ -47,7 +47,7 @@ export const getters = {
   getInboxes($state) {
     return $state.records;
   },
-  getWhatsAppTemplates: $state => inboxId => {
+  getWhatsAppTemplates: $state => (inboxId, openingOnly = false) => {
     const [inbox] = $state.records.filter(
       record => record.id === Number(inboxId)
     );
@@ -60,12 +60,14 @@ export const getters = {
     const { message_templates: apiInboxMessageTemplates } =
       additionalAttributes || {};
     const messagesTemplates =
-      whatsAppMessageTemplates || apiInboxMessageTemplates;
+      inbox?.provider === 'connectapi' && openingOnly
+        ? inbox.opening_templates || []
+        : whatsAppMessageTemplates || apiInboxMessageTemplates;
 
     // filtering out the whatsapp templates with media
     if (messagesTemplates instanceof Array) {
       return messagesTemplates.filter(template => {
-        return !template.components.some(
+        return Array.isArray(template.components) && !template.components.some(
           i => i.format === 'IMAGE' || i.format === 'VIDEO'
         );
       });
@@ -117,6 +119,15 @@ export const getters = {
 
 
 export const actions = {
+  setOpeningTemplate: async ({ commit, getters: inboxGetters }, { inboxId, ...attributes }) => {
+    const { data } = await InboxesAPI.setOpeningTemplate(inboxId, attributes);
+    commit(types.default.EDIT_INBOXES, {
+      ...inboxGetters.getInbox(inboxId),
+      message_templates: data.message_templates,
+      opening_templates: data.opening_templates,
+    });
+    return data;
+  },
   revalidate: async ({ commit }, { newKey }) => {
     try {
       const isExistingKeyValid = await InboxesAPI.validateCacheKey(newKey);

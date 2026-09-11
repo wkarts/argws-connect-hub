@@ -171,7 +171,7 @@ export default {
       return this.isAnEmailInbox || this.isAnWebWidgetInbox;
     },
     hasWhatsappTemplates() {
-      return !!this.selectedInbox.inbox?.message_templates;
+      return this.selectedInbox.inbox?.provider === 'connectapi' || !!this.selectedInbox.inbox?.message_templates;
     },
     hasAttachments() {
       return this.attachedFiles.length;
