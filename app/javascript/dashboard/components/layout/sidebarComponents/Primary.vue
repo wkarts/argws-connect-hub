@@ -47,6 +47,13 @@ export default {
       showOptionsMenu: false,
     };
   },
+  computed: {
+    sidebarLogoSource() {
+      return this.isACustomBrandedInstance
+        ? this.logoSource
+        : '/brand-assets/logo_thumbnail.png';
+    },
+  },
   methods: {
     frontendURL,
     toggleOptions() {
@@ -71,7 +78,7 @@ export default {
   >
     <div class="flex flex-col items-center">
       <Logo
-        :source="logoSource"
+        :source="sidebarLogoSource"
         :name="installationName"
         :account-id="accountId"
         class="m-4 mb-10"

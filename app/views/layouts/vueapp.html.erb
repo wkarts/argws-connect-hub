@@ -6,7 +6,7 @@
     </title>
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no, user-scalable=0"/>
     <meta name="msapplication-TileColor" content="#2F6FED">
-    <meta name="msapplication-TileImage" content="/ms-icon-144x144.png">
+    <meta name="msapplication-TileImage" content="/brand-assets/logo_thumbnail.png">
     <meta name="theme-color" content="#2F6FED">
     <meta name="description" content="🅷🆄🅱 — Comunicação sem limites. Central omnichannel autogerenciada com WhatsApp via Connect|API, e-mail IMAP/SMTP, equipes, automação, atendimento e colaboração.">
     <meta name="application-name" content="HUB">
@@ -14,23 +14,12 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="HUB">
     <link rel="manifest" href="/manifest.json">
-    <link rel="apple-touch-icon" sizes="180x180" href="/apple-icon-180x180.png">
+    <link rel="apple-touch-icon" href="/brand-assets/logo_thumbnail.png">
+    <link class="favicon" rel="icon" type="image/png" sizes="256x256" href="/brand-assets/logo_thumbnail.png">
 
-    <% if @global_config['DISPLAY_MANIFEST'] %>
-      <% if ENV['IOS_APP_IDENTIFIER'].present? %>
-        <meta name="apple-itunes-app" content='app-id=<%= ENV['IOS_APP_IDENTIFIER'] %>'>
-      <% end %>
-      <link rel="apple-touch-icon" sizes="57x57" href="/apple-icon-57x57.png">
-      <link rel="apple-touch-icon" sizes="60x60" href="/apple-icon-60x60.png">
-      <link rel="apple-touch-icon" sizes="72x72" href="/apple-icon-72x72.png">
-      <link rel="apple-touch-icon" sizes="76x76" href="/apple-icon-76x76.png">
-      <link rel="apple-touch-icon" sizes="114x114" href="/apple-icon-114x114.png">
-      <link rel="apple-touch-icon" sizes="120x120" href="/apple-icon-120x120.png">
-      <link rel="apple-touch-icon" sizes="144x144" href="/apple-icon-144x144.png">
-      <link rel="apple-touch-icon" sizes="152x152" href="/apple-icon-152x152.png">
-      <link class="favicon" rel="icon" type="image/png" href="/brand-assets/logo_thumbnail.png">
+    <% if @global_config['DISPLAY_MANIFEST'] && ENV['IOS_APP_IDENTIFIER'].present? %>
+      <meta name="apple-itunes-app" content='app-id=<%= ENV['IOS_APP_IDENTIFIER'] %>'>
     <% end %>
-    <link rel="icon" type="image/png" href="/brand-assets/logo_thumbnail.png">
     <%= csrf_meta_tags %>
     <script>
       window.hubConfig = {

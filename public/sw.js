@@ -1,17 +1,18 @@
 /* eslint-disable no-restricted-globals, no-console */
 /* globals clients */
 
-const CACHE_VERSION = 'hub-pwa-v1.2.0';
+const CACHE_VERSION = 'hub-pwa-v1.2.2';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 const OFFLINE_URL = '/offline.html';
+const HUB_ICON = '/brand-assets/logo_thumbnail.png';
 
 const PRECACHE_URLS = [
   OFFLINE_URL,
   '/manifest.json',
-  '/pwa-icon-192x192.png',
-  '/pwa-icon-512x512.png',
-  '/favicon-32x32.png',
+  HUB_ICON,
+  '/brand-assets/pwa-icon.svg',
+  '/brand-assets/pwa-maskable.svg',
 ];
 
 self.addEventListener('install', event => {
@@ -103,8 +104,8 @@ self.addEventListener('push', event => {
     self.registration.showNotification(notification.title, {
       tag: notification.tag,
       body: notification.body,
-      icon: notification.icon || '/pwa-icon-192x192.png',
-      badge: notification.badge || '/pwa-icon-192x192.png',
+      icon: notification.icon || HUB_ICON,
+      badge: notification.badge || HUB_ICON,
       data: {
         url: notification.url || '/',
       },
