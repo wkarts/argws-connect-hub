@@ -14,6 +14,17 @@ class Whatsapp::IncomingConnectApiCallService
   }.freeze
 
   TERMINAL_STATUSES = %w[rejected missed unanswered ended failed answered_elsewhere].freeze
+  ANSWERED_STATES = %w[ACCEPT_RECEIVED ACCEPTED CONNECTED ACTIVE IN_CALL].freeze
+  RINGING_STATES = %w[CALLING RINGING OFFER_RECEIVED PRE_ACCEPT_RECEIVED INCOMING].freeze
+  ENDED_STATES = %w[ENDED TERMINATED CLOSED DISCONNECTED CANCELLED CANCELED].freeze
+  REJECTED_REASONS = %w[REJECTED DECLINED USER_BUSY BUSY].freeze
+  NO_ANSWER_REASONS = %w[
+    TIMEOUT TIMED_OUT NO_ANSWER NO_ANSWERED NOT_ANSWERED UNANSWERED
+    NO_RESPONSE MISSED CALL_MISSED CALL_TIMEOUT RINGING_TIMEOUT
+  ].freeze
+  ANSWERED_ELSEWHERE_REASONS = %w[
+    ANSWERED_ELSEWHERE ANSWERED_ON_OTHER_DEVICE ACCEPTED_ON_OTHER_DEVICE ACCEPTED_BY_OTHER_DEVICE
+  ].freeze
 
   def initialize(channel:, params:, conversation: nil)
     @channel = channel
@@ -35,7 +46,8 @@ class Whatsapp::IncomingConnectApiCallService
     conversation = @conversation || existing&.conversation || resolve_conversation(call)
     return log_ignored("conversation not found callId=#{call_id}") if conversation.blank?
 
-    snapshot = enrich_contact_snapshot(build_snapshot(data, call), conversation)
+    previous_snapshot = existing&.content_attributes.to_h.deep_stringify_keys&.fetch('connect_api_call', {}) || {}
+    snapshot = enrich_contact_snapshot(build_snapshot(data, call, previous_snapshot), conversation)
     upsert_timeline_message(conversation, existing, snapshot)
   end
 
@@ -127,8 +139,8 @@ class Whatsapp::IncomingConnectApiCallService
     normalized
   end
 
-  def build_snapshot(data, call)
-    status = canonical_status(data[:action], call)
+  def build_snapshot(data, call, previous_snapshot = {})
+    status = canonical_status(data[:action], call, previous_snapshot)
     terminal = TERMINAL_STATUSES.include?(status) || ActiveModel::Type::Boolean.new.cast(call[:terminal])
 
     {
@@ -170,23 +182,50 @@ class Whatsapp::IncomingConnectApiCallService
     enriched
   end
 
-  def canonical_status(action, call)
-    explicit = call[:status].to_s.downcase
-    return explicit if STATUS_RANK.key?(explicit)
+  def canonical_status(action, call, previous_snapshot = {})
+    explicit = normalize_status_token(call[:status])
+    return explicit if STATUS_RANK.key?(explicit) && explicit != 'unknown'
 
-    state = (call[:providerState].presence || call.dig(:stateData, :state).presence || call[:state]).to_s.upcase
-    reason = (call[:providerReason].presence || call.dig(:stateData, :reason).presence || call.dig(:stateData, :endReason)).to_s.upcase
+    state = normalize_status_token(call[:providerState].presence || call.dig(:stateData, :state).presence || call[:state]).upcase
+    reason = normalize_status_token(call[:providerReason].presence || call.dig(:stateData, :reason).presence || call.dig(:stateData, :endReason)).upcase
     direction = normalized_direction(call)
+    terminal = ActiveModel::Type::Boolean.new.cast(call[:terminal])
+    previous_status = previous_snapshot.to_h.deep_stringify_keys['status'].to_s
 
-    return 'answered_elsewhere' if %w[ANSWERED_ELSEWHERE ANSWERED_ON_OTHER_DEVICE ACCEPTED_ON_OTHER_DEVICE ACCEPTED_BY_OTHER_DEVICE].include?(reason)
-    return 'failed' if action.to_s.casecmp('error').zero? || state == 'FAILED'
-    return 'rejected' if state == 'REJECTED' || %w[REJECTED USER_BUSY].include?(reason)
-    return direction == 'incoming' ? 'missed' : 'unanswered' if reason == 'TIMEOUT'
-    return 'ended' if action.to_s.casecmp('ended').zero? || state == 'ENDED'
-    return 'answered' if %w[ACCEPT_RECEIVED CONNECTED].include?(state)
-    return 'ringing' if action.to_s.casecmp('incoming').zero? || %w[CALLING OFFER_RECEIVED PRE_ACCEPT_RECEIVED].include?(state)
+    return 'answered_elsewhere' if ANSWERED_ELSEWHERE_REASONS.include?(reason)
+    return 'failed' if action.to_s.casecmp('error').zero? || state == 'FAILED' || explicit == 'failed'
+    return 'rejected' if state == 'REJECTED' || REJECTED_REASONS.include?(reason) || %w[rejected declined busy].include?(explicit)
+    return no_answer_status(direction) if no_answer_marker?(reason) || no_answer_marker?(explicit.upcase)
+    return 'answered' if ANSWERED_STATES.include?(state) || %w[answered accepted connected active].include?(explicit)
+    return 'ringing' if action.to_s.casecmp('incoming').zero? || RINGING_STATES.include?(state) || %w[ringing calling incoming offered].include?(explicit)
+
+    if terminal || action.to_s.casecmp('ended').zero? || ENDED_STATES.include?(state)
+      return 'ended' if previous_status == 'answered' || answered_evidence?(call)
+
+      return no_answer_status(direction)
+    end
 
     'unknown'
+  end
+
+  def normalize_status_token(value)
+    value.to_s.strip.downcase.tr(' -', '__')
+  end
+
+  def no_answer_marker?(value)
+    token = value.to_s.upcase
+    NO_ANSWER_REASONS.any? { |marker| token == marker || token.include?(marker) }
+  end
+
+  def no_answer_status(direction)
+    direction == 'incoming' ? 'missed' : 'unanswered'
+  end
+
+  def answered_evidence?(call)
+    return true if call_timestamp(call, :answeredAt, :answered_at, :acceptedAt, :accepted_at, :connectedAt, :connected_at).present?
+
+    duration = call_duration_seconds(call)
+    duration.present? && duration.positive?
   end
 
   def normalized_direction(call)

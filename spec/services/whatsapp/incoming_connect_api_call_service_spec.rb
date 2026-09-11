@@ -102,6 +102,67 @@ describe Whatsapp::IncomingConnectApiCallService do
     expect(call['duration_seconds']).to eq(120)
   end
 
+  it 'classifies a terminal unknown incoming call as missed instead of updating' do
+    described_class.new(
+      channel: whatsapp_channel,
+      params: call_payload(
+        status: 'unknown',
+        terminal: true,
+        direction: 'incoming',
+        call_attributes: {
+          providerState: 'ENDED',
+          providerReason: 'NO_ANSWER'
+        }
+      )
+    ).perform
+
+    message = whatsapp_channel.inbox.messages.find_by(source_id: 'connect-api-call:call-1')
+    expect(message.content).to eq('Chamada perdida')
+    expect(message.content_attributes.dig('connect_api_call', 'status')).to eq('missed')
+    expect(message.content_attributes.dig('connect_api_call', 'terminal')).to be(true)
+  end
+
+  it 'classifies a terminal unknown outgoing call as unanswered instead of updating' do
+    described_class.new(
+      channel: whatsapp_channel,
+      params: call_payload(
+        status: 'unknown',
+        terminal: true,
+        direction: 'outgoing',
+        call_attributes: {
+          providerState: 'ENDED',
+          providerReason: 'TIMEOUT'
+        }
+      )
+    ).perform
+
+    message = whatsapp_channel.inbox.messages.find_by(source_id: 'connect-api-call:call-1')
+    expect(message.content).to eq('Chamada não atendida')
+    expect(message.content_attributes.dig('connect_api_call', 'status')).to eq('unanswered')
+    expect(message.content_attributes.dig('connect_api_call', 'terminal')).to be(true)
+  end
+
+  it 'keeps an answered call as ended when a later terminal event has unknown status' do
+    described_class.new(
+      channel: whatsapp_channel,
+      params: call_payload(status: 'answered')
+    ).perform
+
+    described_class.new(
+      channel: whatsapp_channel,
+      params: call_payload(
+        status: 'unknown',
+        action: 'ended',
+        terminal: true,
+        call_attributes: { providerState: 'ENDED' }
+      )
+    ).perform
+
+    message = whatsapp_channel.inbox.messages.find_by(source_id: 'connect-api-call:call-1')
+    expect(message.reload.content).to eq('Chamada encerrada')
+    expect(message.content_attributes.dig('connect_api_call', 'status')).to eq('ended')
+  end
+
   it 'keeps a terminal missed call from regressing to ringing' do
     described_class.new(
       channel: whatsapp_channel,

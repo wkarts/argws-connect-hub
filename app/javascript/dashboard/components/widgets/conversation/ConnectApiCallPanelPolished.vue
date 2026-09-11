@@ -283,7 +283,7 @@ export default {
       <button
         v-if="canAccept(primaryCall)"
         type="button"
-        class="rounded-lg bg-blue-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+        class="rounded-lg bg-hub-500 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-hub-700 disabled:cursor-not-allowed disabled:opacity-60"
         :disabled="busy"
         @click="compactAccept"
       >
@@ -434,7 +434,7 @@ export default {
                 <button
                   v-if="canAccept(primaryCall)"
                   type="button"
-                  class="flex-1 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  class="flex-1 rounded-xl bg-hub-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-hub-700 disabled:cursor-not-allowed disabled:opacity-60"
                   :disabled="busy"
                   @click="action(primaryCall, 'accept')"
                 >

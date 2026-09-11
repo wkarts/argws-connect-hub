@@ -11,8 +11,44 @@ export default {
     },
   },
   computed: {
-    status() {
+    rawStatus() {
       return String(this.call.status || 'unknown').toLowerCase();
+    },
+    isTerminal() {
+      const value = this.call.terminal;
+      return (
+        value === true ||
+        value === 1 ||
+        String(value).toLowerCase() === 'true' ||
+        String(value) === '1'
+      );
+    },
+    hasNoAnswerReason() {
+      const reason = String(this.call.provider_reason || '').toUpperCase();
+      return [
+        'TIMEOUT',
+        'TIMED_OUT',
+        'NO_ANSWER',
+        'NO_ANSWERED',
+        'NOT_ANSWERED',
+        'UNANSWERED',
+        'NO_RESPONSE',
+        'MISSED',
+        'CALL_MISSED',
+        'CALL_TIMEOUT',
+        'RINGING_TIMEOUT',
+      ].some(marker => reason === marker || reason.includes(marker));
+    },
+    status() {
+      if (this.rawStatus !== 'unknown') return this.rawStatus;
+
+      if (this.isTerminal || this.hasNoAnswerReason) {
+        if (this.call.direction === 'incoming') return 'missed';
+        if (this.call.direction === 'outgoing') return 'unanswered';
+        return 'ended';
+      }
+
+      return 'unknown';
     },
     isVideo() {
       const value = this.call.is_video;
