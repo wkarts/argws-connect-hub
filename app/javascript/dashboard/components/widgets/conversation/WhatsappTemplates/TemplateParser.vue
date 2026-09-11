@@ -96,7 +96,6 @@ export default {
     onMounted(generateVariables);
 
     return {
-      local: computed(() => isLocalTemplate(props.template)),
       processedParams,
       variables,
       templateString,
@@ -111,9 +110,6 @@ export default {
 
 <template>
   <div class="w-full">
-    <p v-if="local" class="text-xs text-slate-500">
-      Modelo local Connect|API. A definição salva será renderizada e enviada como texto; não é um template aprovado pela Meta.
-    </p>
     <textarea
       v-model="processedString"
       rows="4"
