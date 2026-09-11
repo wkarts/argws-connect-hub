@@ -168,8 +168,8 @@ class Whatsapp::ConnectApiWebhookSetupService
         enabled: true,
         url: webhook_url,
         headers: { 'X-Connect-Hub-Token' => config['api_key'] },
-        webhookByEvents: false,
-        webhookBase64: false,
+        byEvents: false,
+        base64: false,
         events: ['call']
       }
     }
