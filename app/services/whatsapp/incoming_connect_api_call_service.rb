@@ -35,7 +35,7 @@ class Whatsapp::IncomingConnectApiCallService
     conversation = @conversation || existing&.conversation || resolve_conversation(call)
     return log_ignored("conversation not found callId=#{call_id}") if conversation.blank?
 
-    snapshot = build_snapshot(data, call)
+    snapshot = enrich_contact_snapshot(build_snapshot(data, call), conversation)
     upsert_timeline_message(conversation, existing, snapshot)
   end
 
@@ -154,6 +154,22 @@ class Whatsapp::IncomingConnectApiCallService
     }.compact
   end
 
+  def enrich_contact_snapshot(snapshot, conversation)
+    contact = conversation.contact
+    return snapshot if contact.blank?
+
+    enriched = snapshot.deep_stringify_keys
+    enriched['contact_id'] = contact.id
+    enriched['peer_name'] = contact.name.to_s.strip.presence || enriched['peer_name']
+
+    contact_phone = contact.phone_number.to_s.gsub(/\D/, '')
+    enriched['peer_phone'] = contact_phone if contact_phone.present?
+
+    thumbnail = contact.avatar_url.to_s.presence
+    enriched['peer_thumbnail'] = thumbnail if thumbnail.present?
+    enriched
+  end
+
   def canonical_status(action, call)
     explicit = call[:status].to_s.downcase
     return explicit if STATUS_RANK.key?(explicit)
@@ -249,9 +265,11 @@ class Whatsapp::IncomingConnectApiCallService
   def upsert_timeline_message(conversation, existing, snapshot)
     if existing.present?
       current = existing.content_attributes.to_h.deep_stringify_keys.fetch('connect_api_call', {})
-      return if stale_snapshot?(current, snapshot)
+      return existing if stale_snapshot?(current, snapshot)
 
       merged_snapshot = enrich_timing(current.merge(snapshot))
+      return existing unless snapshot_changed?(current, merged_snapshot)
+
       existing.update!(
         content: timeline_content(merged_snapshot),
         content_attributes: existing.content_attributes.to_h.deep_stringify_keys.merge('connect_api_call' => merged_snapshot)
@@ -276,13 +294,23 @@ class Whatsapp::IncomingConnectApiCallService
     upsert_timeline_message(conversation, retry_message, snapshot)
   end
 
+  def snapshot_changed?(current, incoming)
+    comparable_snapshot(current) != comparable_snapshot(incoming)
+  end
+
+  def comparable_snapshot(snapshot)
+    snapshot.deep_stringify_keys.except('received_at')
+  end
+
   def stale_snapshot?(current, incoming)
     current_status = current['status'].to_s
     incoming_status = incoming['status'].to_s
     current_rank = STATUS_RANK.fetch(current_status, 0)
     incoming_rank = STATUS_RANK.fetch(incoming_status, 0)
 
-    return true if current['terminal'] && current_status != 'unknown'
+    if ActiveModel::Type::Boolean.new.cast(current['terminal']) && current_status != 'unknown'
+      return true if incoming_status != current_status
+    end
 
     incoming_rank < current_rank
   end
