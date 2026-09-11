@@ -15,6 +15,9 @@
     <meta name="apple-mobile-web-app-title" content="HUB">
     <link rel="manifest" href="/manifest.json">
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-icon-180x180.png">
+    <link class="favicon" rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+    <link class="favicon" rel="icon" type="image/png" sizes="96x96" href="/favicon-96x96.png">
+    <link class="favicon" rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
 
     <% if @global_config['DISPLAY_MANIFEST'] %>
       <% if ENV['IOS_APP_IDENTIFIER'].present? %>
@@ -28,9 +31,7 @@
       <link rel="apple-touch-icon" sizes="120x120" href="/apple-icon-120x120.png">
       <link rel="apple-touch-icon" sizes="144x144" href="/apple-icon-144x144.png">
       <link rel="apple-touch-icon" sizes="152x152" href="/apple-icon-152x152.png">
-      <link class="favicon" rel="icon" type="image/png" href="/brand-assets/logo_thumbnail.png">
     <% end %>
-    <link rel="icon" type="image/png" href="/brand-assets/logo_thumbnail.png">
     <%= csrf_meta_tags %>
     <script>
       window.hubConfig = {
