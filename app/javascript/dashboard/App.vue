@@ -141,6 +141,31 @@ export default {
 
 <style lang="scss">
 @import './assets/scss/app';
+
+/* Chamada: mantém a ação de microfone claramente identificável como botão. */
+#app .fixed.inset-0.z-50 .mt-4.flex.flex-wrap.items-center.gap-2 > .flex-1.justify-center {
+  background-color: #ffffff;
+  border: 1px solid #cbd5e1;
+  color: #334155;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.06);
+}
+
+#app .fixed.inset-0.z-50 .mt-4.flex.flex-wrap.items-center.gap-2 > .flex-1.justify-center:hover {
+  background-color: #f1f5f9;
+  border-color: #94a3b8;
+  color: #0f172a;
+}
+
+.dark #app .fixed.inset-0.z-50 .mt-4.flex.flex-wrap.items-center.gap-2 > .flex-1.justify-center {
+  background-color: #334155;
+  border-color: #64748b;
+  color: #f8fafc;
+}
+
+.dark #app .fixed.inset-0.z-50 .mt-4.flex.flex-wrap.items-center.gap-2 > .flex-1.justify-center:hover {
+  background-color: #475569;
+  border-color: #94a3b8;
+}
 </style>
 
 <style src="vue-multiselect/dist/vue-multiselect.min.css"></style>

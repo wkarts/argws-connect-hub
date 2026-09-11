@@ -1,9 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 190" role="img" aria-label="HUB">
-  <title>HUB</title>
-  <g font-family="Inter,Arial,Helvetica,sans-serif" font-weight="800">
-    <text x="0" y="132" font-size="126" letter-spacing="-7" fill="#000000">HU</text>
-    <rect x="270" y="28" width="126" height="126" rx="26" fill="none" stroke="#E10600" stroke-width="12"/>
-    <text x="294" y="132" font-size="112" letter-spacing="-5" fill="#E10600">B</text>
-  </g>
-  <text x="4" y="180" font-family="Inter,Arial,Helvetica,sans-serif" font-size="22" font-weight="500" letter-spacing="9" fill="#1F1F1F">COMUNICAÇÃO SEM LIMITES</text>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 320" role="img" aria-label="HUB"><title>HUB</title><defs><linearGradient id="hubWord" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0B3768"/><stop offset="1" stop-color="#06264E"/></linearGradient></defs><image href="/brand-assets/logo_thumbnail.png" x="0" y="0" width="320" height="320" preserveAspectRatio="xMidYMid meet"/><text x="350" y="245" font-family="Inter,Arial,Helvetica,sans-serif" font-size="230" font-weight="900" letter-spacing="-14" fill="url(#hubWord)">HUB</text></svg>
