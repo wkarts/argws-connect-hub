@@ -28,6 +28,8 @@ jobs:
         run: |
           ruby ./scripts/test-connect-api-opening-templates.rb
           node --test ./scripts/test-connect-api-opening-templates.mjs
+          ruby ./scripts/test-connect-api-local-templates.rb
+          node --test ./scripts/test-connect-api-local-templates.mjs
       - name: Enterprise runtime contracts
         run: ruby ./scripts/check-enterprise-contracts.rb
 
@@ -88,6 +90,7 @@ jobs:
           spec/services/whatsapp/incoming_message_connect_api_status_aware_service_spec.rb
           spec/services/whatsapp/incoming_connect_api_call_service_spec.rb
           spec/services/whatsapp/providers/connect_api_service_spec.rb
+          spec/services/whatsapp/providers/connect_api_local_templates_spec.rb
           spec/services/connect_api/instance_namespace_spec.rb
           spec/jobs/channels/whatsapp/connect_api_profile_picture_job_spec.rb
           spec/jobs/channels/whatsapp/connect_api_media_sync_job_spec.rb

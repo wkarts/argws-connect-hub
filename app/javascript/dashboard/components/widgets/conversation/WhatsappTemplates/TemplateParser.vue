@@ -11,6 +11,7 @@
 import { ref, computed, onMounted } from 'vue';
 import { useVuelidate } from '@vuelidate/core';
 import { requiredIf } from '@vuelidate/validators';
+import { isLocalTemplate, localTemplateText } from './localTemplate';
 
 export default {
   props: {
@@ -32,6 +33,7 @@ export default {
     const processedParams = ref({});
 
     const templateString = computed(() => {
+      if (isLocalTemplate(props.template)) return localTemplateText(props.template);
       return props.template.components.find(
         component => component.type === 'BODY'
       ).text;
@@ -85,6 +87,7 @@ export default {
           language: props.template.language,
           namespace: props.template.namespace,
           processed_params: processedParams.value,
+          ...(isLocalTemplate(props.template) ? { connect_api_version: props.template.version } : {}),
         },
       };
       emit('sendMessage', payload);
@@ -93,6 +96,7 @@ export default {
     onMounted(generateVariables);
 
     return {
+      local: computed(() => isLocalTemplate(props.template)),
       processedParams,
       variables,
       templateString,
@@ -107,6 +111,9 @@ export default {
 
 <template>
   <div class="w-full">
+    <p v-if="local" class="text-xs text-slate-500">
+      Modelo local Connect|API. A definição salva será renderizada e enviada como texto; não é um template aprovado pela Meta.
+    </p>
     <textarea
       v-model="processedString"
       rows="4"

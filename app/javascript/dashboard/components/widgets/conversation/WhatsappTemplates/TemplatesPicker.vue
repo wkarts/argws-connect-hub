@@ -1,4 +1,5 @@
 <script>
+import { isLocalTemplate, localTemplateAvailable } from './localTemplate';
 // TODO: Remove this when we support all formats
 const formatsToRemove = ['DOCUMENT', 'IMAGE', 'VIDEO'];
 
@@ -25,10 +26,11 @@ export default {
     whatsAppTemplateMessages() {
       // TODO: Remove the last filter when we support all formats
       return this.$store.getters['inboxes/getWhatsAppTemplates'](this.inboxId, this.openingOnly)
-        .filter(template =>
-          String(template.status || '').trim().toLowerCase() === 'approved' ||
-          (this.isConnectApi && !String(template.status || '').trim())
-        )
+        .filter(template => {
+          if (isLocalTemplate(template)) return this.isConnectApi && localTemplateAvailable(template);
+          return String(template.status || '').trim().toLowerCase() === 'approved' ||
+            (this.isConnectApi && !String(template.status || '').trim());
+        })
         .filter(template => {
           return template.components.some(component => component.type === 'BODY' && typeof component.text === 'string') && template.components.every(component => {
             return !formatsToRemove.includes(component.format);
@@ -42,6 +44,7 @@ export default {
     },
   },
   methods: {
+    isLocalTemplate,
     getTemplatebody(template) {
       return template.components.find(component => component.type === 'BODY')?.text || '';
     },
@@ -88,7 +91,7 @@ export default {
               <p class="strong">
                 {{ $t('WHATSAPP_TEMPLATES.PICKER.LABELS.CATEGORY') }}
               </p>
-              <p>{{ template.category }}</p>
+              <p>{{ isLocalTemplate(template) ? 'Modelo local Connect|API — não aprovado pela Meta' : template.category }}</p>
             </div>
           </div>
         </button>

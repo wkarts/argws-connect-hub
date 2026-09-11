@@ -78,6 +78,9 @@ export default {
     },
     remoteLabel(template) {
       if (!template.hub_remote_present) return 'Não disponível na Connect|API';
+      if (template.source === 'connectapi_local') {
+        return template.hub_remote_available ? 'Modelo local disponível — não aprovado pela Meta' : 'Modelo local indisponível';
+      }
       if (!template.hub_remote_available) return template.status || 'Indisponível';
       return template.status || 'Disponível';
     },
@@ -95,7 +98,7 @@ export default {
     <p v-if="loading" class="text-sm text-slate-500" role="status">Carregando templates...</p>
     <p v-else-if="error" class="text-sm text-red-700 dark:text-red-300" role="alert">{{ error }}</p>
     <p v-else-if="!templates.length" class="mb-0 text-sm text-slate-600 dark:text-slate-300">
-      Nenhum template foi disponibilizado para esta caixa. Use Reconciliar agora para consultar a Connect|API. O HUB não cria o template hello nem substitui templates por mensagens livres.
+      Nenhum template foi disponibilizado para esta caixa. Use Reconciliar agora para consultar a Connect|API. Para ZAPO/Baileys, cadastre os modelos na instância da Connect|API em Modelos de mensagem. O HUB importa somente os cadastros reais.
     </p>
     <div v-else class="overflow-x-auto">
       <table class="w-full text-left text-sm">
@@ -136,7 +139,7 @@ export default {
         </tbody>
       </table>
       <p class="mb-0 mt-3 text-xs text-slate-500 dark:text-slate-400">
-        Um template liberado só aparece em Nova conversa enquanto também estiver disponível e aprovado na Connect|API, quando houver status de aprovação.
+        Um modelo liberado só aparece em Nova conversa enquanto estiver disponível. Modelos locais são executados como texto pela Connect|API; a aprovação Meta se aplica somente aos templates oficiais.
       </p>
     </div>
   </section>

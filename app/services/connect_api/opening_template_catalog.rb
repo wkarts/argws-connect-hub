@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative 'local_template_message'
+
 module ConnectApi
   # Reuse the channel JSONB: one catalog per inbox, with choices scoped to the
   # instance and name/language send identity. Never create remote templates here.
@@ -95,6 +97,8 @@ module ConnectApi
     end
 
     def remote_available?(template)
+      return LocalTemplateMessage.available?(template) if LocalTemplateMessage.local?(template)
+
       status = template['status'].to_s.strip
       (status.empty? || status.casecmp('APPROVED').zero?) &&
         ![false, 0, 'false', '0'].include?(template['available']) &&

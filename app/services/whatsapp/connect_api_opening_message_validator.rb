@@ -14,11 +14,17 @@ class Whatsapp::ConnectApiOpeningMessageValidator
     opening = opening_message?
     return if !opening && params.blank?
 
-    unless params.is_a?(Hash) && current_catalog.find_available(
+    template = params.is_a?(Hash) && current_catalog.find_available(
       name: params['name'], language: params['language'], opening_only: opening
     )
+    unless template
       raise Error, 'Escolha um template habilitado e disponível nesta caixa para iniciar a conversa.'
     end
+    if ConnectApi::LocalTemplateMessage.local?(template)
+      ConnectApi::LocalTemplateMessage.new(template, params).validate_content!(@message.content)
+    end
+  rescue ConnectApi::LocalTemplateMessage::Error => e
+    raise Error, e.message
   end
 
   private

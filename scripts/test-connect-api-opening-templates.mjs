@@ -8,6 +8,8 @@ import vm from 'node:vm';
 const root = new URL('../', import.meta.url);
 const read = path => readFileSync(new URL(path, root), 'utf8');
 const base = 'app/javascript/dashboard/';
+const localSource = read(`${base}components/widgets/conversation/WhatsappTemplates/localTemplate.js`);
+const { isLocalTemplate, localTemplateAvailable } = await import(`data:text/javascript;base64,${Buffer.from(localSource).toString('base64')}`);
 const settingsPath = `${base}routes/dashboard/settings/inbox/settingsPage/`;
 const contactPath = `${base}routes/dashboard/conversation/contact/`;
 const callPath = `${base}components/widgets/conversation/ConnectApiCallPanelPolished.vue`;
@@ -15,7 +17,7 @@ const script = text => text.match(/<script[^>]*>([\s\S]*?)<\/script>/)?.[1] ?? t
 const noImports = text => text.replace(/^import[\s\S]*?from ['"][^'"]+['"];\s*/gm, '');
 function component(path, globals = {}) {
   const code = noImports(script(read(path))).replace('export default', 'globalThis.component =');
-  const context = { console, mapGetters: () => ({}), ...globals };
+  const context = { console, mapGetters: () => ({}), isLocalTemplate, localTemplateAvailable, ...globals };
   vm.runInNewContext(code, context, { filename: path });
   return context.component;
 }
@@ -119,7 +121,7 @@ test('disconnect sends the existing payload once and always resets its busy stat
 test('reconcile refreshes the real admin catalog only after a successful backend update', async () => {
   const settings = component(`${settingsPath}ConnectApiConfiguration.vue`, { ConnectApiOpeningTemplates: {}, useAlert: () => {} });
   let loads = 0;
-  const self = { isReconciling: false, isDisconnecting: false, update: async () => true, $refs: { openingTemplates: { loadTemplates: async () => { loads += 1; } } } };
+  const self = { isReconciling: false, isDisconnecting: false, update: async () => true, $refs: { openingTemplates: { templates: [], error: '', loadTemplates: async () => { loads += 1; } } } };
   await settings.methods.reconcile.call(self);
   assert.equal(loads, 1);
   self.update = async () => false;
