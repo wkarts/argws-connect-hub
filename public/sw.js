@@ -1,7 +1,7 @@
 /* eslint-disable no-restricted-globals, no-console */
 /* globals clients */
 
-const CACHE_VERSION = 'hub-pwa-v1.2.0';
+const CACHE_VERSION = 'hub-pwa-v1.2.1';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 const OFFLINE_URL = '/offline.html';
@@ -11,7 +11,11 @@ const PRECACHE_URLS = [
   '/manifest.json',
   '/pwa-icon-192x192.png',
   '/pwa-icon-512x512.png',
+  '/pwa-maskable-192x192.png',
+  '/pwa-maskable-512x512.png',
+  '/favicon-16x16.png',
   '/favicon-32x32.png',
+  '/favicon-96x96.png',
 ];
 
 self.addEventListener('install', event => {
