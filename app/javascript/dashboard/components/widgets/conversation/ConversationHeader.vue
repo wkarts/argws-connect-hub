@@ -12,7 +12,7 @@ import { conversationListPageURL } from 'dashboard/helper/URLHelper';
 import { snoozedReopenTime } from 'dashboard/helper/snoozeHelpers';
 import { FEATURE_FLAGS } from 'dashboard/featureFlags';
 import Linear from './linear/index.vue';
-import ConnectApiCallPanel from './ConnectApiCallPanel.vue';
+import ConnectApiCallPanel from './ConnectApiCallPanelPolished.vue';
 
 export default {
   components: {
