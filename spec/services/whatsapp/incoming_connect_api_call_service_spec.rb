@@ -52,7 +52,7 @@ describe Whatsapp::IncomingConnectApiCallService do
     expect(message.message_type).to eq('activity')
     expect(message.content).to eq('Chamada recebida')
     expect(message.content_attributes.dig('connect_api_call', 'status')).to eq('ringing')
-    expect(message.content_attributes.dig('connect_api_call', 'peer_phone')).to eq('557596236940')
+    expect(message.content_attributes.dig('connect_api_call', 'peer_phone')).to eq('5575996236940')
 
     described_class.new(
       channel: whatsapp_channel,
@@ -149,7 +149,7 @@ describe Whatsapp::ConnectApiCallService do
     )
   end
 
-  let(:contact_phone) { '557596236940' }
+  let(:contact_phone) { '5575996236940' }
   let(:client) { instance_double(ConnectApi::Client) }
   let(:raw_call) do
     {
@@ -185,7 +185,7 @@ describe Whatsapp::ConnectApiCallService do
 
     @conversation = whatsapp_channel.inbox.conversations.last
     @conversation.contact.update!(name: 'Cliente Teste')
-    @conversation.messages.delete_all
+    Message.where(conversation_id: @conversation.id).delete_all
   end
 
   def local_call_service
