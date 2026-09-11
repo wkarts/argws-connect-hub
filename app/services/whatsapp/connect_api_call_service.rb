@@ -5,9 +5,10 @@ require 'uri'
 class Whatsapp::ConnectApiCallService
   CALL_PROVIDER = 'WHATSAPP-ZAPO'
 
-  def initialize(whatsapp_channel:, contact_phone: nil, client: ConnectApi::Client.new)
+  def initialize(whatsapp_channel:, contact_phone: nil, conversation: nil, client: ConnectApi::Client.new)
     @channel = whatsapp_channel
     @contact_phone = normalize_number(contact_phone)
+    @conversation = conversation
     @client = client
   end
 
@@ -24,9 +25,9 @@ class Whatsapp::ConnectApiCallService
   def list
     ensure_call_provider!
     calls = @client.list_calls(instance_name)
-    return calls if @contact_phone.blank?
-
-    calls.select { |call| call_matches_contact?(call) }
+    calls = calls.select { |call| call_matches_contact?(call) } if @contact_phone.present?
+    sync_timeline_list(calls)
+    calls
   end
 
   def offer(number:, is_video: false, call_duration: nil)
@@ -36,41 +37,86 @@ class Whatsapp::ConnectApiCallService
     digits = number.to_s.gsub(/\D/, '')
     raise ConnectApi::Error, 'O contato não possui telefone válido para chamada.' if digits.blank?
 
-    @client.offer_call(instance_name, number: digits, is_video: false, call_duration: call_duration)
+    response = @client.offer_call(instance_name, number: digits, is_video: false, call_duration: call_duration)
+    sync_timeline(
+      response_call(response).merge(
+        'direction' => response_call(response)['direction'].presence || 'outgoing',
+        'status' => response_call(response)['status'].presence || 'ringing',
+        'createdAt' => response_call(response)['createdAt'].presence || Time.current.utc.iso8601(3)
+      ),
+      action: 'state',
+      status: 'ringing',
+      direction: 'outgoing',
+      terminal: false,
+      peer_phone: digits
+    )
+    response
   end
 
   def accept(call_id)
     ensure_call_provider!
     call_id = required_call_id(call_id)
-    ensure_call_for_contact!(call_id)
-    @client.accept_call(instance_name, call_id)
+    current_call = find_call_for_contact!(call_id)
+    response = @client.accept_call(instance_name, call_id)
+    sync_timeline(
+      merged_call(current_call, response),
+      action: 'state',
+      status: 'answered',
+      direction: call_direction(current_call, 'incoming'),
+      terminal: false,
+      peer_phone: @contact_phone
+    )
+    response
   end
 
   def reject(call_id)
     ensure_call_provider!
     call_id = required_call_id(call_id)
-    ensure_call_for_contact!(call_id)
-    @client.reject_call(instance_name, call_id)
+    current_call = find_call_for_contact!(call_id)
+    response = @client.reject_call(instance_name, call_id)
+    sync_timeline(
+      merged_call(current_call, response),
+      action: 'ended',
+      status: 'rejected',
+      direction: call_direction(current_call, 'incoming'),
+      terminal: true,
+      peer_phone: @contact_phone
+    )
+    response
   end
 
   def end_call(call_id)
     ensure_call_provider!
     call_id = required_call_id(call_id)
-    ensure_call_for_contact!(call_id)
-    @client.end_call(instance_name, call_id)
+    current_call = find_call_for_contact!(call_id)
+    response = @client.end_call(instance_name, call_id)
+    sync_timeline(
+      merged_call(current_call, response),
+      action: 'ended',
+      status: 'ended',
+      direction: call_direction(current_call, nil),
+      terminal: true,
+      peer_phone: @contact_phone
+    )
+    response
   end
 
   def mute(call_id, muted:)
     ensure_call_provider!
     call_id = required_call_id(call_id)
-    ensure_call_for_contact!(call_id)
-    @client.mute_call(instance_name, call_id, muted: muted)
+    current_call = find_call_for_contact!(call_id)
+    response = @client.mute_call(instance_name, call_id, muted: muted)
+    sync_timeline(
+      merged_call(current_call, response).merge('muted' => ActiveModel::Type::Boolean.new.cast(muted)),
+      peer_phone: @contact_phone
+    )
+    response
   end
 
   def media_ticket(call_id)
     ensure_call_provider!
     call_id = required_call_id(call_id)
-    ensure_call_for_contact!(call_id)
+    find_call_for_contact!(call_id)
     ticket = @client.media_ticket(instance_name, call_id).to_h
     public_url = connect_api_public_url
     media_path = ticket['mediaPath'].presence || '/voice/media'
@@ -122,21 +168,25 @@ class Whatsapp::ConnectApiCallService
     raise ConnectApi::Error, 'Chamadas não estão habilitadas para esta conexão.'
   end
 
-  def ensure_call_for_contact!(call_id)
-    return if @contact_phone.blank?
-
+  def find_call_for_contact!(call_id)
     call = @client.list_calls(instance_name).find do |item|
       id = item.to_h['callId'] || item.to_h['id']
       id.to_s == call_id.to_s
     end
-    raise ConnectApi::Error, 'Chamada não encontrada nesta conversa.' unless call && call_matches_contact?(call)
+
+    if @contact_phone.present? && (!call || !call_matches_contact?(call))
+      raise ConnectApi::Error, 'Chamada não encontrada nesta conversa.'
+    end
+    raise ConnectApi::Error, 'Chamada não encontrada.' unless call
+
+    call
   end
 
   def call_matches_contact?(call)
     return true if @contact_phone.blank?
 
     item = call.to_h.deep_stringify_keys
-    candidates = [item['number'], item['callerPn'], item['displayPeerJid'], item['peerJid']]
+    candidates = [item['number'], item['callerPn'], item['callerPnJid'], item['displayPeerJid'], item['peerJidAlt'], item['remoteJid'], item['peerJid']]
     candidates.any? { |value| normalize_number(value) == @contact_phone }
   end
 
@@ -146,6 +196,50 @@ class Whatsapp::ConnectApiCallService
 
   def required_call_id(value)
     value.to_s.presence || raise(ConnectApi::Error, 'call_id é obrigatório.')
+  end
+
+  def response_call(response)
+    data = response.respond_to?(:to_h) ? response.to_h.deep_stringify_keys : {}
+    data = data['data'].deep_stringify_keys if data['data'].is_a?(Hash)
+    data = data['call'].deep_stringify_keys if data['call'].is_a?(Hash)
+    data
+  end
+
+  def merged_call(current_call, response)
+    current_call.to_h.deep_stringify_keys.merge(response_call(response)).tap do |call|
+      call['callId'] ||= current_call.to_h['callId'] || current_call.to_h['id']
+      call['updatedAt'] ||= Time.current.utc.iso8601(3)
+    end
+  end
+
+  def call_direction(call, fallback)
+    direction = call.to_h.deep_stringify_keys['direction'].to_s.downcase
+    return direction if %w[incoming outgoing].include?(direction)
+
+    fallback
+  end
+
+  def sync_timeline_list(calls)
+    return if @conversation.blank?
+
+    calls.each { |call| sync_timeline(call, peer_phone: @contact_phone) }
+  rescue StandardError => e
+    Rails.logger.warn("[HUB Call Timeline] list sync failed: #{e.class}: #{e.message}")
+  end
+
+  def sync_timeline(call, **options)
+    return if @conversation.blank?
+
+    Whatsapp::ConnectApiCallTimelineSyncService.new(
+      channel: @channel,
+      conversation: @conversation
+    ).sync(
+      call,
+      peer_name: @conversation.contact&.name,
+      **options
+    )
+  rescue StandardError => e
+    Rails.logger.warn("[HUB Call Timeline] sync failed: #{e.class}: #{e.message}")
   end
 
   def connect_api_public_url

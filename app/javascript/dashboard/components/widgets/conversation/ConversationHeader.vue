@@ -210,6 +210,7 @@ export default {
           v-if="inbox"
           :conversation-id="currentChat.id"
           :inbox="inbox"
+          :contact="currentContact"
         />
         <MoreActions :conversation-id="currentChat.id" />
       </div>

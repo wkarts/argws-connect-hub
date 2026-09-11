@@ -31,6 +31,10 @@ export default {
       type: Object,
       required: true,
     },
+    contact: {
+      type: Object,
+      default: () => ({}),
+    },
   },
   data() {
     return {
@@ -79,18 +83,52 @@ export default {
         null
       );
     },
+    hasActiveCall() {
+      return Boolean(this.primaryCall);
+    },
     hasIncomingCall() {
       return this.activeCalls.some(call => this.canAccept(call));
+    },
+    contactName() {
+      return (
+        this.contact?.name ||
+        this.primaryCall?.name ||
+        this.primaryCall?.contactName ||
+        this.primaryCall?.pushName ||
+        'Contato'
+      );
+    },
+    contactThumbnail() {
+      return this.contact?.thumbnail || '';
+    },
+    contactPhone() {
+      return this.formatPhone(
+        this.contact?.phone_number ||
+          this.primaryCall?.number ||
+          this.primaryCall?.phoneNumber ||
+          this.primaryCall?.callerPn ||
+          this.primaryCall?.displayPeerJid ||
+          ''
+      );
     },
     compactActionLabel() {
       return this.primaryCall && this.canReject(this.primaryCall)
         ? 'Recusar'
         : 'Encerrar';
     },
+    currentDuration() {
+      return this.primaryCall ? this.callDurationLabel(this.primaryCall) : '';
+    },
+    currentStateLabel() {
+      return this.primaryCall ? this.stateLabel(this.primaryCall) : 'Pronto para ligar';
+    },
+    currentDirectionLabel() {
+      return this.primaryCall ? this.directionLabel(this.primaryCall) : '';
+    },
     mediaStateLabel() {
       const labels = {
         idle: 'Áudio não conectado',
-        requesting_microphone: 'Aguardando microfone',
+        requesting_microphone: 'Aguardando permissão do microfone',
         connecting: 'Conectando áudio',
         ready: 'Áudio conectado',
         closed: 'Áudio encerrado',
@@ -98,14 +136,37 @@ export default {
       };
       return labels[this.mediaState] || this.mediaState;
     },
+    mediaStateClass() {
+      if (this.mediaState === 'ready') {
+        return 'text-emerald-700 dark:text-emerald-300';
+      }
+      if (this.mediaState === 'error') {
+        return 'text-red-700 dark:text-red-300';
+      }
+      return 'text-slate-500 dark:text-slate-400';
+    },
+    stateDotClass() {
+      if (this.hasIncomingCall) return 'bg-amber-500 animate-pulse';
+      if (this.primaryCall && this.isConnected(this.primaryCall)) return 'bg-emerald-500';
+      if (this.hasActiveCall) return 'bg-blue-500 animate-pulse';
+      return 'bg-slate-300 dark:bg-slate-600';
+    },
+    stateBadgeClass() {
+      if (this.hasIncomingCall) {
+        return 'bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-300';
+      }
+      if (this.primaryCall && this.isConnected(this.primaryCall)) {
+        return 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300';
+      }
+      if (this.hasActiveCall) {
+        return 'bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-300';
+      }
+      return 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300';
+    },
   },
   watch: {
     conversationId() {
-      this.closeMedia();
-      this.open = false;
-      this.minimized = false;
-      this.calls = [];
-      this.callTimerStarts = {};
+      this.resetConversationState();
       if (this.visible) this.loadCalls(true);
     },
     visible(isVisible) {
@@ -119,11 +180,7 @@ export default {
       this.stopPolling();
       this.stopClock();
       this.clearRealtimeRefresh();
-      this.closeMedia();
-      this.open = false;
-      this.minimized = false;
-      this.calls = [];
-      this.callTimerStarts = {};
+      this.resetConversationState();
     },
   },
   mounted() {
@@ -148,6 +205,16 @@ export default {
     this.closeMedia();
   },
   methods: {
+    resetConversationState() {
+      this.closeMedia();
+      this.open = false;
+      this.minimized = false;
+      this.calls = [];
+      this.callTimerStarts = {};
+      this.error = '';
+      this.feedback = '';
+      this.mediaError = '';
+    },
     async toggle() {
       if (this.open) {
         this.close();
@@ -171,6 +238,9 @@ export default {
       }
       this.open = false;
       this.minimized = false;
+      this.feedback = '';
+      this.error = '';
+      this.mediaError = '';
     },
     startPolling() {
       this.stopPolling();
@@ -231,6 +301,7 @@ export default {
       return (
         state.includes('accept') ||
         state.includes('active') ||
+        state === 'answered' ||
         state === 'connected' ||
         state === 'connect'
       );
@@ -358,7 +429,7 @@ export default {
       try {
         const { data } = await connectApiCalls.offer(this.conversationId);
         const callId = String(data.callId || data.id || '');
-        this.feedback = 'Chamada iniciada.';
+        this.feedback = 'Chamando…';
         if (callId && this.capabilities.voice !== false) {
           await this.attachMedia(callId);
         }
@@ -393,7 +464,7 @@ export default {
         await connectApiCalls.action(this.conversationId, action, payload);
         if (action === 'accept') {
           await this.attachMedia(callId);
-          this.feedback = 'Chamada atendida; áudio conectado.';
+          this.feedback = 'Chamada atendida.';
         } else if (action === 'reject') {
           if (this.mediaCallId === callId) this.closeMedia();
           this.feedback = 'Chamada recusada.';
@@ -477,6 +548,7 @@ export default {
       if (
         state.includes('accept') ||
         state.includes('active') ||
+        state === 'answered' ||
         state === 'connected' ||
         state === 'connect'
       ) {
@@ -484,6 +556,7 @@ export default {
       }
       if (state.includes('reject')) return 'Recusada';
       if (state.includes('miss')) return 'Perdida';
+      if (state.includes('unanswered')) return 'Não atendida';
       if (state.includes('fail')) return 'Falhou';
       if (
         state.includes('end') ||
@@ -497,6 +570,7 @@ export default {
     },
     peerLabel(call) {
       return (
+        this.contactName ||
         call.name ||
         call.contactName ||
         call.number ||
@@ -506,6 +580,18 @@ export default {
         call.peerJid ||
         'WhatsApp'
       );
+    },
+    formatPhone(value) {
+      const digits = String(value || '').replace(/\D/g, '');
+      if (!digits) return '';
+
+      if (digits.startsWith('55') && digits.length === 13) {
+        return `+55 (${digits.slice(2, 4)}) ${digits.slice(4, 9)}-${digits.slice(9)}`;
+      }
+      if (digits.startsWith('55') && digits.length === 12) {
+        return `+55 (${digits.slice(2, 4)}) ${digits.slice(4, 8)}-${digits.slice(8)}`;
+      }
+      return `+${digits}`;
     },
     apiError(error) {
       return (
@@ -523,69 +609,66 @@ export default {
   <div v-if="visible" class="relative flex min-w-0 items-center gap-2">
     <div
       v-if="minimized && primaryCall"
-      class="flex min-w-0 items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-2 py-1.5 shadow-sm dark:border-emerald-800 dark:bg-emerald-950/40"
+      class="flex min-w-0 items-center gap-2 rounded-xl border border-slate-200 bg-white px-2 py-1.5 shadow-sm dark:border-slate-700 dark:bg-slate-900"
     >
       <button
         type="button"
-        class="flex min-w-0 items-center gap-2 rounded-lg px-1 py-0.5 text-left hover:bg-emerald-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:hover:bg-emerald-900/60"
+        class="flex min-w-0 items-center gap-2 rounded-lg px-1 py-0.5 text-left hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:hover:bg-slate-800"
         title="Reexibir chamada"
         @click="restore"
       >
-        <span
-          class="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-base text-white shadow-sm"
-          aria-hidden="true"
-        >
-          ☎
-          <span
-            class="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 animate-pulse rounded-full bg-red-500 ring-2 ring-emerald-50 dark:ring-emerald-950"
+        <div class="relative shrink-0">
+          <hub-thumbnail
+            :src="contactThumbnail"
+            :username="contactName"
+            size="34px"
           />
-        </span>
+          <span
+            class="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full ring-2 ring-white dark:ring-slate-900"
+            :class="stateDotClass"
+          />
+        </div>
         <span class="min-w-0">
-          <span class="block truncate text-xs font-semibold text-emerald-950 dark:text-emerald-100">
-            {{ stateLabel(primaryCall) }}
-            <template v-if="callDurationLabel(primaryCall)">
-              · {{ callDurationLabel(primaryCall) }}
-            </template>
+          <span class="block max-w-[150px] truncate text-xs font-semibold text-slate-900 dark:text-slate-100">
+            {{ contactName }}
           </span>
-          <span class="block max-w-[150px] truncate text-[11px] text-emerald-700 dark:text-emerald-300">
-            {{ peerLabel(primaryCall) }}
+          <span class="block max-w-[170px] truncate text-[11px] text-slate-500 dark:text-slate-400">
+            {{ currentStateLabel }}
+            <template v-if="currentDuration"> · {{ currentDuration }}</template>
           </span>
         </span>
       </button>
 
       <button
-        type="button"
-        class="rounded-md border border-emerald-200 bg-white px-2 py-1 text-xs font-medium text-emerald-800 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-emerald-800 dark:bg-slate-900 dark:text-emerald-200 dark:hover:bg-emerald-900/60"
-        :disabled="busy"
-        title="Reexibir chamada"
-        @click="restore"
-      >
-        Exibir
-      </button>
-      <button
         v-if="canAccept(primaryCall)"
         type="button"
-        class="rounded-md bg-emerald-600 px-2 py-1 text-xs font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+        class="rounded-lg bg-emerald-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
         :disabled="busy"
-        title="Atender chamada"
         @click="compactAccept"
       >
         Atender
       </button>
       <button
         type="button"
-        class="rounded-md bg-red-600 px-2 py-1 text-xs font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+        class="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
         :disabled="busy"
-        :title="compactActionLabel + ' chamada'"
+        @click="restore"
+      >
+        Exibir
+      </button>
+      <button
+        type="button"
+        class="rounded-lg bg-red-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+        :disabled="busy"
         @click="compactEnd"
       >
         {{ compactActionLabel }}
       </button>
     </div>
 
-    <div class="relative shrink-0">
+    <div v-if="!minimized" class="relative shrink-0">
       <hub-button
-        v-tooltip="hasIncomingCall ? 'Chamada WhatsApp recebida' : 'Chamada WhatsApp'"
+        v-tooltip="hasIncomingCall ? 'Chamada recebida' : 'Chamada WhatsApp'"
         variant="clear"
         color-scheme="secondary"
         icon="call"
@@ -593,194 +676,210 @@ export default {
       />
       <span
         v-if="hasIncomingCall"
-        class="pointer-events-none absolute right-0 top-0 h-2.5 w-2.5 animate-pulse rounded-full bg-red-500 ring-2 ring-white dark:ring-slate-900"
+        class="pointer-events-none absolute right-1 top-1 h-2.5 w-2.5 rounded-full bg-amber-500 ring-2 ring-white dark:ring-slate-900"
       />
     </div>
 
     <div
       v-if="open"
-      class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-[1px]"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-[1px]"
       @click.self="close"
     >
       <div
-        class="w-full max-w-xl overflow-hidden rounded-2xl border border-emerald-200 bg-white shadow-2xl ring-1 ring-emerald-500/10 dark:border-emerald-900 dark:bg-slate-900"
+        class="w-full max-w-[430px] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900"
       >
-        <div class="flex items-center justify-between gap-3 bg-emerald-600 px-5 py-4 text-white dark:bg-emerald-700">
+        <div class="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3.5 dark:border-slate-800">
           <div class="flex min-w-0 items-center gap-3">
-            <div
-              class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/15 text-xl ring-1 ring-white/20"
-              aria-hidden="true"
-            >
-              ☎
+            <div class="relative shrink-0">
+              <hub-thumbnail
+                :src="contactThumbnail"
+                :username="contactName"
+                size="44px"
+              />
+              <span
+                class="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full ring-2 ring-white dark:ring-slate-900"
+                :class="stateDotClass"
+              />
             </div>
             <div class="min-w-0">
-              <h3 class="m-0 truncate text-lg font-semibold text-white">
-                Chamada WhatsApp
+              <h3 class="m-0 truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
+                {{ contactName }}
               </h3>
-              <p class="m-0 mt-0.5 truncate text-xs text-emerald-50/90">
-                {{ primaryCall ? peerLabel(primaryCall) : 'Central de chamadas' }}
+              <p class="m-0 mt-0.5 truncate text-xs text-slate-500 dark:text-slate-400">
+                {{ contactPhone || 'Número indisponível' }}
               </p>
             </div>
           </div>
 
-          <div class="flex shrink-0 items-center gap-1.5">
-            <button
-              type="button"
-              class="flex h-8 min-w-8 items-center justify-center rounded-md bg-white/10 px-2 text-sm font-semibold text-white hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white/70"
-              title="Minimizar chamada"
-              aria-label="Minimizar chamada"
-              @click="minimize"
-            >
-              —
-            </button>
-            <hub-button
-              v-if="!primaryCall"
-              variant="clear"
-              color-scheme="secondary"
-              icon="dismiss"
-              title="Fechar"
-              @click="close"
-            />
-          </div>
+          <button
+            v-if="hasActiveCall"
+            type="button"
+            class="flex h-8 w-8 items-center justify-center rounded-lg text-lg font-semibold text-slate-500 hover:bg-slate-100 hover:text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100"
+            title="Minimizar chamada"
+            aria-label="Minimizar chamada"
+            @click="minimize"
+          >
+            —
+          </button>
+          <button
+            v-else
+            type="button"
+            class="flex h-8 w-8 items-center justify-center rounded-lg text-xl text-slate-400 hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+            title="Fechar"
+            aria-label="Fechar"
+            @click="close"
+          >
+            ×
+          </button>
         </div>
 
-        <div class="p-5">
+        <div class="px-4 py-4">
           <div
             v-if="error"
-            class="mb-3 rounded-md bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950/30 dark:text-red-300"
+            class="mb-3 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/30 dark:text-red-300"
           >
             {{ error }}
           </div>
           <div
             v-if="mediaError"
-            class="mb-3 rounded-md bg-yellow-50 p-3 text-sm text-yellow-700 dark:bg-yellow-950/30 dark:text-yellow-300"
+            class="mb-3 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-700 dark:bg-amber-950/30 dark:text-amber-300"
           >
             {{ mediaError }}
           </div>
           <div
             v-if="feedback"
-            class="mb-3 rounded-md bg-green-50 p-3 text-sm text-green-700 dark:bg-green-950/30 dark:text-green-300"
+            class="mb-3 rounded-xl bg-emerald-50 px-3 py-2 text-sm text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300"
           >
             {{ feedback }}
           </div>
 
-          <div
-            class="mb-4 flex items-center justify-between rounded-lg border p-3"
-            :class="
-              mediaState === 'ready'
-                ? 'border-emerald-200 bg-emerald-50/70 dark:border-emerald-800 dark:bg-emerald-950/30'
-                : 'border-slate-200 bg-slate-50/60 dark:border-slate-700 dark:bg-slate-800/40'
-            "
-          >
-            <div>
-              <div class="text-sm font-medium text-slate-800 dark:text-slate-100">
-                Áudio da chamada
-              </div>
-              <div
-                class="text-xs"
-                :class="
-                  mediaState === 'ready'
-                    ? 'text-emerald-700 dark:text-emerald-300'
-                    : 'text-slate-500'
-                "
-              >
-                {{ mediaStateLabel }}
-              </div>
-            </div>
+          <div v-if="loading" class="py-8 text-center text-sm text-slate-500">
+            Carregando chamada…
           </div>
 
-          <div
-            v-if="loading"
-            class="py-8 text-center text-sm text-slate-500"
-          >
-            Carregando chamadas…
-          </div>
-          <div v-else-if="activeCalls.length" class="mb-4 space-y-2">
-            <div
-              v-for="call in activeCalls"
-              :key="callId(call)"
-              class="rounded-xl border border-emerald-200 bg-emerald-50/40 p-3 dark:border-emerald-900 dark:bg-emerald-950/20"
-            >
-              <div class="flex flex-wrap items-center justify-between gap-3">
+          <template v-else-if="primaryCall">
+            <div class="rounded-2xl bg-slate-50 px-4 py-4 dark:bg-slate-800/60">
+              <div class="flex items-center justify-between gap-3">
                 <div class="min-w-0">
-                  <div class="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
-                    {{ peerLabel(call) }}
-                  </div>
-                  <div class="mt-0.5 text-xs font-medium text-emerald-700 dark:text-emerald-300">
-                    {{ directionLabel(call) }} · {{ stateLabel(call) }}
+                  <span
+                    class="inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold"
+                    :class="stateBadgeClass"
+                  >
+                    {{ currentDirectionLabel }} · {{ currentStateLabel }}
+                  </span>
+                  <div
+                    v-if="currentDuration"
+                    class="mt-2 font-mono text-2xl font-semibold tabular-nums text-slate-900 dark:text-slate-100"
+                  >
+                    {{ currentDuration }}
                   </div>
                   <div
-                    v-if="callDurationLabel(call)"
-                    class="mt-2 font-mono text-lg font-semibold tabular-nums text-slate-800 dark:text-slate-100"
+                    v-else
+                    class="mt-2 text-sm font-medium text-slate-800 dark:text-slate-100"
                   >
-                    {{ callDurationLabel(call) }}
+                    {{ currentStateLabel }}
                   </div>
                 </div>
-                <div class="flex flex-wrap gap-2">
-                  <hub-button
-                    v-if="canAccept(call)"
-                    size="small"
-                    :disabled="busy"
-                    @click="action(call, 'accept')"
-                  >
-                    Atender
-                  </hub-button>
-                  <hub-button
-                    v-if="canReject(call)"
-                    size="small"
-                    variant="clear"
-                    color-scheme="alert"
-                    :disabled="busy"
-                    @click="action(call, 'reject')"
-                  >
-                    Recusar
-                  </hub-button>
-                  <hub-button
-                    v-if="mediaCallId === callId(call)"
-                    size="small"
-                    variant="clear"
-                    :disabled="busy"
-                    @click="action(call, 'mute')"
-                  >
-                    {{ call.muted ? 'Ativar mic' : 'Silenciar' }}
-                  </hub-button>
-                  <hub-button
-                    size="small"
-                    variant="clear"
-                    color-scheme="alert"
-                    :disabled="busy"
-                    @click="action(call, 'end_call')"
-                  >
-                    Encerrar
-                  </hub-button>
+
+                <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-white text-xl shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-700">
+                  ☎
                 </div>
               </div>
-            </div>
-          </div>
-          <div
-            v-else
-            class="mb-4 rounded-lg border border-dashed border-slate-200 p-5 text-center text-sm text-slate-500 dark:border-slate-700"
-          >
-            Nenhuma chamada ativa no momento.
-          </div>
 
-          <div class="flex justify-end gap-2">
-            <hub-button
-              variant="clear"
-              color-scheme="secondary"
-              :disabled="busy"
-              @click="loadCalls()"
-            >
-              Atualizar
-            </hub-button>
-            <hub-button
-              icon="call"
-              :disabled="busy || loading"
-              @click="makeCall"
-            >
-              Ligar para este contato
-            </hub-button>
-          </div>
+              <div class="mt-4 flex flex-wrap items-center gap-2">
+                <button
+                  v-if="canAccept(primaryCall)"
+                  type="button"
+                  class="flex-1 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  :disabled="busy"
+                  @click="action(primaryCall, 'accept')"
+                >
+                  Atender
+                </button>
+                <button
+                  v-if="canReject(primaryCall)"
+                  type="button"
+                  class="flex-1 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  :disabled="busy"
+                  @click="action(primaryCall, 'reject')"
+                >
+                  Recusar
+                </button>
+                <button
+                  v-if="mediaCallId === callId(primaryCall)"
+                  type="button"
+                  class="flex-1 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+                  :disabled="busy"
+                  @click="action(primaryCall, 'mute')"
+                >
+                  {{ primaryCall.muted ? 'Ativar microfone' : 'Silenciar' }}
+                </button>
+                <button
+                  v-if="!canReject(primaryCall)"
+                  type="button"
+                  class="flex-1 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  :disabled="busy"
+                  @click="action(primaryCall, 'end_call')"
+                >
+                  Encerrar
+                </button>
+              </div>
+            </div>
+
+            <div class="mt-3 flex items-center justify-between gap-3 rounded-xl border border-slate-200 px-3 py-2.5 dark:border-slate-700">
+              <div class="flex min-w-0 items-center gap-2">
+                <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-sm dark:bg-slate-800">
+                  ♪
+                </span>
+                <div class="min-w-0">
+                  <div class="text-xs font-semibold text-slate-800 dark:text-slate-100">
+                    Áudio da chamada
+                  </div>
+                  <div class="truncate text-[11px]" :class="mediaStateClass">
+                    {{ mediaStateLabel }}
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                class="rounded-lg px-2 py-1 text-xs font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-800 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+                :disabled="busy"
+                @click="loadCalls()"
+              >
+                Atualizar
+              </button>
+            </div>
+          </template>
+
+          <template v-else>
+            <div class="rounded-2xl border border-slate-200 px-4 py-4 dark:border-slate-700">
+              <div class="flex items-center gap-3">
+                <hub-thumbnail
+                  :src="contactThumbnail"
+                  :username="contactName"
+                  size="48px"
+                />
+                <div class="min-w-0 flex-1">
+                  <div class="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
+                    Pronto para ligar
+                  </div>
+                  <div class="mt-0.5 truncate text-xs text-slate-500 dark:text-slate-400">
+                    Inicie uma chamada de voz com {{ contactName }}.
+                  </div>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                class="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                :disabled="busy || loading"
+                @click="makeCall"
+              >
+                <span aria-hidden="true">☎</span>
+                Ligar para este contato
+              </button>
+            </div>
+          </template>
         </div>
       </div>
     </div>
