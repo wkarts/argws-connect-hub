@@ -37,6 +37,7 @@ class Channels::Whatsapp::ConnectApiProvisioningSchedulerJob < ApplicationJob
     )
 
     if success
+      channel.sync_templates
       Channels::Whatsapp::ConnectApiMediaSyncJob.perform_later(channel.id)
       Channels::Whatsapp::ConnectApiProfilePictureSchedulerJob.perform_later
       return

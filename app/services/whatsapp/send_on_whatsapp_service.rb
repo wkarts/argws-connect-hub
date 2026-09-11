@@ -8,12 +8,15 @@ class Whatsapp::SendOnWhatsappService < Base::SendOnChannelService
   def perform_reply
     return if message.message_type == :outgoing && message.source_id&.is_present? # is message send by own
 
+    Whatsapp::ConnectApiOpeningMessageValidator.new(message).validate!
     should_send_template_message = template_params.present? || !message.conversation.can_reply?
     if should_send_template_message
       send_template_message
     else
       send_session_message
     end
+  rescue Whatsapp::ConnectApiOpeningMessageValidator::Error => e
+    message.update!(status: :failed, external_error: e.message)
   end
 
   def send_template_message
@@ -73,13 +76,13 @@ class Whatsapp::SendOnWhatsappService < Base::SendOnChannelService
     # the variables are of the format {{num}} ex:{{1}}
 
     # transform the template text into a regex string
-    # we need to replace the {{num}} with matchers that can be used to capture the variables
     template_text = template_text.gsub(/{{\d}}/, '(.*)')
     # escape if there are regex characters in the template text
     template_text = Regexp.escape(template_text)
     # ensuring only the variables remain as capture groups
     template_text = template_text.gsub(Regexp.escape('(.*)'), '(.*)')
 
+    # the pattern should match the entire string
     template_match_string = "^#{template_text}$"
     Regexp.new template_match_string
   end
@@ -94,7 +97,7 @@ class Whatsapp::SendOnWhatsappService < Base::SendOnChannelService
   end
 
   def send_session_message
-    uuid_regex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
+    uuid_regex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
     phone_number = if uuid_regex.match?(message.conversation.contact_inbox.source_id)
                      message.conversation.contact_inbox.contact.phone_number.sub('+', '')
                    else

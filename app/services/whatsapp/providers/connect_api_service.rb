@@ -36,22 +36,10 @@ class Whatsapp::Providers::ConnectApiService < Whatsapp::Providers::WhatsappClou
   end
 
   def sync_templates
-    whatsapp_channel.mark_message_templates_updated
-
-    response = HTTParty.get(
-      "#{business_account_path}/message_templates",
-      headers: api_headers,
-      timeout: request_timeout
-    )
-
-    templates = response.success? ? Array(response['data']) : []
-    whatsapp_channel.update(
-      message_templates: templates,
-      message_templates_last_updated: Time.now.utc
-    )
+    Whatsapp::ConnectApiTemplateSyncService.new(whatsapp_channel).sync!
   rescue StandardError => e
-    Rails.logger.warn("[HUB Connect|API] template sync skipped: #{e.class}: #{e.message}")
-    []
+    Rails.logger.warn("[HUB Connect|API] template sync failed channel=#{whatsapp_channel.id}: #{e.class}")
+    false
   end
 
   private

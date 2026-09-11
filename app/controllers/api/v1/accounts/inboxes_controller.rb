@@ -45,6 +45,9 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
     @inbox.update!(permitted_params.except(:channel))
     update_inbox_working_hours
     update_channel if channel_update_required?
+    sync_connect_api_templates if connect_api_template_reconciliation?
+  rescue Whatsapp::ConnectApiTemplateSyncService::Error => e
+    render json: { message: e.message }, status: :unprocessable_entity
   end
 
   def agent_bot
@@ -69,6 +72,15 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
   end
 
   private
+
+  def connect_api_template_reconciliation?
+    @inbox.whatsapp? && @inbox.channel.provider == 'connectapi' &&
+      ActiveModel::Type::Boolean.new.cast(params.dig(:channel, :provider_config, :force_reconcile))
+  end
+
+  def sync_connect_api_templates
+    Whatsapp::ConnectApiTemplateSyncService.new(@inbox.channel).sync!
+  end
 
   def fetch_inbox
     @inbox = Current.account.inboxes.find(params[:id])
