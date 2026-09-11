@@ -33,7 +33,7 @@ module ConnectApi
       {
         name: @template['name'],
         language: { policy: 'deterministic', code: @template['language'] },
-        components: [{ type: 'body', parameters: values.map { |value| { type: 'text', text: value } }],
+        components: [{ type: 'body', parameters: values.map { |value| { type: 'text', text: value } } }],
         connect_api_version: @template['version']
       }
     end
