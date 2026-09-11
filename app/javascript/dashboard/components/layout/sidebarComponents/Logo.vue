@@ -21,7 +21,7 @@ export default {
       return frontendURL(`accounts/${this.accountId}/dashboard`);
     },
     logoSource() {
-      return this.source || '/brand-assets/logo_thumbnail.svg';
+      return this.source || '/brand-assets/logo_thumbnail.png';
     },
   },
 };
