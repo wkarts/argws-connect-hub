@@ -85,6 +85,12 @@ export default {
           language: props.template.language,
           namespace: props.template.namespace,
           processed_params: processedParams.value,
+          ...(props.template.origin === 'CONNECT_LOCAL'
+            ? {
+                connect_template_id: props.template.id,
+                connect_template_revision: props.template.revision,
+              }
+            : {}),
         },
       };
       emit('sendMessage', payload);
@@ -108,7 +114,7 @@ export default {
 <template>
   <div class="w-full">
     <textarea
-      v-model="processedString"
+      :value="processedString"
       rows="4"
       readonly
       class="template-input"

@@ -35,6 +35,20 @@ class Whatsapp::Providers::ConnectApiService < Whatsapp::Providers::WhatsappClou
     end
   end
 
+  def send_template(message, phone_number, template_info)
+    payload = ConnectApi::LocalTemplateDelivery.new(
+      catalog: whatsapp_channel.opening_template_catalog,
+      message: message,
+      template_info: template_info
+    ).payload
+    return super unless payload
+
+    send_local_template(message, phone_number, payload)
+  rescue ConnectApi::LocalTemplateDelivery::Error => e
+    message.update!(status: :failed, external_error: e.message)
+    nil
+  end
+
   def sync_templates
     Whatsapp::ConnectApiTemplateSyncService.new(whatsapp_channel).sync!
   rescue StandardError => e
@@ -45,6 +59,24 @@ class Whatsapp::Providers::ConnectApiService < Whatsapp::Providers::WhatsappClou
   end
 
   private
+
+  def send_local_template(message, phone_number, template)
+    response = HTTParty.post(
+      "#{phone_id_path}/messages",
+      headers: api_headers,
+      body: {
+        messaging_product: 'whatsapp',
+        to: normalize_phone(phone_number),
+        type: 'template',
+        template: template
+      }.to_json,
+      timeout: request_timeout,
+      follow_redirects: false
+    )
+    process_response(message, response)
+  rescue StandardError => e
+    process_native_exception(message, e)
+  end
 
   def send_native_text_message(phone_number, message)
     response = HTTParty.post(

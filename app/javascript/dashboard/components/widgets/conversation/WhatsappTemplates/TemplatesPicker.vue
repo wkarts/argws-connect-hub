@@ -1,4 +1,5 @@
 <script>
+import { isTemplateReady } from './templateAvailability';
 // TODO: Remove this when we support all formats
 const formatsToRemove = ['DOCUMENT', 'IMAGE', 'VIDEO'];
 
@@ -25,10 +26,7 @@ export default {
     whatsAppTemplateMessages() {
       // TODO: Remove the last filter when we support all formats
       return this.$store.getters['inboxes/getWhatsAppTemplates'](this.inboxId, this.openingOnly)
-        .filter(template =>
-          String(template.status || '').trim().toLowerCase() === 'approved' ||
-          (this.isConnectApi && !String(template.status || '').trim())
-        )
+        .filter(template => isTemplateReady(template, this.isConnectApi))
         .filter(template => {
           return template.components.some(component => component.type === 'BODY' && typeof component.text === 'string') && template.components.every(component => {
             return !formatsToRemove.includes(component.format);
@@ -84,6 +82,9 @@ export default {
               </p>
               <p class="label-body">{{ getTemplatebody(template) }}</p>
             </div>
+            <p v-if="template.origin === 'CONNECT_LOCAL'" class="text-xs mt-2">
+              Modelo local · Connect|API · Não aprovado pela Meta
+            </p>
             <div class="label-category">
               <p class="strong">
                 {{ $t('WHATSAPP_TEMPLATES.PICKER.LABELS.CATEGORY') }}

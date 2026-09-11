@@ -14,10 +14,15 @@ class Whatsapp::ConnectApiOpeningMessageValidator
     opening = opening_message?
     return if !opening && params.blank?
 
-    unless params.is_a?(Hash) && current_catalog.find_available(
+    template = params.is_a?(Hash) && current_catalog.find_available(
       name: params['name'], language: params['language'], opening_only: opening
     )
+    unless template
       raise Error, 'Escolha um template habilitado e disponível nesta caixa para iniciar a conversa.'
+    end
+    if template['origin'] == 'CONNECT_LOCAL' &&
+       (params['connect_template_id'] != template['id'] || params['connect_template_revision'] != template['revision'])
+      raise Error, 'O modelo foi alterado. Atualize o catálogo e selecione-o novamente.'
     end
   end
 
