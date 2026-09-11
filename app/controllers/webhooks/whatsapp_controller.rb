@@ -3,7 +3,7 @@ class Webhooks::WhatsappController < ActionController::API
 
   def process_payload
     if connect_api_call_payload?
-      channel = Channel::Whatsapp.find_by(phone_number: params[:phone_number])
+      channel = find_connect_api_channel
       return head :not_found if channel.blank?
       return head :unauthorized unless valid_connect_api_call_webhook?(channel)
 
@@ -21,9 +21,15 @@ class Webhooks::WhatsappController < ActionController::API
     params[:event].to_s.casecmp('call').zero? && params[:data].present?
   end
 
-  def valid_connect_api_call_webhook?(channel)
-    return false unless channel.provider == 'connectapi'
+  def find_connect_api_channel
+    raw_phone = params[:phone_number].to_s
+    digits = raw_phone.gsub(/\D/, '')
 
+    Channel::Whatsapp.find_by(phone_number: raw_phone, provider: 'connectapi') ||
+      Channel::Whatsapp.find_by(phone_number: "+#{digits}", provider: 'connectapi')
+  end
+
+  def valid_connect_api_call_webhook?(channel)
     config = channel.provider_config.to_h.deep_stringify_keys
     expected_token = config['api_key'].to_s
     provided_token = request.headers['X-Connect-Hub-Token'].to_s
