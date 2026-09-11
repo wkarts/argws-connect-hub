@@ -1,9 +1,248 @@
 <script>
 import ConnectApiCallPanelBase from './ConnectApiCallPanel.vue';
 
+const INCOMING_RING_INTERVAL = 3000;
+const OUTGOING_RING_INTERVAL = 4200;
+
 export default {
   name: 'ConnectApiCallPanelPolished',
   extends: ConnectApiCallPanelBase,
+  data() {
+    return {
+      ringAudioContext: null,
+      ringTimer: null,
+      ringMode: '',
+      ringSignature: '',
+      callAudioUnlockHandler: null,
+    };
+  },
+  computed: {
+    incomingCallRingEnabled() {
+      const value = this.providerConfig.incoming_call_ring_enabled;
+      if (value === undefined || value === null || value === '') return true;
+
+      return (
+        value === true ||
+        value === 1 ||
+        String(value).toLowerCase() === 'true' ||
+        String(value) === '1'
+      );
+    },
+  },
+  watch: {
+    primaryCall: {
+      deep: true,
+      handler() {
+        this.syncCallSounds();
+      },
+    },
+    incomingCallRingEnabled() {
+      this.syncCallSounds();
+    },
+  },
+  mounted() {
+    this.registerCallAudioUnlock();
+    this.syncCallSounds();
+  },
+  beforeDestroy() {
+    this.stopCallSound();
+    this.unregisterCallAudioUnlock();
+    if (this.ringAudioContext) {
+      this.ringAudioContext.close().catch(() => {});
+      this.ringAudioContext = null;
+    }
+  },
+  methods: {
+    resetConversationState() {
+      this.stopCallSound();
+      return ConnectApiCallPanelBase.methods.resetConversationState.call(this);
+    },
+    async loadCalls(silent = false) {
+      await ConnectApiCallPanelBase.methods.loadCalls.call(this, silent);
+      this.syncCallSounds();
+    },
+    async makeCall() {
+      this.startCallSound('outgoing', 'outgoing:pending');
+      try {
+        await ConnectApiCallPanelBase.methods.makeCall.call(this);
+      } finally {
+        this.syncCallSounds();
+      }
+    },
+    async action(call, action) {
+      if (['accept', 'reject', 'end_call'].includes(action)) {
+        this.stopCallSound();
+      }
+      try {
+        await ConnectApiCallPanelBase.methods.action.call(this, call, action);
+      } finally {
+        this.syncCallSounds();
+      }
+    },
+    desiredCallSound() {
+      if (
+        this.primaryCall &&
+        this.canAccept(this.primaryCall) &&
+        this.incomingCallRingEnabled
+      ) {
+        return {
+          mode: 'incoming',
+          signature: `incoming:${this.callId(this.primaryCall)}`,
+        };
+      }
+
+      if (
+        this.primaryCall &&
+        this.primaryCall.direction === 'outgoing' &&
+        this.isActive(this.primaryCall) &&
+        !this.isConnected(this.primaryCall)
+      ) {
+        return {
+          mode: 'outgoing',
+          signature: `outgoing:${this.callId(this.primaryCall)}`,
+        };
+      }
+
+      return null;
+    },
+    syncCallSounds() {
+      const desired = this.desiredCallSound();
+      if (!desired) {
+        this.stopCallSound();
+        return;
+      }
+
+      if (
+        this.ringMode === desired.mode &&
+        this.ringSignature === desired.signature
+      ) {
+        return;
+      }
+
+      this.startCallSound(desired.mode, desired.signature);
+    },
+    startCallSound(mode, signature) {
+      if (mode === 'incoming' && !this.incomingCallRingEnabled) return;
+      if (this.ringMode === mode && this.ringSignature === signature) return;
+
+      this.stopCallSound();
+      this.ringMode = mode;
+      this.ringSignature = signature;
+      this.ensureRingAudioContext();
+      this.playCurrentRingPattern();
+
+      const interval =
+        mode === 'incoming' ? INCOMING_RING_INTERVAL : OUTGOING_RING_INTERVAL;
+      this.ringTimer = window.setInterval(() => {
+        this.playCurrentRingPattern();
+      }, interval);
+    },
+    stopCallSound() {
+      if (this.ringTimer) {
+        window.clearInterval(this.ringTimer);
+        this.ringTimer = null;
+      }
+      this.ringMode = '';
+      this.ringSignature = '';
+    },
+    playCurrentRingPattern() {
+      if (this.ringMode === 'incoming') {
+        this.playIncomingRingPattern();
+      } else if (this.ringMode === 'outgoing') {
+        this.playOutgoingRingPattern();
+      }
+    },
+    playIncomingRingPattern() {
+      [0, 0.82].forEach(delay => {
+        this.playTone({
+          frequency: 660,
+          duration: 0.62,
+          volume: 0.045,
+          delay,
+        });
+        this.playTone({
+          frequency: 880,
+          duration: 0.62,
+          volume: 0.03,
+          delay,
+        });
+      });
+    },
+    playOutgoingRingPattern() {
+      this.playTone({
+        frequency: 425,
+        duration: 1.05,
+        volume: 0.028,
+        delay: 0,
+      });
+    },
+    playTone({ frequency, duration, volume, delay = 0 }) {
+      const context = this.ensureRingAudioContext();
+      if (!context || context.state !== 'running') return;
+
+      const startAt = context.currentTime + delay;
+      const endAt = startAt + duration;
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+
+      oscillator.type = 'sine';
+      oscillator.frequency.setValueAtTime(frequency, startAt);
+      gain.gain.setValueAtTime(0.0001, startAt);
+      gain.gain.linearRampToValueAtTime(volume, startAt + 0.03);
+      gain.gain.setValueAtTime(volume, Math.max(startAt + 0.03, endAt - 0.08));
+      gain.gain.exponentialRampToValueAtTime(0.0001, endAt);
+
+      oscillator.connect(gain);
+      gain.connect(context.destination);
+      oscillator.start(startAt);
+      oscillator.stop(endAt + 0.03);
+    },
+    ensureRingAudioContext() {
+      const AudioContextClass =
+        window.AudioContext || window.webkitAudioContext;
+      if (!AudioContextClass) return null;
+
+      if (!this.ringAudioContext) {
+        this.ringAudioContext = new AudioContextClass();
+      }
+
+      if (this.ringAudioContext.state === 'suspended') {
+        this.ringAudioContext.resume().catch(() => {});
+      }
+
+      return this.ringAudioContext;
+    },
+    registerCallAudioUnlock() {
+      if (this.callAudioUnlockHandler) return;
+
+      this.callAudioUnlockHandler = () => {
+        const context = this.ensureRingAudioContext();
+        if (context && context.state === 'suspended') {
+          context.resume().catch(() => {});
+        }
+        this.unregisterCallAudioUnlock();
+        if (this.ringMode) {
+          window.setTimeout(() => this.playCurrentRingPattern(), 20);
+        }
+      };
+
+      window.addEventListener('pointerdown', this.callAudioUnlockHandler, {
+        passive: true,
+      });
+      window.addEventListener('keydown', this.callAudioUnlockHandler);
+      window.addEventListener('touchstart', this.callAudioUnlockHandler, {
+        passive: true,
+      });
+    },
+    unregisterCallAudioUnlock() {
+      if (!this.callAudioUnlockHandler) return;
+
+      window.removeEventListener('pointerdown', this.callAudioUnlockHandler);
+      window.removeEventListener('keydown', this.callAudioUnlockHandler);
+      window.removeEventListener('touchstart', this.callAudioUnlockHandler);
+      this.callAudioUnlockHandler = null;
+    },
+  },
 };
 </script>
 
@@ -41,14 +280,15 @@ export default {
         </span>
       </button>
 
-      <hub-button
+      <button
         v-if="canAccept(primaryCall)"
-        size="small"
+        type="button"
+        class="rounded-lg bg-blue-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
         :disabled="busy"
         @click="compactAccept"
       >
         Atender
-      </hub-button>
+      </button>
 
       <hub-button
         size="small"
@@ -191,14 +431,15 @@ export default {
               </div>
 
               <div class="mt-4 flex flex-wrap items-center gap-2">
-                <hub-button
+                <button
                   v-if="canAccept(primaryCall)"
-                  class="flex-1 justify-center"
+                  type="button"
+                  class="flex-1 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
                   :disabled="busy"
                   @click="action(primaryCall, 'accept')"
                 >
                   Atender
-                </hub-button>
+                </button>
 
                 <button
                   v-if="canReject(primaryCall)"
