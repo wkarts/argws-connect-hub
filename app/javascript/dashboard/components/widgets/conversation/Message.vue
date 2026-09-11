@@ -9,6 +9,7 @@ import BubbleLocation from './bubble/Location.vue';
 import BubbleMailHead from './bubble/MailHead.vue';
 import BubbleReplyTo from './bubble/ReplyTo.vue';
 import BubbleText from './bubble/Text.vue';
+import CallTimelineCard from './CallTimelineCard.vue';
 import ContextMenu from 'dashboard/modules/conversations/components/MessageContextMenu.vue';
 import InstagramStory from './bubble/InstagramStory.vue';
 import InstagramStoryReply from './bubble/InstagramStoryReply.vue';
@@ -23,7 +24,7 @@ import { getDayDifferenceFromNow } from 'shared/helpers/DateHelper';
 
 // stores and apis
 import { mapGetters } from 'vuex';
-  
+
 export default {
   components: {
     BubbleActions,
@@ -35,6 +36,7 @@ export default {
     BubbleMailHead,
     BubbleReplyTo,
     BubbleText,
+    CallTimelineCard,
     ContextMenu,
     InstagramStory,
     InstagramStoryReply,
@@ -94,7 +96,7 @@ export default {
       isFeatureEnabledonAccount: 'accounts/isFeatureEnabledonAccount',
       currentRole: 'getCurrentRole',
       accountId: 'getCurrentAccountId',
-    }),    
+    }),
     attachments() {
       // Here it is used to get sender and created_at for each attachment
       return this.data?.attachments.map(attachment => ({
@@ -113,7 +115,8 @@ export default {
         this.data.content ||
         this.isEmailContentType ||
         this.isUnsupported ||
-        this.isAnIntegrationMessage
+        this.isAnIntegrationMessage ||
+        this.isCallTimelineMessage
       );
     },
     emailMessageContent() {
@@ -202,9 +205,15 @@ export default {
           'hide_delete_message_for_agent'
         )
       );
-    },    
+    },
     contentAttributes() {
       return this.data.content_attributes || {};
+    },
+    callTimelineData() {
+      return this.contentAttributes.connect_api_call || null;
+    },
+    isCallTimelineMessage() {
+      return Boolean(this.callTimelineData?.call_id);
     },
     externalError() {
       return this.contentAttributes.external_error || '';
@@ -398,7 +407,6 @@ export default {
         const { file_type: fileType } = attachments[0];
         return fileType === type && !this.hasMediaLoadError;
       } catch (err) {
-
         console.error(err);
         return false;
       }
@@ -502,6 +510,11 @@ export default {
             {{ $t('CONVERSATION.UNSUPPORTED_MESSAGE') }}
           </template>
         </div>
+        <CallTimelineCard
+          v-else-if="isCallTimelineMessage"
+          :call="callTimelineData"
+          :message-created-at="createdAt"
+        />
         <BubbleText
           v-else-if="data.content"
           :message="message"
@@ -546,6 +559,7 @@ export default {
           </div>
         </div>
         <BubbleActions
+          v-if="!isCallTimelineMessage"
           :id="data.id"
           :sender="data.sender"
           :story-sender="storySender"

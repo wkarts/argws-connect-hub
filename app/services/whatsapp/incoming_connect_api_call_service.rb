@@ -129,6 +129,7 @@ class Whatsapp::IncomingConnectApiCallService
 
   def build_snapshot(data, call)
     status = canonical_status(data[:action], call)
+    terminal = TERMINAL_STATUSES.include?(status) || ActiveModel::Type::Boolean.new.cast(call[:terminal])
 
     {
       'call_id' => call[:callId].to_s,
@@ -136,7 +137,7 @@ class Whatsapp::IncomingConnectApiCallService
       'provider' => data[:provider].to_s,
       'direction' => normalized_direction(call),
       'status' => status,
-      'terminal' => TERMINAL_STATUSES.include?(status) || ActiveModel::Type::Boolean.new.cast(call[:terminal]),
+      'terminal' => terminal,
       'provider_state' => (call[:providerState].presence || call.dig(:stateData, :state).presence || call[:state].presence).to_s,
       'provider_reason' => (call[:providerReason].presence || call.dig(:stateData, :reason).presence || call.dig(:stateData, :endReason).presence).to_s,
       'is_video' => ActiveModel::Type::Boolean.new.cast(call[:isVideo]),
@@ -145,7 +146,11 @@ class Whatsapp::IncomingConnectApiCallService
       'peer_name' => call_display_name(call),
       'created_at' => call[:createdAt],
       'updated_at' => call[:updatedAt],
-      'received_at' => @params[:date_time].presence || Time.current.utc.iso8601
+      'started_at' => call_timestamp(call, :startedAt, :started_at, :startTime, :start_time, :createdAt, :created_at),
+      'answered_at' => call_timestamp(call, :answeredAt, :answered_at, :acceptedAt, :accepted_at, :connectedAt, :connected_at),
+      'ended_at' => terminal ? call_timestamp(call, :endedAt, :ended_at, :endTime, :end_time, :updatedAt, :updated_at) : nil,
+      'duration_seconds' => call_duration_seconds(call),
+      'received_at' => normalize_timestamp(@params[:date_time].presence || Time.current.utc.iso8601)
     }.compact
   end
 
@@ -179,26 +184,90 @@ class Whatsapp::IncomingConnectApiCallService
     [call[:name], call[:pushName], call[:callerPushName], call[:peerName]].map { |value| value.to_s.strip.presence }.compact.first
   end
 
+  def call_timestamp(call, *keys)
+    value = keys.lazy.map { |key| call[key] }.find(&:present?)
+    normalize_timestamp(value)
+  end
+
+  def normalize_timestamp(value)
+    return if value.blank?
+
+    numeric = Float(value, exception: false)
+    if numeric
+      seconds = numeric > 100_000_000_000 ? numeric / 1000.0 : numeric
+      return Time.at(seconds).utc.iso8601(3)
+    end
+
+    parsed = Time.zone.parse(value.to_s)
+    parsed&.utc&.iso8601(3)
+  rescue ArgumentError, RangeError
+    nil
+  end
+
+  def call_duration_seconds(call)
+    milliseconds = Float(call[:durationMs].presence || call[:duration_ms], exception: false)
+    return (milliseconds / 1000.0).round if milliseconds && milliseconds >= 0
+
+    seconds = Float(call[:durationSeconds].presence || call[:duration_seconds].presence || call[:duration], exception: false)
+    return seconds.round if seconds && seconds >= 0
+
+    nil
+  end
+
+  def enrich_timing(snapshot)
+    enriched = snapshot.deep_stringify_keys
+    status = enriched['status'].to_s
+    terminal = ActiveModel::Type::Boolean.new.cast(enriched['terminal']) || TERMINAL_STATUSES.include?(status)
+
+    enriched['started_at'] ||= normalize_timestamp(enriched['created_at']) || enriched['received_at']
+    if status == 'answered' && enriched['answered_at'].blank?
+      enriched['answered_at'] = normalize_timestamp(enriched['updated_at']) || enriched['received_at']
+    end
+    if terminal && enriched['ended_at'].blank?
+      enriched['ended_at'] = normalize_timestamp(enriched['updated_at']) || enriched['received_at']
+    end
+
+    if enriched['duration_seconds'].blank? && enriched['answered_at'].present? && enriched['ended_at'].present?
+      answered_at = parse_timestamp(enriched['answered_at'])
+      ended_at = parse_timestamp(enriched['ended_at'])
+      if answered_at && ended_at && ended_at >= answered_at
+        enriched['duration_seconds'] = (ended_at - answered_at).round
+      end
+    end
+
+    enriched.compact
+  end
+
+  def parse_timestamp(value)
+    return if value.blank?
+
+    Time.zone.parse(value.to_s)
+  rescue ArgumentError, TypeError
+    nil
+  end
+
   def upsert_timeline_message(conversation, existing, snapshot)
     if existing.present?
       current = existing.content_attributes.to_h.deep_stringify_keys.fetch('connect_api_call', {})
       return if stale_snapshot?(current, snapshot)
 
+      merged_snapshot = enrich_timing(current.merge(snapshot))
       existing.update!(
-        content: timeline_content(snapshot),
-        content_attributes: existing.content_attributes.to_h.deep_stringify_keys.merge('connect_api_call' => current.merge(snapshot))
+        content: timeline_content(merged_snapshot),
+        content_attributes: existing.content_attributes.to_h.deep_stringify_keys.merge('connect_api_call' => merged_snapshot)
       )
       return existing
     end
 
+    enriched_snapshot = enrich_timing(snapshot)
     conversation.messages.create!(
       account_id: conversation.account_id,
       inbox_id: conversation.inbox_id,
       message_type: :activity,
       status: :sent,
-      source_id: source_id(snapshot['call_id']),
-      content: timeline_content(snapshot),
-      content_attributes: { 'connect_api_call' => snapshot }
+      source_id: source_id(enriched_snapshot['call_id']),
+      content: timeline_content(enriched_snapshot),
+      content_attributes: { 'connect_api_call' => enriched_snapshot }
     )
   rescue ActiveRecord::RecordNotUnique
     retry_message = timeline_message(snapshot['call_id'])

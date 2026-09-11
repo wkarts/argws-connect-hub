@@ -48,8 +48,22 @@ class ActionCableConnector extends BaseActionCableConnector {
     return this.app.$store.getters.getCurrentAccountId === data.account_id;
   };
 
+  isCallTimelineMessage = data => {
+    return Boolean(data?.content_attributes?.connect_api_call?.call_id);
+  };
+
+  notifyCallTimelineUpdated = data => {
+    if (!this.isCallTimelineMessage(data)) return;
+
+    emitter.emit(BUS_EVENTS.CALL_TIMELINE_UPDATED, {
+      conversationId: data.conversation_id,
+      call: data.content_attributes.connect_api_call,
+    });
+  };
+
   onMessageUpdated = data => {
     this.app.$store.dispatch('updateMessage', data);
+    this.notifyCallTimelineUpdated(data);
   };
 
   onPresenceUpdate = data => {
@@ -96,6 +110,7 @@ class ActionCableConnector extends BaseActionCableConnector {
     } = data;
     DashboardAudioNotificationHelper.onNewMessage(data);
     this.app.$store.dispatch('addMessage', data);
+    this.notifyCallTimelineUpdated(data);
     if (lastActivityAt && conversationId) {
       this.app.$store.dispatch('updateConversationLastActivity', {
         lastActivityAt,
@@ -153,7 +168,8 @@ class ActionCableConnector extends BaseActionCableConnector {
 
   initTimer = ({ conversation, user }) => {
     const conversationId = conversation.id;
-    // Turn off typing automatically after 30 seconds
+
+    this.clearTimer(conversationId);
     this.CancelTyping[conversationId] = setTimeout(() => {
       this.onTypingOff({ conversation, user });
     }, 30000);

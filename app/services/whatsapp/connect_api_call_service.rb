@@ -15,8 +15,8 @@ class Whatsapp::ConnectApiCallService
     provider = current_provider
     {
       provider: provider,
-      calls: provider == CALL_PROVIDER,
-      voice: provider == CALL_PROVIDER,
+      calls: calls_supported?,
+      voice: calls_supported? && voice_supported?,
       video: false
     }
   end
@@ -31,7 +31,7 @@ class Whatsapp::ConnectApiCallService
 
   def offer(number:, is_video: false, call_duration: nil)
     ensure_call_provider!
-    raise ConnectApi::Error, 'Chamadas de vídeo ainda não estão disponíveis neste provider.' if ActiveModel::Type::Boolean.new.cast(is_video)
+    raise ConnectApi::Error, 'Chamadas de vídeo ainda não estão disponíveis nesta conexão.' if ActiveModel::Type::Boolean.new.cast(is_video)
 
     digits = number.to_s.gsub(/\D/, '')
     raise ConnectApi::Error, 'O contato não possui telefone válido para chamada.' if digits.blank?
@@ -85,12 +85,26 @@ class Whatsapp::ConnectApiCallService
 
   private
 
+  def provider_config
+    @provider_config ||= @channel.provider_config.to_h.deep_stringify_keys
+  end
+
+  def calls_supported?
+    ActiveModel::Type::Boolean.new.cast(provider_config['calls_supported'])
+  end
+
+  def voice_supported?
+    return calls_supported? if provider_config['voice_supported'].nil?
+
+    ActiveModel::Type::Boolean.new.cast(provider_config['voice_supported'])
+  end
+
   def instance_name
-    @instance_name ||= @channel.provider_config.to_h['instance_name'].to_s.presence || raise(ConnectApi::Error, 'Instância Connect|API não provisionada.')
+    @instance_name ||= provider_config['instance_name'].to_s.presence || raise(ConnectApi::Error, 'Instância de comunicação não provisionada.')
   end
 
   def current_provider
-    configured = @channel.provider_config.to_h['connect_api_provider'].to_s
+    configured = provider_config['connect_api_provider'].to_s
     return configured if configured.present?
 
     instance = @client.fetch_instances.find do |item|
@@ -99,13 +113,13 @@ class Whatsapp::ConnectApiCallService
     end
     (instance&.dig('integration') || instance&.dig('provider') || 'WHATSAPP-BAILEYS').to_s
   rescue ConnectApi::Error
-    @channel.provider_config.to_h['connect_api_provider'].to_s.presence || 'WHATSAPP-BAILEYS'
+    provider_config['connect_api_provider'].to_s.presence || 'WHATSAPP-BAILEYS'
   end
 
   def ensure_call_provider!
-    return if current_provider == CALL_PROVIDER
+    return if calls_supported? && current_provider == CALL_PROVIDER
 
-    raise ConnectApi::Error, 'Esta instância usa um provider sem chamadas. Migre-a para WHATSAPP-ZAPO no HUB Admin ou crie a caixa usando ZAPO.'
+    raise ConnectApi::Error, 'Chamadas não estão habilitadas para esta conexão.'
   end
 
   def ensure_call_for_contact!(call_id)
@@ -139,7 +153,7 @@ class Whatsapp::ConnectApiCallService
     value = @client.base_url if value.blank?
     return value if value.start_with?('http://', 'https://')
 
-    raise ConnectApi::Error, 'CONNECT_API_PUBLIC_URL deve apontar para a URL HTTPS pública da Connect|API para habilitar áudio no navegador.'
+    raise ConnectApi::Error, 'CONNECT_API_PUBLIC_URL deve apontar para a URL HTTPS pública do serviço para habilitar áudio no navegador.'
   end
 
   def websocket_url(public_url, media_path)
