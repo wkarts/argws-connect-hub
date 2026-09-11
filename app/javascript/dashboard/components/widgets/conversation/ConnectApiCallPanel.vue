@@ -1,6 +1,7 @@
 <script>
 import connectApiCalls from 'dashboard/api/connectApiCalls';
 import { ConnectApiVoiceMediaSession } from 'dashboard/services/connectApiVoiceMedia';
+import { BUS_EVENTS } from 'shared/constants/busEvents';
 
 const ENDED_STATES = [
   'ended',
@@ -18,6 +19,7 @@ const ENDED_STATES = [
 ];
 const CALL_POLL_INTERVAL = 3000;
 const CALL_CLOCK_INTERVAL = 1000;
+const REALTIME_REFRESH_DELAY = 50;
 
 export default {
   props: {
@@ -42,6 +44,7 @@ export default {
       feedback: '',
       pollTimer: null,
       clockTimer: null,
+      realtimeRefreshTimer: null,
       clockNow: Date.now(),
       callTimerStarts: {},
       voiceSession: null,
@@ -54,12 +57,17 @@ export default {
     providerConfig() {
       return this.inbox.provider_config || {};
     },
-    visible() {
+    callsSupported() {
+      const value = this.providerConfig.calls_supported;
       return (
-        this.inbox.provider === 'connectapi' &&
-        (this.providerConfig.calls_supported ||
-          this.providerConfig.connect_api_provider === 'WHATSAPP-ZAPO')
+        value === true ||
+        value === 1 ||
+        String(value).toLowerCase() === 'true' ||
+        String(value) === '1'
       );
+    },
+    visible() {
+      return this.inbox.provider === 'connectapi' && this.callsSupported;
     },
     activeCalls() {
       return this.calls.filter(call => this.isActive(call));
@@ -110,6 +118,7 @@ export default {
 
       this.stopPolling();
       this.stopClock();
+      this.clearRealtimeRefresh();
       this.closeMedia();
       this.open = false;
       this.minimized = false;
@@ -118,6 +127,10 @@ export default {
     },
   },
   mounted() {
+    this.$emitter.on(
+      BUS_EVENTS.CALL_TIMELINE_UPDATED,
+      this.onCallTimelineUpdated
+    );
     if (this.visible) {
       this.loadCalls(true);
       this.startPolling();
@@ -125,8 +138,13 @@ export default {
     }
   },
   beforeDestroy() {
+    this.$emitter.off(
+      BUS_EVENTS.CALL_TIMELINE_UPDATED,
+      this.onCallTimelineUpdated
+    );
     this.stopPolling();
     this.stopClock();
+    this.clearRealtimeRefresh();
     this.closeMedia();
   },
   methods: {
@@ -176,9 +194,28 @@ export default {
       if (this.clockTimer) window.clearInterval(this.clockTimer);
       this.clockTimer = null;
     },
+    clearRealtimeRefresh() {
+      if (this.realtimeRefreshTimer) {
+        window.clearTimeout(this.realtimeRefreshTimer);
+      }
+      this.realtimeRefreshTimer = null;
+    },
+    onCallTimelineUpdated({ conversationId } = {}) {
+      if (!this.visible) return;
+      if (String(conversationId) !== String(this.conversationId)) return;
+
+      this.clearRealtimeRefresh();
+      this.realtimeRefreshTimer = window.setTimeout(() => {
+        this.realtimeRefreshTimer = null;
+        this.loadCalls(true);
+      }, REALTIME_REFRESH_DELAY);
+    },
     isActive(call) {
       const state = String(call.state || call.status || '').toLowerCase();
-      if (call.terminal === true || String(call.terminal).toLowerCase() === 'true') {
+      if (
+        call.terminal === true ||
+        String(call.terminal).toLowerCase() === 'true'
+      ) {
         return false;
       }
       return !ENDED_STATES.some(
@@ -331,6 +368,10 @@ export default {
       } finally {
         this.busy = false;
       }
+    },
+    async compactAccept() {
+      if (!this.primaryCall || !this.canAccept(this.primaryCall)) return;
+      await this.action(this.primaryCall, 'accept');
     },
     async compactEnd() {
       if (!this.primaryCall) return;
@@ -520,6 +561,16 @@ export default {
         @click="restore"
       >
         Exibir
+      </button>
+      <button
+        v-if="canAccept(primaryCall)"
+        type="button"
+        class="rounded-md bg-emerald-600 px-2 py-1 text-xs font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+        :disabled="busy"
+        title="Atender chamada"
+        @click="compactAccept"
+      >
+        Atender
       </button>
       <button
         type="button"
