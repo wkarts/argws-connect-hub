@@ -27,6 +27,7 @@ class Whatsapp::ConnectApiWebhookSetupService
     sync_instance_metadata!
     enable_meta_compatibility!
     verify_meta_compatibility!
+    configure_native_call_webhook!
 
     if config['disconnect']
       disconnect!
@@ -152,6 +153,58 @@ class Whatsapp::ConnectApiWebhookSetupService
     config['meta_compatible_verified_at'] = Time.current.utc.iso8601
     config['communication_ready'] = true
     config['last_error'] = nil
+    persist_config!
+  end
+
+  def configure_native_call_webhook!
+    unless config['calls_supported']
+      config['native_call_webhook_enabled'] = false
+      return
+    end
+
+    webhook_url = expected_webhook_url
+    payload = {
+      webhook: {
+        enabled: true,
+        url: webhook_url,
+        headers: { 'X-Connect-Hub-Token' => config['api_key'] },
+        webhookByEvents: false,
+        webhookBase64: false,
+        events: ['call']
+      }
+    }
+
+    response = HTTParty.post(
+      "#{base_url}/webhook/set/#{CGI.escape(config['instance_name'])}",
+      headers: instance_headers,
+      body: payload.to_json,
+      timeout: request_timeout
+    )
+    raise response_body(response) unless response.success?
+
+    verify_native_call_webhook!(webhook_url)
+  end
+
+  def verify_native_call_webhook!(expected_url)
+    response = HTTParty.get(
+      "#{base_url}/webhook/find/#{CGI.escape(config['instance_name'])}",
+      headers: instance_headers,
+      timeout: request_timeout
+    )
+    raise response_body(response) unless response.success?
+
+    data = response.parsed_response.to_h.deep_stringify_keys
+    data = data['webhook'].to_h.deep_stringify_keys if data['webhook'].is_a?(Hash)
+    actual_url = data['url'].to_s.sub(%r{/+$}, '')
+    events = Array(data['events']).map(&:to_s)
+
+    unless ActiveModel::Type::Boolean.new.cast(data['enabled']) && actual_url == expected_url.sub(%r{/+$}, '') && events.include?('call')
+      raise 'Connect|API native call webhook was not persisted correctly'
+    end
+
+    config['native_call_webhook_enabled'] = true
+    config['native_call_webhook_url'] = expected_url
+    config['native_call_webhook_verified_at'] = Time.current.utc.iso8601
     persist_config!
   end
 
