@@ -55,7 +55,6 @@ export default {
     },
     async setEnabled(template, event) {
       const enabled = event.target.checked;
-      // Keep the persisted state on screen until the server confirms the change.
       event.target.checked = template.hub_opening_enabled === true;
       if (this.savingKey || this.loading) return;
       const inboxId = this.inbox.id;
@@ -76,13 +75,9 @@ export default {
         this.savingKey = null;
       }
     },
-    remoteLabel(template) {
-      if (!template.hub_remote_present) return 'Não disponível na Connect|API';
-      if (template.source === 'connectapi_local') {
-        return template.hub_remote_available ? 'Modelo local disponível — não aprovado pela Meta' : 'Modelo local indisponível';
-      }
-      if (!template.hub_remote_available) return template.status || 'Indisponível';
-      return template.status || 'Disponível';
+    categoryLabel(template) {
+      if (template.category === 'OPENING') return 'Abertura de conversa';
+      return template.category || 'Abertura de conversa';
     },
   },
 };
@@ -92,13 +87,13 @@ export default {
   <section class="my-6 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900" aria-labelledby="opening-templates-title">
     <h4 id="opening-templates-title" class="mb-2 text-base font-semibold text-slate-900 dark:text-slate-100">Templates de abertura</h4>
     <p class="mb-2 text-sm text-slate-600 dark:text-slate-300">
-      Templates reais importados da Connect|API para esta caixa. Na primeira descoberta, somente o nome exato <strong>hello</strong> é habilitado. Suas escolhas são preservadas nas próximas reconciliações.
+      Templates importados da Connect|API para esta caixa. Na primeira descoberta, somente o nome exato <strong>hello</strong> é habilitado. Suas escolhas são preservadas nas próximas reconciliações.
     </p>
     <p class="mb-4 text-xs text-slate-500 dark:text-slate-400">Última sincronização: {{ lastSyncLabel }}</p>
     <p v-if="loading" class="text-sm text-slate-500" role="status">Carregando templates...</p>
     <p v-else-if="error" class="text-sm text-red-700 dark:text-red-300" role="alert">{{ error }}</p>
     <p v-else-if="!templates.length" class="mb-0 text-sm text-slate-600 dark:text-slate-300">
-      Nenhum template foi disponibilizado para esta caixa. Use Reconciliar agora para consultar a Connect|API. Para ZAPO/Baileys, cadastre os modelos na instância da Connect|API em Modelos de mensagem. O HUB importa somente os cadastros reais.
+      Nenhum template foi disponibilizado para esta caixa. Use Reconciliar agora para consultar a Connect|API.
     </p>
     <div v-else class="overflow-x-auto">
       <table class="w-full text-left text-sm">
@@ -106,7 +101,7 @@ export default {
           <tr>
             <th class="px-2 py-3" scope="col">Template</th>
             <th class="px-2 py-3" scope="col">Idioma</th>
-            <th class="px-2 py-3" scope="col">Categoria / Status</th>
+            <th class="px-2 py-3" scope="col">Categoria</th>
             <th class="px-2 py-3 text-right" scope="col">Liberado para abertura</th>
           </tr>
         </thead>
@@ -114,10 +109,7 @@ export default {
           <tr v-for="template in templates" :key="key(template)" class="border-t border-slate-100 dark:border-slate-800">
             <td class="px-2 py-3 font-medium text-slate-900 dark:text-slate-100">{{ template.name }}</td>
             <td class="px-2 py-3">{{ template.language }}</td>
-            <td class="px-2 py-3">
-              <div>{{ template.category || 'Não informada' }}</div>
-              <div class="mt-1 text-xs" :class="template.hub_remote_available ? 'text-emerald-700 dark:text-emerald-300' : 'text-amber-700 dark:text-amber-300'">{{ remoteLabel(template) }}</div>
-            </td>
+            <td class="px-2 py-3">{{ categoryLabel(template) }}</td>
             <td class="px-2 py-3 text-right">
               <label class="relative inline-flex cursor-pointer items-center">
                 <input
@@ -139,7 +131,7 @@ export default {
         </tbody>
       </table>
       <p class="mb-0 mt-3 text-xs text-slate-500 dark:text-slate-400">
-        Um modelo liberado só aparece em Nova conversa enquanto estiver disponível. Modelos locais são executados como texto pela Connect|API; a aprovação Meta se aplica somente aos templates oficiais.
+        Um template liberado aparece em Nova conversa enquanto estiver disponível na Connect|API.
       </p>
     </div>
   </section>
