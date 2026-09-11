@@ -3,14 +3,14 @@ export const isLocalTemplate = template =>
 
 export const localTemplateAvailable = template =>
   isLocalTemplate(template) &&
-  template.status === 'LOCAL_READY' &&
+  template.status === 'APPROVED' &&
+  template.approved === true &&
   template.execution === 'rendered_text' &&
-  template.meta_approved === false &&
   template.enabled === true &&
   template.available === true &&
   Number.isSafeInteger(template.version) && template.version > 0;
 
-// Static text header/footer are part of the actual delivered local model.
+// Static text header/footer are part of the actual delivered template.
 export const localTemplateText = template =>
   ['HEADER', 'BODY', 'FOOTER']
     .map(type => template.components?.find(component => component.type === type)?.text)
