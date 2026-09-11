@@ -60,6 +60,7 @@ export default {
       authMode: 'qrcode',
       connectApiProvider: 'WHATSAPP-BAILEYS',
       voipMaxConcurrentCalls: null,
+      incomingCallRingEnabled: true,
     };
   },
   computed: { ...mapGetters({ uiFlags: 'inboxes/getUIFlags' }) },
@@ -75,6 +76,7 @@ export default {
         ignore_group_messages: true,
         ignore_history_messages: true,
         send_agent_name: true,
+        incoming_call_ring_enabled: this.incomingCallRingEnabled,
       };
       if (
         this.connectApiProvider === 'WHATSAPP-ZAPO' &&
