@@ -28,8 +28,12 @@ RSpec.describe Whatsapp::ConnectApiOpeningMessageValidator do
 
   it 'validates before MessageBuilder saves a free-text opener' do
     user = create(:user, account: channel.account)
-    expect { Messages::MessageBuilder.new(user, conversation, { content: 'Free text', message_type: 'outgoing' }).perform }
-      .to raise_error(ActiveRecord::RecordInvalid, /template habilitado/)
+    expect do
+      Messages::MessageBuilder.new(user, conversation, { content: 'Free text', message_type: 'outgoing' }).perform
+    end.to raise_error(ActiveRecord::RecordInvalid) do |error|
+      expect(error.record.errors[:base]).to include('Escolha um template habilitado e disponível nesta caixa para iniciar a conversa.')
+      expect(error.record).not_to be_persisted
+    end
     expect(conversation.messages.outgoing.count).to eq(0)
   end
 
