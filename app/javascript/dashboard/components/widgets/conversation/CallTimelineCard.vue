@@ -31,6 +31,11 @@ export default {
       if (this.call.direction === 'outgoing') return 'Efetuada';
       return 'Chamada';
     },
+    alignmentClasses() {
+      if (this.call.direction === 'incoming') return 'mr-auto ml-0';
+      if (this.call.direction === 'outgoing') return 'ml-auto mr-0';
+      return 'mx-auto';
+    },
     statusLabel() {
       const labels = {
         ringing: this.call.direction === 'incoming' ? 'Tocando' : 'Chamando',
@@ -139,8 +144,8 @@ export default {
 
 <template>
   <div
-    class="call-timeline-card mx-auto my-2 w-full max-w-[430px] overflow-hidden rounded-xl border border-slate-200 border-l-4 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900"
-    :class="accentClasses"
+    class="call-timeline-card my-2 w-full max-w-[430px] overflow-hidden rounded-xl border border-slate-200 border-l-4 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900"
+    :class="[accentClasses, alignmentClasses]"
   >
     <div class="flex items-center gap-3 px-3.5 py-3">
       <div class="relative shrink-0">
