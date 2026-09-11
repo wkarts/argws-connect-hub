@@ -72,7 +72,8 @@ class Api::V1::Accounts::Conversations::ConnectApiCallsController < Api::V1::Acc
   def call_service
     @call_service ||= Whatsapp::ConnectApiCallService.new(
       whatsapp_channel: @whatsapp_channel,
-      contact_phone: @conversation.contact.phone_number
+      contact_phone: @conversation.contact.phone_number,
+      conversation: @conversation
     )
   end
 
