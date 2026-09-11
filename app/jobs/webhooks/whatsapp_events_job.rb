@@ -10,7 +10,7 @@ class Webhooks::WhatsappEventsJob < ApplicationJob
     when 'whatsapp_cloud'
       Whatsapp::IncomingMessageWhatsappCloudService.new(inbox: channel.inbox, params: params).perform
     when 'connectapi'
-      Whatsapp::IncomingMessageConnectApiService.new(inbox: channel.inbox, params: params).perform
+      Whatsapp::IncomingMessageConnectApiStatusAwareService.new(inbox: channel.inbox, params: params).perform
     else
       Whatsapp::IncomingMessageService.new(inbox: channel.inbox, params: params).perform
     end

@@ -81,6 +81,8 @@ jobs:
         run: >-
           bundle exec rspec
           spec/services/whatsapp/incoming_message_connect_api_service_spec.rb
+          spec/services/whatsapp/incoming_message_connect_api_status_aware_service_spec.rb
+          spec/services/whatsapp/incoming_connect_api_call_service_spec.rb
           spec/services/whatsapp/providers/connect_api_service_spec.rb
           spec/services/connect_api/instance_namespace_spec.rb
           spec/jobs/channels/whatsapp/connect_api_profile_picture_job_spec.rb
