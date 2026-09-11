@@ -170,7 +170,7 @@ class Whatsapp::ConnectApiWebhookSetupService
         headers: { 'X-Connect-Hub-Token' => config['api_key'] },
         byEvents: false,
         base64: false,
-        events: ['call']
+        events: ['CALL']
       }
     }
 
@@ -196,9 +196,9 @@ class Whatsapp::ConnectApiWebhookSetupService
     data = response.parsed_response.to_h.deep_stringify_keys
     data = data['webhook'].to_h.deep_stringify_keys if data['webhook'].is_a?(Hash)
     actual_url = data['url'].to_s.sub(%r{/+$}, '')
-    events = Array(data['events']).map(&:to_s)
+    events = Array(data['events']).map { |event| event.to_s.upcase }
 
-    unless ActiveModel::Type::Boolean.new.cast(data['enabled']) && actual_url == expected_url.sub(%r{/+$}, '') && events.include?('call')
+    unless ActiveModel::Type::Boolean.new.cast(data['enabled']) && actual_url == expected_url.sub(%r{/+$}, '') && events.include?('CALL')
       raise 'Connect|API native call webhook was not persisted correctly'
     end
 
@@ -358,11 +358,21 @@ class Whatsapp::ConnectApiWebhookSetupService
 
   def response_body(response)
     parsed = response.parsed_response
+
     if parsed.is_a?(Hash)
       parsed = parsed.deep_stringify_keys
-      return parsed.dig('error', 'message').to_s if parsed.dig('error', 'message').present?
+      error = parsed['error']
+
+      if error.is_a?(Hash)
+        message = error.deep_stringify_keys['message'].to_s.presence
+        return message if message.present?
+      elsif error.present?
+        return error.to_s
+      end
+
       return parsed['message'].to_s if parsed['message'].present?
-      return parsed['error'].to_s if parsed['error'].present?
+    elsif parsed.present?
+      return parsed.to_s
     end
 
     response.body.to_s.presence || "HTTP #{response.code}"
