@@ -13,9 +13,18 @@ const contactPath = `${base}routes/dashboard/conversation/contact/`;
 const callPath = `${base}components/widgets/conversation/ConnectApiCallPanelPolished.vue`;
 const script = text => text.match(/<script[^>]*>([\s\S]*?)<\/script>/)?.[1] ?? text;
 const noImports = text => text.replace(/^import[\s\S]*?from ['"][^'"]+['"];\s*/gm, '');
+// The SFC harness removes imports. Load the actual pure helper into its VM,
+// rather than stubbing readiness or bypassing the picker assertions.
+const templateHelpers = {};
+vm.runInNewContext(
+  read(`${base}components/widgets/conversation/WhatsappTemplates/templateAvailability.js`)
+    .replace(/export const /g, 'globalThis.'),
+  templateHelpers,
+  { filename: 'templateAvailability.js' }
+);
 function component(path, globals = {}) {
   const code = noImports(script(read(path))).replace('export default', 'globalThis.component =');
-  const context = { console, mapGetters: () => ({}), ...globals };
+  const context = { console, mapGetters: () => ({}), ...templateHelpers, ...globals };
   vm.runInNewContext(code, context, { filename: path });
   return context.component;
 }
@@ -60,6 +69,14 @@ test('picker filters pending/rejected templates and preserves absent statuses on
   assert.deepEqual(names(picker.computed.whatsAppTemplateMessages.call(self)), ['hello', 'nostatus']);
   self.isConnectApi = false;
   assert.deepEqual(names(picker.computed.whatsAppTemplateMessages.call(self)), ['hello']);
+});
+test('opening harness executes the real readiness helper, including rejection of disabled local models', () => {
+  assert.equal(typeof templateHelpers.isTemplateReady, 'function');
+  const local = { ...template(), id: 'local_fixture', origin: 'CONNECT_LOCAL', revision: 1, status: 'LOCAL_READY', meta_approved: false, enabled: true, available: true };
+  assert.equal(templateHelpers.isTemplateReady(local, true), true);
+  assert.equal(templateHelpers.isTemplateReady(local, false), false);
+  assert.equal(templateHelpers.isTemplateReady({ ...local, enabled: false }, true), false);
+  assert.equal(templateHelpers.isTemplateReady({ ...local, status: 'APPROVED' }, true), false);
 });
 test('changing inbox clears a selected opening template', () => {
   const wrapper = component(`${contactPath}WhatsappTemplates.vue`, { TemplatesPicker: {}, TemplateParser: {} });
