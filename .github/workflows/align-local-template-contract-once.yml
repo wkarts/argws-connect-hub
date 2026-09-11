@@ -1,0 +1,79 @@
+name: Align local template consumer with API95 (one time)
+on:
+  push:
+    branches: [fix/connect-local-template-support]
+    paths: [.github/workflows/align-local-template-contract-once.yml]
+permissions:
+  contents: write
+concurrency:
+  group: align-local-template-contract-once
+  cancel-in-progress: false
+jobs:
+  align:
+    if: github.repository == 'wkarts/argws-connect-hub' && github.ref == 'refs/heads/fix/connect-local-template-support'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          ref: ${{ github.sha }}
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3.10'
+          bundler-cache: false
+      - name: Validate and align only unmerged template implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -z "$(git status --porcelain)"
+          python3 - <<'PY'
+          import base64, hashlib, lzma, pathlib, re, subprocess
+          def git(*args):
+              return subprocess.check_output(['git', *args])
+          base = '1439d0ab93cdb77de098ae4e7461e8583d2f2747'
+          expected = '6f2829d523634e8fd2fa5be0782ba3cb5e83b4b1'
+          git('merge-base', '--is-ancestor', expected, 'HEAD')
+          folder = pathlib.Path('scripts/.local-template-align')
+          encoded = ''.join((folder / f'part-{i:02d}.b64').read_text().strip() for i in (1, 2))
+          patch = lzma.decompress(base64.b64decode(encoded, validate=True))
+          assert len(patch) == 44642
+          assert hashlib.sha256(patch).hexdigest() == 'f0fa1a2c0f49c657db30a62e2e5329c130087900ed4cf91909da8c851caa84db'
+          pairs = re.findall(rb'^diff --git a/(\S+) b/(\S+)$', patch, re.M)
+          assert len(pairs) == 14
+          paths = []
+          for left, right in pairs:
+              path = right.decode()
+              assert left == right and not path.startswith('/') and '..' not in pathlib.PurePosixPath(path).parts
+              assert path.startswith(('app/', 'docs/', 'scripts/test-', 'spec/'))
+              paths.append(path)
+          obsolete = [
+              'app/javascript/dashboard/components/widgets/conversation/WhatsappTemplates/templateAvailability.js',
+              'app/services/connect_api/local_template_delivery.rb',
+              'test/connect_api_local_templates_test.rb',
+              'test/connect_api_template_ui_test.mjs',
+          ]
+          assert not git('diff', expected, 'HEAD', '--', *paths, *obsolete), 'Concurrent source modification; manual reconciliation required'
+          for path in paths:
+              existed = subprocess.run(['git', 'cat-file', '-e', f'{base}:{path}'], capture_output=True).returncode == 0
+              if existed:
+                  git('restore', '--source', base, '--staged', '--worktree', '--', path)
+              else:
+                  assert not pathlib.Path(path).exists(), f'Unexpected new path: {path}'
+          for path in obsolete:
+              assert subprocess.run(['git', 'cat-file', '-e', f'{base}:{path}'], capture_output=True).returncode != 0
+              git('rm', '--', path)
+          subprocess.run(['git', 'apply', '--check', '--index', '-'], input=patch, check=True)
+          subprocess.run(['git', 'apply', '--index', '-'], input=patch, check=True)
+          PY
+          ruby scripts/test-connect-api-opening-templates.rb
+          node --test scripts/test-connect-api-opening-templates.mjs
+          ruby scripts/test-connect-api-local-templates.rb
+          node --test scripts/test-connect-api-local-templates.mjs
+          git diff --cached --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'fix(connect-api): align template consumer with persisted API95 catalog'
+          git push origin HEAD:refs/heads/fix/connect-local-template-support
+          echo "Aligned commit: $(git rev-parse HEAD)" >> "$GITHUB_STEP_SUMMARY"
+          echo 'API owns all template definitions; HUB only consumes. No HUB migration or production deployment.' >> "$GITHUB_STEP_SUMMARY"
