@@ -17,8 +17,8 @@ class Campaigns::AudienceCampaignService
 
       stats[:eligible] += 1
       begin
-        result = driver.deliver(contact)
-        result.present? ? stats[:delivered] += 1 : stats[:failed] += 1
+        driver.deliver(contact)
+        stats[:delivered] += 1
       rescue StandardError => e
         stats[:failed] += 1
         Rails.logger.error(
@@ -28,7 +28,7 @@ class Campaigns::AudienceCampaignService
     end
 
     if stats[:eligible].positive? && stats[:delivered].zero? && stats[:failed].positive?
-      raise DeliveryError, "Campaign #{campaign.id} could not enqueue any eligible delivery"
+      raise DeliveryError, "Campaign #{campaign.id} could not dispatch any eligible delivery"
     end
 
     campaign.completed! if mark_completed
