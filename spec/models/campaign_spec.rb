@@ -24,7 +24,7 @@ RSpec.describe Campaign do
     end
   end
 
-  context 'when Inbox other then Website or Twilio SMS' do
+  context 'when Inbox other then Website or supported one-off channels' do
     before do
       stub_request(:post, /graph.facebook.com/)
     end
@@ -56,7 +56,7 @@ RSpec.describe Campaign do
     end
 
     it 'cant be triggered' do
-      expect(Twilio::OneoffSmsCampaignService).not_to receive(:new).with(campaign: campaign)
+      expect(Campaigns::OneoffCampaignService).not_to receive(:new).with(campaign: campaign)
       expect(campaign.trigger!).to be_nil
     end
   end
@@ -74,10 +74,10 @@ RSpec.describe Campaign do
         expect(campaign.scheduled_at.present?).to be true
       end
 
-      it 'calls twilio service on trigger!' do
-        sms_service = double
-        expect(Twilio::OneoffSmsCampaignService).to receive(:new).with(campaign: campaign).and_return(sms_service)
-        expect(sms_service).to receive(:perform)
+      it 'calls the polymorphic one-off service on trigger!' do
+        campaign_service = double
+        expect(Campaigns::OneoffCampaignService).to receive(:new).with(campaign: campaign).and_return(campaign_service)
+        expect(campaign_service).to receive(:perform)
         campaign.save!
         campaign.trigger!
       end
@@ -95,10 +95,66 @@ RSpec.describe Campaign do
         expect(campaign.scheduled_at.present?).to be true
       end
 
-      it 'calls sms service on trigger!' do
-        sms_service = double
-        expect(Sms::OneoffSmsCampaignService).to receive(:new).with(campaign: campaign).and_return(sms_service)
-        expect(sms_service).to receive(:perform)
+      it 'calls the polymorphic one-off service on trigger!' do
+        campaign_service = double
+        expect(Campaigns::OneoffCampaignService).to receive(:new).with(campaign: campaign).and_return(campaign_service)
+        expect(campaign_service).to receive(:perform)
+        campaign.save!
+        campaign.trigger!
+      end
+    end
+
+    context 'when WhatsApp campaign' do
+      let(:account) { create(:account) }
+      let!(:whatsapp_channel) do
+        create(
+          :channel_whatsapp,
+          account: account,
+          validate_provider_config: false,
+          sync_templates: false,
+          provider_config: {
+            'api_key' => 'test_key',
+            'instance_name' => 'campaign-instance'
+          }
+        )
+      end
+      let(:whatsapp_inbox) { whatsapp_channel.inbox }
+      let(:template_params) do
+        {
+          'name' => 'sample_shipping_confirmation',
+          'language' => 'en_US',
+          'processed_params' => { '1' => '3' }
+        }
+      end
+      let(:campaign) do
+        build(
+          :campaign,
+          inbox: whatsapp_inbox,
+          account: account,
+          message_attributes: { 'template_params' => template_params }
+        )
+      end
+
+      it 'saves as one-off and exposes template capabilities' do
+        campaign.save!
+
+        expect(campaign.reload.campaign_type).to eq 'one_off'
+        expect(campaign.scheduled_at).to be_present
+        expect(campaign.channel_capabilities).to include('template', 'variables')
+      end
+
+      it 'requires template params for a WhatsApp campaign' do
+        campaign.message_attributes = {}
+
+        expect(campaign).not_to be_valid
+        expect(campaign.errors[:message_attributes]).to include('template_params is required for WhatsApp campaigns')
+      end
+
+      it 'calls the polymorphic one-off service on trigger!' do
+        campaign_service = double
+        expect(Campaigns::OneoffCampaignService).to receive(:new).with(campaign: campaign).and_return(campaign_service)
+        expect(campaign_service).to receive(:perform)
+
         campaign.save!
         campaign.trigger!
       end
