@@ -1,5 +1,12 @@
 class Campaigns::CampaignConversationBuilder
-  pattr_initialize [:contact_inbox_id!, :campaign_display_id!, :conversation_additional_attributes, :custom_attributes]
+  pattr_initialize [
+    :contact_inbox_id!,
+    :campaign_display_id!,
+    :conversation_additional_attributes,
+    :custom_attributes,
+    :message_attributes,
+    { skip_existing_conversation: true }
+  ]
 
   def perform
     @contact_inbox = ContactInbox.find(@contact_inbox_id)
@@ -8,8 +15,9 @@ class Campaigns::CampaignConversationBuilder
     ActiveRecord::Base.transaction do
       @contact_inbox.lock!
 
-      # We won't send campaigns if a conversation is already present
-      raise 'Conversation alread present' if @contact_inbox.reload.conversations.present?
+      if skip_existing_conversation && @contact_inbox.reload.conversations.present?
+        raise 'Conversation already present'
+      end
 
       @conversation = ::Conversation.create!(conversation_params)
       Messages::MessageBuilder.new(@campaign.sender, @conversation, message_params).perform
@@ -23,10 +31,13 @@ class Campaigns::CampaignConversationBuilder
   private
 
   def message_params
-    ActionController::Parameters.new({
-                                       content: @campaign.message,
-                                       campaign_id: @campaign.id
-                                     })
+    attributes = (message_attributes || {}).to_h.deep_symbolize_keys
+    ActionController::Parameters.new(
+      {
+        content: @campaign.message,
+        campaign_id: @campaign.id
+      }.merge(attributes)
+    )
   end
 
   def conversation_params
