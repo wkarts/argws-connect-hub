@@ -20,7 +20,7 @@ describe Whatsapp::SendOnWhatsappService do
         channel = build(:channel_whatsapp, provider: 'default')
         channel.define_singleton_method(:sync_templates) { nil }
         channel.save!(validate: false)
-        create(:inbox, channel: channel, account: channel.account)
+        Inbox.create!(channel: channel, account: channel.account, name: 'Legacy 360dialog')
         channel
       end
       let!(:contact_inbox) { create(:contact_inbox, inbox: whatsapp_channel.inbox, source_id: '123456789') }
