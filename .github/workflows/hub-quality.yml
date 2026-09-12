@@ -88,6 +88,7 @@ jobs:
           bundle exec rspec
           spec/models/campaign_spec.rb
           spec/builders/campaigns/campaign_conversation_builder_spec.rb
+          spec/services/campaigns/oneoff_campaign_service_spec.rb
           spec/services/sms/oneoff_sms_campaign_service_spec.rb
           spec/services/twilio/oneoff_sms_campaign_service_spec.rb
       - name: Connect API WhatsApp regression specs
