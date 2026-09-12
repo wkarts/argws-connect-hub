@@ -4,6 +4,8 @@ class Campaigns::ChannelDriverResolver
   class UnsupportedChannel < StandardError; end
 
   DRIVERS = {
+    'Channel::Api' => Campaigns::ChannelDrivers::Api,
+    'Channel::Email' => Campaigns::ChannelDrivers::Email,
     'Channel::Sms' => Campaigns::ChannelDrivers::Sms,
     'Channel::TwilioSms' => Campaigns::ChannelDrivers::TwilioSms,
     'Channel::Whatsapp' => Campaigns::ChannelDrivers::Whatsapp
