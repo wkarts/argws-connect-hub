@@ -37,6 +37,27 @@ describe Campaigns::CampaignConversationBuilder do
       expect(message.additional_attributes['template_params']['language']).to eq('pt_BR')
     end
 
+    it 'reuses persisted campaign message attributes when delivery does not override them' do
+      campaign.update!(
+        message_attributes: {
+          'template_params' => {
+            'name' => 'persisted_template',
+            'language' => 'pt_BR',
+            'processed_params' => { '1' => 'Cliente' }
+          }
+        }
+      )
+
+      campaign_conversation = described_class.new(
+        contact_inbox_id: contact_inbox.id,
+        campaign_display_id: campaign.display_id
+      ).perform
+
+      message = campaign_conversation.messages.first
+      expect(message.additional_attributes.dig('template_params', 'name')).to eq('persisted_template')
+      expect(message.additional_attributes.dig('template_params', 'processed_params', '1')).to eq('Cliente')
+    end
+
     it 'will not create a conversation with campaign id if another conversation exists' do
       create(:conversation, contact_inbox_id: contact_inbox.id, inbox: inbox, account: account)
       campaign_conversation = described_class.new(

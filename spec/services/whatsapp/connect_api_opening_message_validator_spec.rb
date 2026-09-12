@@ -26,7 +26,7 @@ RSpec.describe Whatsapp::ConnectApiOpeningMessageValidator do
     expect { described_class.new(message).validate! }.to raise_error(described_class::Error)
   end
 
-  it 'validates before MessageBuilder saves a free-text opener' do
+  it 'validates before MessageBuilder saves a regular free-text opener' do
     user = create(:user, account: channel.account)
     expect do
       Messages::MessageBuilder.new(user, conversation, { content: 'Free text', message_type: 'outgoing' }).perform
@@ -35,6 +35,31 @@ RSpec.describe Whatsapp::ConnectApiOpeningMessageValidator do
       expect(error.record).not_to be_persisted
     end
     expect(conversation.messages.outgoing.count).to eq(0)
+  end
+
+  it 'allows a free-text opener when it belongs to a campaign' do
+    user = create(:user, account: channel.account)
+    campaign = create(
+      :campaign,
+      account: channel.account,
+      inbox: channel.inbox,
+      message: 'Campaign free text',
+      message_attributes: { 'delivery_mode' => 'freeform' }
+    )
+
+    built_message = Messages::MessageBuilder.new(
+      user,
+      conversation,
+      {
+        content: 'Campaign free text',
+        message_type: 'outgoing',
+        campaign_id: campaign.id
+      }
+    ).perform
+
+    expect(built_message).to be_persisted
+    expect(built_message.additional_attributes['campaign_id']).to eq(campaign.id)
+    expect(built_message.additional_attributes['template_params']).to be_blank
   end
 
   it 'revalidates persisted choices immediately before sending a queued template' do

@@ -9,6 +9,7 @@ class Whatsapp::ConnectApiOpeningMessageValidator
 
   def validate!
     return unless applicable?
+    return if campaign_freeform_message?
 
     params = @message.additional_attributes.to_h['template_params']
     opening = opening_message?
@@ -34,7 +35,6 @@ class Whatsapp::ConnectApiOpeningMessageValidator
   end
 
   def current_catalog
-    # Reload choices for queued/retried messages, not a cached association.
     Channel::Whatsapp.find(channel.id).opening_template_catalog
   end
 
@@ -44,11 +44,15 @@ class Whatsapp::ConnectApiOpeningMessageValidator
     @message.inbox.whatsapp? && channel.provider == 'connectapi'
   end
 
+  def campaign_freeform_message?
+    attributes = @message.additional_attributes.to_h
+    attributes['campaign_id'].present? && attributes['template_params'].blank?
+  end
+
   def opening_message?
     messages = @message.conversation.messages.where(private: false)
     messages = messages.where('id < ?', @message.id) if @message.persisted?
     incoming = messages.where(message_type: :incoming)
-    # A failed/queued opener does not authorize a free-text fallback.
     delivered = messages.where(message_type: :outgoing).where.not(source_id: [nil, '']).where.not(status: :failed)
     !incoming.or(delivered).exists?
   end

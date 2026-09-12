@@ -14,7 +14,6 @@ const buildInboxData = inboxParams => {
     formData.append(key, inboxProperties[key]);
   });
   const { selectedFeatureFlags, ...channelParams } = channel;
-  // selectedFeatureFlags needs to be empty when creating a website channel
   if (selectedFeatureFlags) {
     if (selectedFeatureFlags.length) {
       selectedFeatureFlags.forEach(featureFlag => {
@@ -28,6 +27,35 @@ const buildInboxData = inboxParams => {
     formData.append(`channel[${key}]`, channel[key]);
   });
   return formData;
+};
+
+const legacyOutboundCampaignInbox = inbox => {
+  if (
+    [
+      INBOX_TYPES.API,
+      INBOX_TYPES.EMAIL,
+      INBOX_TYPES.SMS,
+      INBOX_TYPES.WHATSAPP,
+    ].includes(inbox.channel_type)
+  ) {
+    return true;
+  }
+
+  return (
+    inbox.channel_type === INBOX_TYPES.TWILIO &&
+    ['sms', 'whatsapp'].includes(inbox.medium)
+  );
+};
+
+const supportsCampaignMode = (inbox, mode) => {
+  const modes = inbox?.campaign_capabilities?.modes;
+  if (Array.isArray(modes)) return modes.includes(mode);
+
+  if (mode === 'one_off') return legacyOutboundCampaignInbox(inbox);
+  if (mode === 'ongoing') {
+    return inbox.channel_type === INBOX_TYPES.WEB || legacyOutboundCampaignInbox(inbox);
+  }
+  return false;
 };
 
 export const state = {
@@ -64,7 +92,6 @@ export const getters = {
         ? inbox.opening_templates || []
         : whatsAppMessageTemplates || apiInboxMessageTemplates;
 
-    // filtering out the whatsapp templates with media
     if (messagesTemplates instanceof Array) {
       return messagesTemplates.filter(template => {
         return Array.isArray(template.components) && !template.components.some(
@@ -98,23 +125,10 @@ export const getters = {
     });
   },
   getCampaignInboxes($state) {
-    return $state.records.filter(item => {
-      if (
-        [
-          INBOX_TYPES.API,
-          INBOX_TYPES.EMAIL,
-          INBOX_TYPES.SMS,
-          INBOX_TYPES.WHATSAPP,
-        ].includes(item.channel_type)
-      ) {
-        return true;
-      }
-
-      return (
-        item.channel_type === INBOX_TYPES.TWILIO &&
-        ['sms', 'whatsapp'].includes(item.medium)
-      );
-    });
+    return $state.records.filter(item => supportsCampaignMode(item, 'one_off'));
+  },
+  getRecurringCampaignInboxes($state) {
+    return $state.records.filter(item => supportsCampaignMode(item, 'ongoing'));
   },
   getNewConversationInboxes($state) {
     return $state.records.filter(inbox => {
@@ -196,7 +210,6 @@ export const actions = {
       const response = await WebChannel.create(params);
       commit(types.default.ADD_INBOXES, response.data);
       commit(types.default.SET_INBOXES_UI_FLAG, { isCreating: false });
-      const { channel = {} } = params;
       return response.data;
     } catch (error) {
       const errorMessage = error?.response?.data?.message;

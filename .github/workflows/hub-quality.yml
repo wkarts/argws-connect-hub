@@ -30,6 +30,7 @@ jobs:
           node --test ./scripts/test-connect-api-opening-templates.mjs
           ruby ./scripts/test-connect-api-local-templates.rb
           node --test ./scripts/test-connect-api-local-templates.mjs
+          node --test ./scripts/test-campaign-channel-ui.mjs
       - name: Enterprise runtime contracts
         run: ruby ./scripts/check-enterprise-contracts.rb
 
@@ -88,7 +89,9 @@ jobs:
           bundle exec rspec
           spec/models/campaign_spec.rb
           spec/builders/campaigns/campaign_conversation_builder_spec.rb
+          spec/services/campaigns/audience_campaign_service_spec.rb
           spec/services/campaigns/oneoff_campaign_service_spec.rb
+          spec/services/campaigns/recurring_campaign_service_spec.rb
           spec/services/sms/oneoff_sms_campaign_service_spec.rb
           spec/services/twilio/oneoff_sms_campaign_service_spec.rb
       - name: Connect API WhatsApp regression specs
@@ -105,4 +108,5 @@ jobs:
           spec/jobs/channels/whatsapp/delete_connect_api_instance_job_spec.rb
           spec/services/whatsapp/connect_api_template_sync_service_spec.rb
           spec/services/whatsapp/connect_api_opening_message_validator_spec.rb
+          spec/services/whatsapp/send_on_whatsapp_service_spec.rb
           spec/controllers/api/v1/accounts/connect_api_templates_controller_spec.rb

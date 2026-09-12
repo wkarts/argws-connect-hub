@@ -33,6 +33,7 @@ class Api::V1::Accounts::CampaignsController < Api::V1::Accounts::BaseController
       :description,
       :message,
       :enabled,
+      :campaign_type,
       :trigger_only_during_business_hours,
       :inbox_id,
       :sender_id,

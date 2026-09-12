@@ -29,17 +29,11 @@ export default {
     return { isOngoingType };
   },
   computed: {
-    currentInboxId() {
-      return this.$route.params.inboxId;
-    },
-    inbox() {
-      return this.$store.getters['inboxes/getInbox'](this.currentInboxId);
-    },
     inboxes() {
       if (this.isOngoingType) {
-        return this.$store.getters['inboxes/getWebsiteInboxes'];
+        return this.$store.getters['inboxes/getRecurringCampaignInboxes'];
       }
-      return this.$store.getters['inboxes/getTwilioInboxes'];
+      return this.$store.getters['inboxes/getCampaignInboxes'];
     },
     emptyMessage() {
       if (this.isOngoingType) {

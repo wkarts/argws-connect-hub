@@ -9,22 +9,25 @@ class Campaigns::ChannelDrivers::Whatsapp < Campaigns::ChannelDrivers::Base
     contact_inbox = ContactInboxBuilder.new(contact: contact, inbox: inbox).perform
     return if contact_inbox.blank?
 
+    message_attributes = {}
+    message_attributes[:template_params] = template_params if template_params.present?
+
     Campaigns::CampaignConversationBuilder.new(
       contact_inbox_id: contact_inbox.id,
       campaign_display_id: campaign.display_id,
       conversation_additional_attributes: {},
       custom_attributes: {},
-      message_attributes: { template_params: template_params },
+      message_attributes: message_attributes,
       skip_existing_conversation: false
     ).perform
   end
 
   def capabilities
-    %w[text template variables].freeze
+    %w[text freeform template variables].freeze
   end
 
   def validation_errors
-    return ['template_params is required for WhatsApp campaigns'] if template_params.blank?
+    return [] if template_params.blank?
     return [] unless channel.provider == 'connectapi'
 
     template = channel.opening_template_catalog.find_available(

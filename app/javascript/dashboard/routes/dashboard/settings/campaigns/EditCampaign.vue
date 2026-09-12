@@ -4,12 +4,16 @@ import { useVuelidate } from '@vuelidate/core';
 import { required } from '@vuelidate/validators';
 import { useAlert } from 'dashboard/composables';
 import HubMessageEditor from 'dashboard/components/widgets/HubWriter/Editor.vue';
+import HubDateTimePicker from 'dashboard/components/ui/DateTimePicker.vue';
 import { useCampaign } from 'shared/composables/useCampaign';
 import { INBOX_TYPES } from 'shared/mixins/inboxMixin';
 import { URLPattern } from 'urlpattern-polyfill';
 
 export default {
-  components: { HubMessageEditor },
+  components: {
+    HubMessageEditor,
+    HubDateTimePicker,
+  },
   props: {
     selectedCampaign: {
       type: Object,
@@ -17,8 +21,8 @@ export default {
     },
   },
   setup() {
-    const { isOngoingType, isOneOffType } = useCampaign();
-    return { v$: useVuelidate(), isOngoingType, isOneOffType };
+    const { campaignType, isOngoingType, isOneOffType } = useCampaign();
+    return { v$: useVuelidate(), campaignType, isOngoingType, isOneOffType };
   },
   data() {
     return {
@@ -26,6 +30,7 @@ export default {
       message: '',
       selectedSender: 0,
       selectedInbox: null,
+      whatsappMode: 'freeform',
       selectedTemplateKey: '',
       templateParameters: {},
       emailSubject: '',
@@ -33,44 +38,48 @@ export default {
       timeOnPage: 10,
       triggerOnlyDuringBusinessHours: false,
       enabled: true,
+      scheduledAt: null,
+      selectedAudience: [],
       senderList: [],
     };
   },
   validations() {
-    const common = {
+    const validations = {
       title: { required },
       message: { required },
       selectedInbox: { required },
     };
 
-    if (this.isOngoingType) {
-      return {
-        ...common,
-        selectedSender: { required },
-        endPoint: {
-          required,
-          shouldBeAValidURLPattern(value) {
-            try {
-              // eslint-disable-next-line no-new
-              new URLPattern(value);
-              return true;
-            } catch (error) {
-              return false;
-            }
-          },
-          shouldStartWithHTTP(value) {
-            if (!value) return false;
-            return value.startsWith('https://') || value.startsWith('http://');
-          },
+    if (this.isWebsiteCampaign) {
+      validations.selectedSender = { required };
+      validations.endPoint = {
+        required,
+        shouldBeAValidURLPattern(value) {
+          try {
+            // eslint-disable-next-line no-new
+            new URLPattern(value);
+            return true;
+          } catch (error) {
+            return false;
+          }
         },
-        timeOnPage: { required },
+        shouldStartWithHTTP(value) {
+          if (!value) return false;
+          return value.startsWith('https://') || value.startsWith('http://');
+        },
+      };
+      validations.timeOnPage = { required };
+    } else if (this.selectedInbox) {
+      validations.selectedAudience = {
+        isEmpty() {
+          return !!this.selectedAudience.length;
+        },
       };
     }
 
-    const oneOff = { ...common };
-    if (this.isWhatsAppCampaign) {
-      oneOff.selectedTemplateKey = { required };
-      oneOff.templateParameters = {
+    if (this.isWhatsAppTemplateMode) {
+      validations.selectedTemplateKey = { required };
+      validations.templateParameters = {
         allRequired() {
           return this.templateVariableIndexes.every(position => {
             const value = this.templateParameters[String(position)];
@@ -79,40 +88,41 @@ export default {
         },
       };
     }
-    if (this.isEmailCampaign) oneOff.emailSubject = { required };
-    return oneOff;
+
+    if (this.isEmailCampaign) validations.emailSubject = { required };
+    return validations;
   },
   computed: {
     ...mapGetters({
       uiFlags: 'campaigns/getUIFlags',
+      audienceList: 'labels/getLabels',
     }),
     inboxes() {
-      if (this.isOngoingType) {
-        return this.$store.getters['inboxes/getWebsiteInboxes'];
-      }
-      return this.$store.getters['inboxes/getCampaignInboxes'];
+      return this.isOngoingType
+        ? this.$store.getters['inboxes/getRecurringCampaignInboxes']
+        : this.$store.getters['inboxes/getCampaignInboxes'];
     },
     selectedInboxRecord() {
       if (!this.selectedInbox) return {};
       return this.$store.getters['inboxes/getInbox'](this.selectedInbox);
     },
-    isWhatsAppCampaign() {
+    isWebsiteCampaign() {
       return (
-        this.isOneOffType &&
-        this.selectedInboxRecord.channel_type === INBOX_TYPES.WHATSAPP
+        this.isOngoingType &&
+        this.selectedInboxRecord.channel_type === INBOX_TYPES.WEB
       );
+    },
+    isWhatsAppCampaign() {
+      return this.selectedInboxRecord.channel_type === INBOX_TYPES.WHATSAPP;
+    },
+    isWhatsAppTemplateMode() {
+      return this.isWhatsAppCampaign && this.whatsappMode === 'template';
     },
     isEmailCampaign() {
-      return (
-        this.isOneOffType &&
-        this.selectedInboxRecord.channel_type === INBOX_TYPES.EMAIL
-      );
+      return this.selectedInboxRecord.channel_type === INBOX_TYPES.EMAIL;
     },
     isApiCampaign() {
-      return (
-        this.isOneOffType &&
-        this.selectedInboxRecord.channel_type === INBOX_TYPES.API
-      );
+      return this.selectedInboxRecord.channel_type === INBOX_TYPES.API;
     },
     whatsAppTemplates() {
       if (!this.isWhatsAppCampaign) return [];
@@ -147,6 +157,14 @@ export default {
     sendersAndBotList() {
       return [{ id: 0, name: 'Bot' }, ...this.senderList];
     },
+    audienceHasError() {
+      return Boolean(this.v$.selectedAudience && this.v$.selectedAudience.$error);
+    },
+  },
+  watch: {
+    audienceList() {
+      this.hydrateAudience();
+    },
   },
   mounted() {
     this.setFormValues();
@@ -155,8 +173,13 @@ export default {
     onClose() {
       this.$emit('onClose');
     },
+    onChange(value) {
+      this.scheduledAt = value;
+    },
     async loadInboxMembers() {
-      if (!this.isOngoingType) return;
+      this.senderList = [];
+      if (!this.isWebsiteCampaign) return;
+
       try {
         const response = await this.$store.dispatch('inboxMembers/get', {
           inboxId: this.selectedInbox,
@@ -169,11 +192,17 @@ export default {
       }
     },
     onChangeInbox() {
+      this.whatsappMode = 'freeform';
       this.selectedTemplateKey = '';
       this.templateParameters = {};
       this.emailSubject = '';
-      if (this.isOneOffType) this.message = '';
+      this.message = '';
       this.loadInboxMembers();
+    },
+    onWhatsappModeChange() {
+      this.selectedTemplateKey = '';
+      this.templateParameters = {};
+      this.message = '';
     },
     templateKey(template) {
       return `${template.name}::${template.language}`;
@@ -191,7 +220,10 @@ export default {
       this.updateTemplateMessage();
     },
     updateTemplateMessage() {
-      if (!this.selectedTemplate) return;
+      if (!this.selectedTemplate) {
+        this.message = '';
+        return;
+      }
       const order = ['HEADER', 'BODY', 'FOOTER'];
       this.message = [...(this.selectedTemplate.components || [])]
         .filter(component => component?.text)
@@ -223,11 +255,23 @@ export default {
     },
     getMessageAttributes() {
       if (this.isWhatsAppCampaign) {
-        return { template_params: this.whatsappTemplateParams() };
+        if (this.whatsappMode === 'template') {
+          return {
+            delivery_mode: 'template',
+            template_params: this.whatsappTemplateParams(),
+          };
+        }
+        return { delivery_mode: 'freeform' };
       }
       if (this.isEmailCampaign) return { subject: this.emailSubject };
       if (this.isApiCampaign) return { payload_type: 'message_created' };
       return {};
+    },
+    hydrateAudience() {
+      const ids = (this.selectedCampaign.audience || []).map(item => Number(item.id));
+      this.selectedAudience = this.audienceList.filter(label =>
+        ids.includes(Number(label.id))
+      );
     },
     setFormValues() {
       const campaign = this.selectedCampaign;
@@ -235,8 +279,8 @@ export default {
       const attributes = campaign.message_attributes || {};
       const templateParams = attributes.template_params || {};
 
-      this.title = campaign.title;
-      this.message = campaign.message;
+      this.title = campaign.title || '';
+      this.message = campaign.message || '';
       this.endPoint = rules.url || '';
       this.timeOnPage = rules.time_on_page || 10;
       this.selectedInbox = campaign.inbox?.id || null;
@@ -245,39 +289,52 @@ export default {
       this.selectedSender = campaign.sender?.id || 0;
       this.enabled = campaign.enabled;
       this.emailSubject = attributes.subject || '';
+      this.whatsappMode =
+        attributes.delivery_mode || (templateParams.name ? 'template' : 'freeform');
       this.templateParameters = { ...(templateParams.processed_params || {}) };
       if (templateParams.name && templateParams.language) {
         this.selectedTemplateKey = `${templateParams.name}::${templateParams.language}`;
       }
+      this.scheduledAt = campaign.scheduled_at
+        ? new Date(Number(campaign.scheduled_at) * 1000)
+        : null;
+      this.hydrateAudience();
       this.loadInboxMembers();
     },
     async editCampaign() {
       this.v$.$touch();
       if (this.v$.$invalid) return;
 
+      const payload = {
+        id: this.selectedCampaign.id,
+        title: this.title,
+        message: this.message,
+        campaign_type: this.campaignType,
+        inbox_id: this.selectedInbox,
+        message_attributes: this.getMessageAttributes(),
+      };
+
+      if (this.isWebsiteCampaign) {
+        Object.assign(payload, {
+          trigger_only_during_business_hours:
+            this.triggerOnlyDuringBusinessHours,
+          sender_id: this.selectedSender || null,
+          enabled: this.enabled,
+          trigger_rules: {
+            url: this.endPoint,
+            time_on_page: this.timeOnPage,
+          },
+        });
+      } else {
+        payload.audience = this.selectedAudience.map(item => ({
+          id: item.id,
+          type: 'Label',
+        }));
+        payload.enabled = this.isOngoingType ? this.enabled : true;
+        if (this.isOneOffType) payload.scheduled_at = this.scheduledAt;
+      }
+
       try {
-        const payload = {
-          id: this.selectedCampaign.id,
-          title: this.title,
-          message: this.message,
-          inbox_id: this.selectedInbox,
-        };
-
-        if (this.isOngoingType) {
-          Object.assign(payload, {
-            trigger_only_during_business_hours:
-              this.triggerOnlyDuringBusinessHours,
-            sender_id: this.selectedSender || null,
-            enabled: this.enabled,
-            trigger_rules: {
-              url: this.endPoint,
-              time_on_page: this.timeOnPage,
-            },
-          });
-        } else {
-          payload.message_attributes = this.getMessageAttributes();
-        }
-
         await this.$store.dispatch('campaigns/update', payload);
         useAlert(this.$t('CAMPAIGN.EDIT.API.SUCCESS_MESSAGE'));
         this.onClose();
@@ -314,12 +371,9 @@ export default {
               {{ item.name }}
             </option>
           </select>
-          <span v-if="v$.selectedInbox.$error" class="message">
-            {{ $t('CAMPAIGN.ADD.FORM.INBOX.ERROR') }}
-          </span>
         </label>
 
-        <div v-if="isOngoingType" class="editor-wrap">
+        <div v-if="isWebsiteCampaign" class="editor-wrap">
           <label>{{ $t('CAMPAIGN.ADD.FORM.MESSAGE.LABEL') }}</label>
           <HubMessageEditor
             v-model="message"
@@ -329,14 +383,23 @@ export default {
             :placeholder="$t('CAMPAIGN.ADD.FORM.MESSAGE.PLACEHOLDER')"
             @input="v$.message.$touch"
           />
-          <span v-if="v$.message.$error" class="editor-warning__message">
-            {{ $t('CAMPAIGN.ADD.FORM.MESSAGE.ERROR') }}
-          </span>
         </div>
 
-        <template v-else>
+        <template v-else-if="selectedInbox">
+          <label v-if="isWhatsAppCampaign">
+            Tipo de mensagem WhatsApp
+            <select v-model="whatsappMode" @change="onWhatsappModeChange">
+              <option value="freeform">Mensagem livre</option>
+              <option value="template">Template</option>
+            </select>
+          </label>
+
+          <div v-if="isWhatsAppCampaign && whatsappMode === 'freeform'" class="campaign-warning">
+            Mensagens livres podem depender da janela de atendimento e das regras da instância/provedor do WhatsApp. A campanha será permitida e o resultado do envio será registrado normalmente.
+          </div>
+
           <label
-            v-if="isWhatsAppCampaign"
+            v-if="isWhatsAppTemplateMode"
             :class="{ error: v$.selectedTemplateKey.$error }"
           >
             Template WhatsApp
@@ -350,16 +413,10 @@ export default {
                 {{ templateLabel(template) }}
               </option>
             </select>
-            <span v-if="v$.selectedTemplateKey.$error" class="message">
-              Selecione um template disponível nesta caixa.
-            </span>
           </label>
 
-          <div v-if="isWhatsAppCampaign && templateVariableIndexes.length">
-            <label
-              v-for="position in templateVariableIndexes"
-              :key="position"
-            >
+          <div v-if="isWhatsAppTemplateMode && templateVariableIndexes.length">
+            <label v-for="position in templateVariableIndexes" :key="position">
               Variável {{ position }}
               <input
                 v-model="templateParameters[String(position)]"
@@ -368,9 +425,6 @@ export default {
                 @blur="v$.templateParameters.$touch"
               />
             </label>
-            <span v-if="v$.templateParameters.$error" class="message">
-              Preencha todas as variáveis do template.
-            </span>
           </div>
 
           <hub-input
@@ -388,16 +442,39 @@ export default {
             <textarea
               v-model="message"
               rows="6"
-              :readonly="isWhatsAppCampaign"
+              :readonly="isWhatsAppTemplateMode"
               @blur="v$.message.$touch"
             />
-            <span v-if="v$.message.$error" class="message">
-              {{ $t('CAMPAIGN.ADD.FORM.MESSAGE.ERROR') }}
+          </label>
+
+          <label
+            class="multiselect-wrap--small"
+            :class="{ error: audienceHasError }"
+          >
+            {{ $t('CAMPAIGN.ADD.FORM.AUDIENCE.LABEL') }}
+            <multiselect
+              v-model="selectedAudience"
+              :options="audienceList"
+              track-by="id"
+              label="title"
+              multiple
+              :close-on-select="false"
+              :clear-on-select="false"
+              hide-selected
+              :placeholder="$t('CAMPAIGN.ADD.FORM.AUDIENCE.PLACEHOLDER')"
+              selected-label
+              :select-label="$t('FORMS.MULTISELECT.ENTER_TO_SELECT')"
+              :deselect-label="$t('FORMS.MULTISELECT.ENTER_TO_REMOVE')"
+              @blur="v$.selectedAudience && v$.selectedAudience.$touch()"
+              @select="v$.selectedAudience && v$.selectedAudience.$touch()"
+            />
+            <span v-if="audienceHasError" class="message">
+              {{ $t('CAMPAIGN.ADD.FORM.AUDIENCE.ERROR') }}
             </span>
           </label>
         </template>
 
-        <template v-if="isOngoingType">
+        <template v-if="isWebsiteCampaign">
           <label :class="{ error: v$.selectedSender.$error }">
             {{ $t('CAMPAIGN.ADD.FORM.SENT_BY.LABEL') }}
             <select v-model="selectedSender">
@@ -409,18 +486,13 @@ export default {
                 {{ sender.name }}
               </option>
             </select>
-            <span v-if="v$.selectedSender.$error" class="message">
-              {{ $t('CAMPAIGN.ADD.FORM.SENT_BY.ERROR') }}
-            </span>
           </label>
-
           <hub-input
             v-model="endPoint"
             :label="$t('CAMPAIGN.ADD.FORM.END_POINT.LABEL')"
             type="text"
             :class="{ error: v$.endPoint.$error }"
             :error="v$.endPoint.$error ? $t('CAMPAIGN.ADD.FORM.END_POINT.ERROR') : ''"
-            :placeholder="$t('CAMPAIGN.ADD.FORM.END_POINT.PLACEHOLDER')"
             @blur="v$.endPoint.$touch"
           />
           <hub-input
@@ -429,27 +501,35 @@ export default {
             type="text"
             :class="{ error: v$.timeOnPage.$error }"
             :error="v$.timeOnPage.$error ? $t('CAMPAIGN.ADD.FORM.TIME_ON_PAGE.ERROR') : ''"
-            :placeholder="$t('CAMPAIGN.ADD.FORM.TIME_ON_PAGE.PLACEHOLDER')"
             @blur="v$.timeOnPage.$touch"
           />
-          <label>
-            <input v-model="enabled" type="checkbox" value="enabled" name="enabled" />
-            {{ $t('CAMPAIGN.ADD.FORM.ENABLED') }}
-          </label>
           <label>
             <input
               v-model="triggerOnlyDuringBusinessHours"
               type="checkbox"
-              value="triggerOnlyDuringBusinessHours"
-              name="triggerOnlyDuringBusinessHours"
             />
             {{ $t('CAMPAIGN.ADD.FORM.TRIGGER_ONLY_BUSINESS_HOURS') }}
           </label>
         </template>
+
+        <label v-if="isOneOffType && !isWebsiteCampaign">
+          {{ $t('CAMPAIGN.ADD.FORM.SCHEDULED_AT.LABEL') }}
+          <HubDateTimePicker
+            :value="scheduledAt"
+            :confirm-text="$t('CAMPAIGN.ADD.FORM.SCHEDULED_AT.CONFIRM')"
+            :placeholder="$t('CAMPAIGN.ADD.FORM.SCHEDULED_AT.PLACEHOLDER')"
+            @change="onChange"
+          />
+        </label>
+
+        <label v-if="isOngoingType">
+          <input v-model="enabled" type="checkbox" />
+          {{ $t('CAMPAIGN.ADD.FORM.ENABLED') }}
+        </label>
       </div>
 
       <div class="flex flex-row justify-end w-full gap-2 px-0 py-2">
-        <hub-button :is-loading="uiFlags.isCreating">
+        <hub-button :is-loading="uiFlags.isUpdating">
           {{ $t('CAMPAIGN.EDIT.UPDATE_BUTTON_TEXT') }}
         </hub-button>
         <hub-button variant="clear" @click.prevent="onClose">
@@ -467,11 +547,9 @@ export default {
 
 .message-editor {
   @apply px-3;
+}
 
-  ::v-deep {
-    .ProseMirror-menubar {
-      @apply rounded-tl-[4px];
-    }
-  }
+.campaign-warning {
+  @apply p-3 mb-3 text-sm rounded border border-yellow-300 bg-yellow-50 text-yellow-900;
 }
 </style>
