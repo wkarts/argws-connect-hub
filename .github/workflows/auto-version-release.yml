@@ -1,16 +1,10 @@
-name: Release - Auto Version, Build and Publish
+name: Release - Publish Versioned Main
 
 on:
-  push:
+  pull_request:
     branches: [main]
+    types: [closed]
   workflow_dispatch:
-    inputs:
-      force_bump:
-        description: Optional bump override
-        required: false
-        type: choice
-        options: [auto, patch, minor, major]
-        default: auto
 
 permissions:
   contents: write
@@ -21,17 +15,24 @@ concurrency:
   group: argws-connect-hub-release-main
   cancel-in-progress: false
 
+env:
+  RELEASE_SHA: ${{ github.event_name == 'workflow_dispatch' && github.sha || github.event.pull_request.merge_commit_sha }}
+
 jobs:
   validate:
     name: Validate release source - no image build
-    if: ${{ github.event_name == 'workflow_dispatch' || !contains(github.event.head_commit.message, '[skip release]') }}
+    if: >-
+      ${{ github.event_name == 'workflow_dispatch' ||
+          (github.event.pull_request.merged == true &&
+           github.event.pull_request.head.ref == 'develop' &&
+           !contains(github.event.pull_request.title, '[skip release]')) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
-      - name: Checkout release candidate
+      - name: Checkout exact release candidate
         uses: actions/checkout@v5
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ env.RELEASE_SHA }}
           fetch-depth: 0
 
       - name: Install Ruby 3.3.10
@@ -45,6 +46,9 @@ jobs:
         with:
           node-version: '24.x'
 
+      - name: Validate canonical version metadata
+        run: bash ./scripts/validate-version-sync.sh
+
       - name: Validate HUB source and deployments
         run: bash ./scripts/validate-hub-ci.sh
 
@@ -52,137 +56,64 @@ jobs:
         run: bash ./scripts/test-verify-hub-image.sh
 
   plan:
-    name: Plan semantic version
+    name: Validate declared release version
     needs: validate
     runs-on: ubuntu-24.04
     outputs:
       version: ${{ steps.plan.outputs.version }}
       tag: ${{ steps.plan.outputs.tag }}
     steps:
-      - name: Checkout validated revision
+      - name: Checkout validated release source
         uses: actions/checkout@v5
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ env.RELEASE_SHA }}
           fetch-depth: 0
 
-      - uses: actions/setup-node@v5
-        with:
-          node-version: '24.x'
-
-      - name: Resolve merged PR metadata
-        id: pr
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          json="$(gh api -H 'Accept: application/vnd.github+json' "/repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/pulls" 2>/dev/null || echo '[]')"
-          echo "title=$(jq -r '.[0].title // empty' <<<"$json")" >> "$GITHUB_OUTPUT"
-          echo "labels=$(jq -r '[.[0].labels[]?.name] | join(",")' <<<"$json")" >> "$GITHUB_OUTPUT"
-
-      - name: Compute and validate next version before any image build
+      - name: Validate release version and tag availability
         id: plan
-        env:
-          LABELS: ${{ steps.pr.outputs.labels }}
-          TITLE: ${{ steps.pr.outputs.title }}
-          FORCE: ${{ inputs.force_bump || 'auto' }}
         shell: bash
         run: |
           set -euo pipefail
-          git fetch --tags --force
-          latest="$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n1 || true)"
-          labels="$LABELS"
-          [[ "$FORCE" == auto || -z "$FORCE" ]] || labels="version:$FORCE"
-          result="$(node .github/scripts/compute-next-version.mjs "$latest" "$labels" "$TITLE")"
-          version="$(jq -r .version <<<"$result")"
+          bash ./scripts/validate-version-sync.sh
+          version="$(tr -d '[:space:]' < VERSION)"
           [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
-            echo "Version planner returned invalid SemVer: $version" >&2
+            echo "VERSION must be SemVer X.Y.Z; got '$version'." >&2
             exit 1
           }
+
+          git fetch --tags --force
           tag="v${version}"
           if git rev-parse "refs/tags/${tag}" >/dev/null 2>&1; then
-            echo "Release tag ${tag} already exists; refusing to build a duplicate release." >&2
+            echo "Release tag ${tag} already exists; bump VERSION in develop before the release PR." >&2
             exit 1
           fi
+
+          latest="$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n1 || true)"
+          if [[ -n "$latest" ]]; then
+            latest_version="${latest#v}"
+            highest="$(printf '%s\n%s\n' "$latest_version" "$version" | sort -V | tail -n1)"
+            if [[ "$version" == "$latest_version" || "$highest" != "$version" ]]; then
+              echo "Declared VERSION $version must be greater than latest release $latest_version." >&2
+              exit 1
+            fi
+          fi
+
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
-          echo "Planned HUB ${tag}; versioning is valid before image construction."
-
-  version-source:
-    name: Materialize release version
-    needs: plan
-    runs-on: ubuntu-24.04
-    outputs:
-      sha: ${{ steps.commit.outputs.sha }}
-    steps:
-      - name: Checkout main
-        uses: actions/checkout@v5
-        with:
-          ref: main
-          fetch-depth: 0
-
-      - uses: actions/setup-node@v5
-        with:
-          node-version: '24.x'
-
-      - name: Configure Git identity before any generated commit
-        shell: bash
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-      - name: Ensure main still points to the validated source
-        shell: bash
-        run: |
-          set -euo pipefail
-          current="$(git rev-parse HEAD)"
-          if [[ "$current" != "$GITHUB_SHA" ]]; then
-            echo "main moved while release was being planned ($current != $GITHUB_SHA)." >&2
-            exit 1
-          fi
-
-      - name: Apply and validate release metadata
-        shell: bash
-        run: |
-          set -euo pipefail
-          node .github/scripts/apply-version.mjs "${{ needs.plan.outputs.version }}"
-          expected='${{ needs.plan.outputs.version }}'
-          [[ "$(tr -d '[:space:]' < VERSION)" == "$expected" ]]
-          bash ./scripts/validate-version-sync.sh
-          node - "$expected" <<'NODE'
-          const fs = require('fs');
-          const expected = process.argv[2];
-          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-          const manifest = JSON.parse(fs.readFileSync('RELEASE-MANIFEST.json', 'utf8'));
-          if (pkg.version !== expected) throw new Error(`package.json version ${pkg.version} != ${expected}`);
-          if (manifest.version !== expected) throw new Error(`RELEASE-MANIFEST version ${manifest.version} != ${expected}`);
-          NODE
-          git diff --check
-
-      - name: Persist version metadata before expensive build
-        id: commit
-        shell: bash
-        run: |
-          set -euo pipefail
-          git add VERSION package.json RELEASE-MANIFEST.json
-          if ! git diff --cached --quiet; then
-            git commit -m "chore(release): v${{ needs.plan.outputs.version }} [skip release]"
-            git push origin HEAD:main
-          fi
-          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "Release source declares HUB ${tag}."
 
   preflight:
     name: Preflight tag and release
-    needs: [plan, version-source]
+    needs: plan
     runs-on: ubuntu-24.04
     steps:
-      - name: Checkout exact versioned source
+      - name: Checkout exact release source
         uses: actions/checkout@v5
         with:
-          ref: ${{ needs.version-source.outputs.sha }}
+          ref: ${{ env.RELEASE_SHA }}
           fetch-depth: 0
 
-      - name: Configure Git identity in tag-capable job
+      - name: Configure Git identity
         shell: bash
         run: |
           git config user.name "github-actions[bot]"
@@ -201,23 +132,22 @@ jobs:
             exit 1
           fi
           probe="__hub-release-preflight-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          git tag -a "$probe" "${{ needs.version-source.outputs.sha }}" -m "HUB release preflight"
+          git tag -a "$probe" "$RELEASE_SHA" -m "HUB release preflight"
           git tag -d "$probe" >/dev/null
           gh api "/repos/${GITHUB_REPOSITORY}" --jq '.full_name' >/dev/null
-          echo "Git identity, target tag and GitHub token preflight: OK"
 
   build:
     name: Build and publish immutable release image
-    needs: [plan, version-source, preflight]
+    needs: [plan, preflight]
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     outputs:
       digest: ${{ steps.build.outputs.digest }}
     steps:
-      - name: Checkout exact versioned source
+      - name: Checkout exact release source
         uses: actions/checkout@v5
         with:
-          ref: ${{ needs.version-source.outputs.sha }}
+          ref: ${{ env.RELEASE_SHA }}
           fetch-depth: 0
 
       - name: Resolve immutable HUB bases
@@ -279,7 +209,7 @@ jobs:
             echo "ghcr.io/${{ github.repository_owner }}/argws-connect-hub:${major}.${minor}"
             echo "ghcr.io/${{ github.repository_owner }}/argws-connect-hub:${major}"
             echo "ghcr.io/${{ github.repository_owner }}/argws-connect-hub:latest"
-            echo "ghcr.io/${{ github.repository_owner }}/argws-connect-hub:sha-${{ needs.version-source.outputs.sha }}"
+            echo "ghcr.io/${{ github.repository_owner }}/argws-connect-hub:sha-${RELEASE_SHA}"
             echo EOF
           } >> "$GITHUB_OUTPUT"
 
@@ -292,7 +222,7 @@ jobs:
           platforms: linux/amd64
           push: true
           build-args: |
-            GIT_SHA=${{ needs.version-source.outputs.sha }}
+            GIT_SHA=${{ env.RELEASE_SHA }}
             HUB_VERSION=${{ needs.plan.outputs.version }}
             HUB_DEPS_BASE_IMAGE=${{ steps.bases.outputs.deps }}
             HUB_RUNTIME_BASE_IMAGE=${{ steps.bases.outputs.runtime }}
@@ -300,7 +230,7 @@ jobs:
           labels: |
             org.opencontainers.image.title=HUB
             org.opencontainers.image.version=${{ needs.plan.outputs.version }}
-            org.opencontainers.image.revision=${{ needs.version-source.outputs.sha }}
+            org.opencontainers.image.revision=${{ env.RELEASE_SHA }}
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.argws.hub.channel=stable
             org.argws.hub.base.version=${{ steps.bases.outputs.version }}
@@ -316,23 +246,23 @@ jobs:
           IMAGE_TAGS: ${{ steps.meta.outputs.tags }}
           EXPECTED_DIGEST: ${{ steps.build.outputs.digest }}
           EXPECTED_VERSION: ${{ needs.plan.outputs.version }}
-          EXPECTED_REVISION: ${{ needs.version-source.outputs.sha }}
+          EXPECTED_REVISION: ${{ env.RELEASE_SHA }}
           EXPECTED_CHANNEL: stable
           HUB_IMAGE_REQUIRE_ANONYMOUS_PULL: ${{ vars.HUB_IMAGE_REQUIRE_ANONYMOUS_PULL || 'true' }}
         run: bash ./scripts/verify-hub-image.sh
 
   release:
     name: Tag and publish GitHub Release
-    needs: [plan, version-source, build]
+    needs: [plan, build]
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout exact released source
         uses: actions/checkout@v5
         with:
-          ref: ${{ needs.version-source.outputs.sha }}
+          ref: ${{ env.RELEASE_SHA }}
           fetch-depth: 0
 
-      - name: Configure Git identity in the actual tag job
+      - name: Configure Git identity
         shell: bash
         run: |
           git config user.name "github-actions[bot]"
@@ -342,7 +272,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ needs.plan.outputs.tag }}
-          RELEASE_SHA: ${{ needs.version-source.outputs.sha }}
+          RELEASE_SHA: ${{ env.RELEASE_SHA }}
           IMAGE_DIGEST: ${{ needs.build.outputs.digest }}
         shell: bash
         run: |
@@ -355,7 +285,6 @@ jobs:
               echo "Tag $TAG already points to $existing, expected $RELEASE_SHA." >&2
               exit 1
             fi
-            echo "Tag $TAG already exists on the expected SHA; keeping it."
           else
             git tag -a "$TAG" "$RELEASE_SHA" -m "HUB $TAG"
             git push origin "refs/tags/${TAG}"
