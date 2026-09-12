@@ -14,6 +14,10 @@ class Campaigns::ChannelDrivers::Base
     raise NotImplementedError, "#{self.class.name} must implement #deliver"
   end
 
+  def validation_errors
+    []
+  end
+
   def capabilities
     []
   end
