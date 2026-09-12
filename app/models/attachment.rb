@@ -118,10 +118,18 @@ class Attachment < ApplicationRecord
 
   def should_validate_file?
     return unless file.attached?
-    # we are only limiting attachment types in case of website widget
+    # We only limit regular website-widget attachments. Campaign materials are
+    # uploaded by authenticated operators and intentionally support arbitrary
+    # file types (HTML, documents, archives, images, etc.). Provider-specific
+    # transport limits are enforced by the selected campaign channel/driver.
     return unless message.inbox.channel_type == 'Channel::WebWidget'
+    return false if campaign_material?
 
     true
+  end
+
+  def campaign_material?
+    message.conversation&.campaign_id.present? || message.additional_attributes.to_h['campaign_id'].present?
   end
 
   def acceptable_file
