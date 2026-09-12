@@ -22,6 +22,10 @@ RSpec.describe Campaign do
     it 'runs before_create callbacks' do
       expect(campaign.display_id).to eq(1)
     end
+
+    it 'keeps a schedule for website campaigns too' do
+      expect(campaign.scheduled_at).to be_present
+    end
   end
 
   context 'when Inbox other then Website or supported campaign channels' do
@@ -71,13 +75,14 @@ RSpec.describe Campaign do
         expect(campaign.scheduled_at).to be_present
       end
 
-      it 'allows an explicit recurring campaign' do
+      it 'allows an explicit recurring campaign with a real schedule' do
         campaign.campaign_type = 'ongoing'
         campaign.save!
 
         expect(campaign.reload).to be_ongoing
-        expect(campaign.scheduled_at).to be_nil
-        expect(campaign.channel_capabilities).to include('one_off', 'ongoing')
+        expect(campaign.scheduled_at).to be_present
+        expect(campaign.recurrence_config).to include('frequency' => 'daily', 'interval' => 1)
+        expect(campaign.channel_capabilities).to include('one_off', 'ongoing', 'schedule', 'materials')
       end
 
       it 'dispatches explicit recurring campaigns through the recurring service' do
@@ -89,6 +94,16 @@ RSpec.describe Campaign do
         expect(campaign_service).to receive(:perform)
 
         campaign.trigger!
+      end
+
+      it 'calculates the next recurring execution from the stored schedule' do
+        first_run = Time.zone.parse('2026-09-12 10:00:00')
+        campaign.campaign_type = 'ongoing'
+        campaign.scheduled_at = first_run
+        campaign.trigger_rules = { 'recurrence' => { 'frequency' => 'hourly', 'interval' => 2 } }
+        campaign.save!
+
+        expect(campaign.next_scheduled_at(from: first_run)).to eq(first_run + 2.hours)
       end
     end
 
@@ -189,6 +204,7 @@ RSpec.describe Campaign do
         campaign.save!
 
         expect(campaign.reload).to be_ongoing
+        expect(campaign.scheduled_at).to be_present
         expect(campaign.message_attributes['delivery_mode']).to eq('freeform')
       end
 
@@ -262,9 +278,10 @@ RSpec.describe Campaign do
     context 'when Website campaign' do
       let(:campaign) { build(:campaign) }
 
-      it 'keeps website campaigns recurring by default' do
+      it 'keeps website campaigns recurring by default and scheduled' do
         campaign.save!
         expect(campaign.reload).to be_ongoing
+        expect(campaign.scheduled_at).to be_present
       end
 
       it 'rejects website one-off campaigns instead of silently changing the selected mode' do
