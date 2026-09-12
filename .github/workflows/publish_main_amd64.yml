@@ -1,0 +1,197 @@
+name: GHCR - Publish Main Image
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+  pull-requests: read
+
+concurrency:
+  group: argws-connect-hub-main-image
+  cancel-in-progress: false
+
+jobs:
+  gate:
+    name: Authorize main publication source
+    runs-on: ubuntu-24.04
+    outputs:
+      allowed: ${{ steps.gate.outputs.allowed }}
+    steps:
+      - name: Require main or merged develop to main PR
+        id: gate
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            [[ "$REF_NAME" == "refs/heads/main" ]] || {
+              echo "Manual main publication accepts only refs/heads/main (got $REF_NAME)." >&2
+              exit 1
+            }
+            echo "allowed=true" >> "$GITHUB_OUTPUT"
+            echo "Manual main image publication authorized."
+            exit 0
+          fi
+
+          prs="$(gh api -H 'Accept: application/vnd.github+json' "/repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/pulls" 2>/dev/null || echo '[]')"
+          promotion_pr="$(jq -c '[.[] | select(.merged_at != null and .base.ref == "main" and .head.ref == "develop")][0] // empty' <<<"$prs")"
+
+          if [[ -z "$promotion_pr" ]]; then
+            echo "allowed=false" >> "$GITHUB_OUTPUT"
+            echo "This main push did not come from a merged develop -> main PR; GHCR main publication is disabled."
+            exit 0
+          fi
+
+          echo "allowed=true" >> "$GITHUB_OUTPUT"
+          echo "Main publication authorized from merged develop -> main PR."
+
+  validate:
+    name: Validate exact main source - no image build
+    needs: gate
+    if: ${{ needs.gate.outputs.allowed == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact main revision
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Install Ruby 3.3.10
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3.10'
+          bundler-cache: false
+
+      - name: Install Node for validation tooling
+        uses: actions/setup-node@v5
+        with:
+          node-version: '24.x'
+
+      - name: Validate HUB source and deployments
+        run: bash ./scripts/validate-hub-ci.sh
+
+      - name: Test image publication verification
+        run: bash ./scripts/test-verify-hub-image.sh
+
+  build:
+    name: Build and publish HUB main / amd64
+    needs: validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
+      build_version: ${{ steps.identity.outputs.build_version }}
+    steps:
+      - name: Checkout validated main revision
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Resolve immutable base and build identity
+        id: identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          base_version="$(tr -d '[:space:]' < docker/base/VERSION)"
+          [[ "$base_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+            echo "docker/base/VERSION must be SemVer X.Y.Z, got: $base_version" >&2
+            exit 1
+          }
+          short_sha="${GITHUB_SHA:0:12}"
+          build_version="main-${short_sha}"
+          echo "base=$base_version" >> "$GITHUB_OUTPUT"
+          echo "short_sha=$short_sha" >> "$GITHUB_OUTPUT"
+          echo "build_version=$build_version" >> "$GITHUB_OUTPUT"
+          echo "deps_base=ghcr.io/${{ github.repository_owner }}/argws-connect-hub-deps-base:${base_version}" >> "$GITHUB_OUTPUT"
+          echo "runtime_base=ghcr.io/${{ github.repository_owner }}/argws-connect-hub-runtime-base:${base_version}" >> "$GITHUB_OUTPUT"
+          echo "Main build identity: $build_version"
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v4.3.0
+
+      - name: Login GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Wait for immutable HUB bases
+        shell: bash
+        env:
+          DEPS_BASE: ${{ steps.identity.outputs.deps_base }}
+          RUNTIME_BASE: ${{ steps.identity.outputs.runtime_base }}
+        run: |
+          set -euo pipefail
+          for image in "$DEPS_BASE" "$RUNTIME_BASE"; do
+            ready=false
+            for attempt in $(seq 1 180); do
+              if docker buildx imagetools inspect "$image" >/dev/null 2>&1; then
+                ready=true
+                break
+              fi
+              echo "Waiting for $image ($attempt/180)..."
+              sleep 10
+            done
+            [[ "$ready" == true ]] || {
+              echo "Required immutable HUB base is unavailable: $image" >&2
+              exit 1
+            }
+          done
+
+      - name: Build once and publish main image
+        id: build
+        uses: docker/build-push-action@v7.3.0
+        with:
+          context: .
+          file: docker/Dockerfile
+          platforms: linux/amd64
+          push: true
+          build-args: |
+            GIT_SHA=${{ github.sha }}
+            HUB_VERSION=${{ steps.identity.outputs.build_version }}
+            HUB_DEPS_BASE_IMAGE=${{ steps.identity.outputs.deps_base }}
+            HUB_RUNTIME_BASE_IMAGE=${{ steps.identity.outputs.runtime_base }}
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/argws-connect-hub:main
+            ghcr.io/${{ github.repository_owner }}/argws-connect-hub:latest
+            ghcr.io/${{ github.repository_owner }}/argws-connect-hub:main-${{ steps.identity.outputs.short_sha }}
+            ghcr.io/${{ github.repository_owner }}/argws-connect-hub:sha-${{ github.sha }}
+          labels: |
+            org.opencontainers.image.title=HUB
+            org.opencontainers.image.version=${{ steps.identity.outputs.build_version }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.argws.hub.channel=stable
+            org.argws.hub.base.version=${{ steps.identity.outputs.base }}
+          cache-from: type=gha,scope=hub-main-amd64
+          cache-to: type=gha,mode=max,scope=hub-main-amd64
+          provenance: true
+          sbom: true
+
+      - name: Verify final main image
+        timeout-minutes: 15
+        env:
+          IMAGE_REPOSITORY: ghcr.io/${{ github.repository_owner }}/argws-connect-hub
+          IMAGE_TAGS: |
+            ghcr.io/${{ github.repository_owner }}/argws-connect-hub:main
+            ghcr.io/${{ github.repository_owner }}/argws-connect-hub:latest
+            ghcr.io/${{ github.repository_owner }}/argws-connect-hub:main-${{ steps.identity.outputs.short_sha }}
+            ghcr.io/${{ github.repository_owner }}/argws-connect-hub:sha-${{ github.sha }}
+          EXPECTED_DIGEST: ${{ steps.build.outputs.digest }}
+          EXPECTED_VERSION: ${{ steps.identity.outputs.build_version }}
+          EXPECTED_REVISION: ${{ github.sha }}
+          EXPECTED_CHANNEL: stable
+          HUB_IMAGE_REQUIRE_ANONYMOUS_PULL: ${{ vars.HUB_IMAGE_REQUIRE_ANONYMOUS_PULL || 'true' }}
+        run: bash ./scripts/verify-hub-image.sh
