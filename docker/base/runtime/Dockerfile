@@ -1,5 +1,5 @@
 # HUB immutable runtime base.
-# Keep this image smaller than the build base and version it independently from HUB releases.
+# Keep this image smaller than the build base; its identity is content-addressed.
 ARG HUB_UPSTREAM_BASE_IMAGE=ghcr.io/linuxcontainers/alpine:3.20
 FROM ${HUB_UPSTREAM_BASE_IMAGE}
 

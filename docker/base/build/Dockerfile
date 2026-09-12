@@ -1,5 +1,5 @@
 # HUB immutable build base.
-# This image has its own lifecycle and must only change when docker/base/VERSION is bumped.
+# Content identity is derived from this definition; no manual SemVer bump is used.
 ARG HUB_UPSTREAM_BASE_IMAGE=ghcr.io/linuxcontainers/alpine:3.20
 FROM ${HUB_UPSTREAM_BASE_IMAGE}
 
