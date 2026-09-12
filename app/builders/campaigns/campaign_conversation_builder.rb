@@ -31,7 +31,8 @@ class Campaigns::CampaignConversationBuilder
   private
 
   def message_params
-    attributes = (message_attributes || {}).to_h.deep_symbolize_keys
+    persisted_attributes = @campaign.message_attributes || {}
+    attributes = (message_attributes.presence || persisted_attributes).to_h.deep_symbolize_keys
     ActionController::Parameters.new(
       {
         content: @campaign.message,
