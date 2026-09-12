@@ -44,6 +44,7 @@ describe Whatsapp::SendOnWhatsappService do
       it 'calls channel.send_template when after 24 hour limit' do
         message = create(:message, message_type: :outgoing, content: 'Your package has been shipped. It will be delivered in 3 business days.',
                                    conversation: conversation)
+        allow_any_instance_of(Conversation).to receive(:can_reply?).and_return(false)
         allow(HTTParty).to receive(:post).and_return(whatsapp_request)
         allow(whatsapp_request).to receive(:success?).and_return(true)
         allow(whatsapp_request).to receive(:[]).with('messages').and_return([{ 'id' => '123456789' }])
@@ -96,6 +97,7 @@ describe Whatsapp::SendOnWhatsappService do
           content: 'عميلنا العزيز الرجاء الرد على هذه الرسالة بكلمة *نعم* للرد على إستفساركم من قبل خدمة العملاء.',
           conversation: conversation
         )
+        allow_any_instance_of(Conversation).to receive(:can_reply?).and_return(false)
         allow(HTTParty).to receive(:post).and_return(whatsapp_request)
         allow(whatsapp_request).to receive(:success?).and_return(true)
         allow(whatsapp_request).to receive(:[]).with('messages').and_return([{ 'id' => '123456789' }])
