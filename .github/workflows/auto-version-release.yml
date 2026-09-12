@@ -26,7 +26,6 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           EVENT_NAME: ${{ github.event_name }}
-          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
         shell: bash
         run: |
           set -euo pipefail
@@ -37,19 +36,24 @@ jobs:
             exit 0
           fi
 
-          if [[ "$COMMIT_MESSAGE" == *"[skip release]"* ]]; then
+          prs="$(gh api -H 'Accept: application/vnd.github+json' "/repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/pulls" 2>/dev/null || echo '[]')"
+          release_pr="$(jq -c '[.[] | select(.merged_at != null and .base.ref == "main" and .head.ref == "develop")][0] // empty' <<<"$prs")"
+
+          if [[ -z "$release_pr" ]]; then
             echo "allowed=false" >> "$GITHUB_OUTPUT"
-            echo "Release skipped by commit marker."
+            echo "This main push did not come from a merged develop -> main PR; release publication is disabled."
             exit 0
           fi
 
-          prs="$(gh api -H 'Accept: application/vnd.github+json' "/repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/pulls" 2>/dev/null || echo '[]')"
-          allowed="$(jq -r 'any(.[]; .merged_at != null and .base.ref == "main" and .head.ref == "develop")' <<<"$prs")"
-          echo "allowed=$allowed" >> "$GITHUB_OUTPUT"
-
-          if [[ "$allowed" != "true" ]]; then
-            echo "This main push did not come from a merged develop -> main PR; release publication is disabled."
+          title="$(jq -r '.title // ""' <<<"$release_pr")"
+          if [[ "$title" == *"[skip release]"* ]]; then
+            echo "allowed=false" >> "$GITHUB_OUTPUT"
+            echo "Release PR requested [skip release]."
+            exit 0
           fi
+
+          echo "allowed=true" >> "$GITHUB_OUTPUT"
+          echo "Release authorized from merged develop -> main PR."
 
   validate:
     name: Validate release source - no image build
