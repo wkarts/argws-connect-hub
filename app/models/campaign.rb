@@ -38,7 +38,6 @@ class Campaign < ApplicationRecord
   validates :message, presence: true
   validate :validate_campaign_inbox
   validate :validate_channel_message_attributes
-  validate :validate_outbound_audience
   validate :validate_url
   validate :prevent_completed_campaign_from_update, on: :update
 
@@ -101,13 +100,6 @@ class Campaign < ApplicationRecord
     Campaigns::ChannelDriverResolver.resolve(self).validation_errors.each do |message|
       errors.add(:message_attributes, message)
     end
-  end
-
-  def validate_outbound_audience
-    return unless Campaigns::ChannelDriverResolver.supported?(inbox)
-    return if Array(audience).present?
-
-    errors.add(:audience, 'at least one audience label is required')
   end
 
   def ensure_correct_campaign_attributes
