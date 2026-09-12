@@ -35,14 +35,32 @@ RSpec.describe TriggerScheduledItemsJob do
     described_class.perform_now
   end
 
-  context 'when unexecuted Scheduled campaign jobs' do
+  context 'when scheduled campaign jobs are due' do
     let!(:twilio_sms) { create(:channel_twilio_sms) }
     let!(:twilio_inbox) { create(:inbox, channel: twilio_sms) }
 
-    it 'triggers Campaigns::TriggerOneoffCampaignJob' do
-      campaign = create(:campaign, inbox: twilio_inbox)
-      create(:campaign, inbox: twilio_inbox, scheduled_at: 10.days.after)
-      expect(Campaigns::TriggerOneoffCampaignJob).to receive(:perform_later).with(campaign).once
+    it 'recovers due one-off campaigns through the generic trigger job' do
+      campaign = create(:campaign, inbox: twilio_inbox, scheduled_at: 10.days.ago)
+      create(:campaign, inbox: twilio_inbox, scheduled_at: 10.days.from_now)
+
+      expect(Campaigns::TriggerCampaignJob).to receive(:perform_later)
+        .with(campaign.id, campaign.scheduled_at.iso8601(6)).once
+
+      described_class.perform_now
+    end
+
+    it 'recovers due recurring outbound campaigns too' do
+      campaign = create(
+        :campaign,
+        campaign_type: :ongoing,
+        inbox: twilio_inbox,
+        scheduled_at: 2.minutes.ago,
+        trigger_rules: { recurrence: { frequency: 'daily', interval: 1 } }
+      )
+
+      expect(Campaigns::TriggerCampaignJob).to receive(:perform_later)
+        .with(campaign.id, campaign.scheduled_at.iso8601(6)).once
+
       described_class.perform_now
     end
   end
