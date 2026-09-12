@@ -21,6 +21,18 @@ json.sender_name_type resource.sender_name_type
 json.business_name resource.business_name
 json.allow_agent_to_delete_message resource.allow_agent_to_delete_message
 
+campaign_modes = if resource.web_widget?
+                   %w[ongoing]
+                 elsif Campaigns::ChannelDriverResolver.supported?(resource)
+                   %w[one_off ongoing]
+                 else
+                   []
+                 end
+json.campaign_capabilities do
+  json.supported campaign_modes.present?
+  json.modes campaign_modes
+end
+
 if resource.portal.present?
   json.help_center do
     json.name resource.portal.name
