@@ -27,6 +27,7 @@ class Whatsapp::ConnectApiWebhookSetupService
     sync_instance_metadata!
     enable_meta_compatibility!
     verify_meta_compatibility!
+    configure_native_call_webhook!
 
     if config['disconnect']
       disconnect!
@@ -158,6 +159,10 @@ class Whatsapp::ConnectApiWebhookSetupService
   def configure_native_call_webhook!
     unless config['calls_supported']
       config['native_call_webhook_enabled'] = false
+      config.delete('native_call_webhook_url')
+      config.delete('native_call_webhook_verified_at')
+      config.delete('native_call_webhook_last_error')
+      persist_config!
       return
     end
 
@@ -182,6 +187,16 @@ class Whatsapp::ConnectApiWebhookSetupService
     raise response_body(response) unless response.success?
 
     verify_native_call_webhook!(webhook_url)
+  rescue StandardError => e
+    config['native_call_webhook_enabled'] = false
+    config['native_call_webhook_last_error'] = e.message.to_s.slice(0, 1000)
+    config.delete('native_call_webhook_url')
+    config.delete('native_call_webhook_verified_at')
+    Rails.logger.warn(
+      "[HUB Connect|API] native CALL webhook setup skipped " \
+      "instance=#{config['instance_name']}: #{e.class}: #{e.message}"
+    )
+    persist_config!
   end
 
   def verify_native_call_webhook!(expected_url)
@@ -204,6 +219,7 @@ class Whatsapp::ConnectApiWebhookSetupService
     config['native_call_webhook_enabled'] = true
     config['native_call_webhook_url'] = expected_url
     config['native_call_webhook_verified_at'] = Time.current.utc.iso8601
+    config.delete('native_call_webhook_last_error')
     persist_config!
   end
 
