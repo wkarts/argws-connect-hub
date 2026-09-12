@@ -1,9 +1,8 @@
 name: Release - Publish Versioned Main
 
 on:
-  pull_request:
+  push:
     branches: [main]
-    types: [closed]
   workflow_dispatch:
 
 permissions:
@@ -15,24 +14,54 @@ concurrency:
   group: argws-connect-hub-release-main
   cancel-in-progress: false
 
-env:
-  RELEASE_SHA: ${{ github.event_name == 'workflow_dispatch' && github.sha || github.event.pull_request.merge_commit_sha }}
-
 jobs:
+  gate:
+    name: Authorize release source
+    runs-on: ubuntu-24.04
+    outputs:
+      allowed: ${{ steps.gate.outputs.allowed }}
+    steps:
+      - name: Require merged develop to main PR
+        id: gate
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EVENT_NAME: ${{ github.event_name }}
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            echo "allowed=true" >> "$GITHUB_OUTPUT"
+            echo "Manual release dispatch authorized."
+            exit 0
+          fi
+
+          if [[ "$COMMIT_MESSAGE" == *"[skip release]"* ]]; then
+            echo "allowed=false" >> "$GITHUB_OUTPUT"
+            echo "Release skipped by commit marker."
+            exit 0
+          fi
+
+          prs="$(gh api -H 'Accept: application/vnd.github+json' "/repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/pulls" 2>/dev/null || echo '[]')"
+          allowed="$(jq -r 'any(.[]; .merged_at != null and .base.ref == "main" and .head.ref == "develop")' <<<"$prs")"
+          echo "allowed=$allowed" >> "$GITHUB_OUTPUT"
+
+          if [[ "$allowed" != "true" ]]; then
+            echo "This main push did not come from a merged develop -> main PR; release publication is disabled."
+          fi
+
   validate:
     name: Validate release source - no image build
-    if: >-
-      ${{ github.event_name == 'workflow_dispatch' ||
-          (github.event.pull_request.merged == true &&
-           github.event.pull_request.head.ref == 'develop' &&
-           !contains(github.event.pull_request.title, '[skip release]')) }}
+    needs: gate
+    if: ${{ needs.gate.outputs.allowed == 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - name: Checkout exact release candidate
         uses: actions/checkout@v5
         with:
-          ref: ${{ env.RELEASE_SHA }}
+          ref: ${{ github.sha }}
           fetch-depth: 0
 
       - name: Install Ruby 3.3.10
@@ -66,7 +95,7 @@ jobs:
       - name: Checkout validated release source
         uses: actions/checkout@v5
         with:
-          ref: ${{ env.RELEASE_SHA }}
+          ref: ${{ github.sha }}
           fetch-depth: 0
 
       - name: Validate release version and tag availability
@@ -110,7 +139,7 @@ jobs:
       - name: Checkout exact release source
         uses: actions/checkout@v5
         with:
-          ref: ${{ env.RELEASE_SHA }}
+          ref: ${{ github.sha }}
           fetch-depth: 0
 
       - name: Configure Git identity
@@ -132,7 +161,7 @@ jobs:
             exit 1
           fi
           probe="__hub-release-preflight-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          git tag -a "$probe" "$RELEASE_SHA" -m "HUB release preflight"
+          git tag -a "$probe" "$GITHUB_SHA" -m "HUB release preflight"
           git tag -d "$probe" >/dev/null
           gh api "/repos/${GITHUB_REPOSITORY}" --jq '.full_name' >/dev/null
 
@@ -147,7 +176,7 @@ jobs:
       - name: Checkout exact release source
         uses: actions/checkout@v5
         with:
-          ref: ${{ env.RELEASE_SHA }}
+          ref: ${{ github.sha }}
           fetch-depth: 0
 
       - name: Resolve immutable HUB bases
@@ -209,7 +238,7 @@ jobs:
             echo "ghcr.io/${{ github.repository_owner }}/argws-connect-hub:${major}.${minor}"
             echo "ghcr.io/${{ github.repository_owner }}/argws-connect-hub:${major}"
             echo "ghcr.io/${{ github.repository_owner }}/argws-connect-hub:latest"
-            echo "ghcr.io/${{ github.repository_owner }}/argws-connect-hub:sha-${RELEASE_SHA}"
+            echo "ghcr.io/${{ github.repository_owner }}/argws-connect-hub:sha-${{ github.sha }}"
             echo EOF
           } >> "$GITHUB_OUTPUT"
 
@@ -222,7 +251,7 @@ jobs:
           platforms: linux/amd64
           push: true
           build-args: |
-            GIT_SHA=${{ env.RELEASE_SHA }}
+            GIT_SHA=${{ github.sha }}
             HUB_VERSION=${{ needs.plan.outputs.version }}
             HUB_DEPS_BASE_IMAGE=${{ steps.bases.outputs.deps }}
             HUB_RUNTIME_BASE_IMAGE=${{ steps.bases.outputs.runtime }}
@@ -230,7 +259,7 @@ jobs:
           labels: |
             org.opencontainers.image.title=HUB
             org.opencontainers.image.version=${{ needs.plan.outputs.version }}
-            org.opencontainers.image.revision=${{ env.RELEASE_SHA }}
+            org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.argws.hub.channel=stable
             org.argws.hub.base.version=${{ steps.bases.outputs.version }}
@@ -246,7 +275,7 @@ jobs:
           IMAGE_TAGS: ${{ steps.meta.outputs.tags }}
           EXPECTED_DIGEST: ${{ steps.build.outputs.digest }}
           EXPECTED_VERSION: ${{ needs.plan.outputs.version }}
-          EXPECTED_REVISION: ${{ env.RELEASE_SHA }}
+          EXPECTED_REVISION: ${{ github.sha }}
           EXPECTED_CHANNEL: stable
           HUB_IMAGE_REQUIRE_ANONYMOUS_PULL: ${{ vars.HUB_IMAGE_REQUIRE_ANONYMOUS_PULL || 'true' }}
         run: bash ./scripts/verify-hub-image.sh
@@ -259,7 +288,7 @@ jobs:
       - name: Checkout exact released source
         uses: actions/checkout@v5
         with:
-          ref: ${{ env.RELEASE_SHA }}
+          ref: ${{ github.sha }}
           fetch-depth: 0
 
       - name: Configure Git identity
@@ -272,7 +301,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ needs.plan.outputs.tag }}
-          RELEASE_SHA: ${{ env.RELEASE_SHA }}
+          RELEASE_SHA: ${{ github.sha }}
           IMAGE_DIGEST: ${{ needs.build.outputs.digest }}
         shell: bash
         run: |
