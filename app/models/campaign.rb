@@ -32,12 +32,16 @@
 class Campaign < ApplicationRecord
   include UrlHelper
 
+  RECURRENCE_FREQUENCIES = %w[hourly daily weekly monthly].freeze
+
   validates :account_id, presence: true
   validates :inbox_id, presence: true
   validates :title, presence: true
-  validates :message, presence: true
+  validate :validate_campaign_content
   validate :validate_campaign_inbox
   validate :validate_channel_message_attributes
+  validate :validate_schedule
+  validate :validate_recurrence
   validate :validate_url
   validate :prevent_completed_campaign_from_update, on: :update
 
@@ -49,9 +53,11 @@ class Campaign < ApplicationRecord
   enum campaign_status: { active: 0, completed: 1 }
 
   has_many :conversations, dependent: :nullify, autosave: true
+  has_many_attached :materials
 
   before_validation :ensure_correct_campaign_attributes
   after_commit :set_display_id, unless: :display_id?
+  after_commit :enqueue_scheduled_delivery, on: [:create, :update]
 
   def campaign_type=(value)
     @campaign_type_explicitly_set = true
@@ -59,26 +65,74 @@ class Campaign < ApplicationRecord
   end
 
   def trigger!
-    return if completed?
+    return if completed? || !enabled?
 
     if one_off?
       Campaigns::OneoffCampaignService.new(campaign: self).perform
-    elsif ongoing? && Campaigns::ChannelDriverResolver.supported?(inbox)
+    elsif scheduled_recurring_delivery?
       Campaigns::RecurringCampaignService.new(campaign: self).perform
     end
   end
 
   def channel_capabilities
-    return %w[ongoing url] if inbox&.inbox_type == 'Website'
+    return %w[ongoing url schedule materials] if inbox&.inbox_type == 'Website'
     return [] unless Campaigns::ChannelDriverResolver.supported?(inbox)
 
-    (Campaigns::ChannelDriverResolver.resolve(self).capabilities + %w[one_off ongoing]).uniq
+    (Campaigns::ChannelDriverResolver.resolve(self).capabilities + %w[one_off ongoing schedule materials]).uniq
+  end
+
+  def recurrence_config
+    trigger_rules.to_h['recurrence'].to_h
+  end
+
+  def scheduled_delivery?
+    return false unless Campaigns::ChannelDriverResolver.supported?(inbox)
+    return true if one_off?
+
+    scheduled_recurring_delivery?
+  end
+
+  def scheduled_recurring_delivery?
+    ongoing? && Campaigns::ChannelDriverResolver.supported?(inbox) && recurrence_config['frequency'].present?
+  end
+
+  def next_scheduled_at(from: scheduled_at || Time.current)
+    return unless scheduled_recurring_delivery?
+
+    interval = [recurrence_config['interval'].to_i, 1].max
+    next_time = case recurrence_config['frequency']
+                when 'hourly' then from + interval.hours
+                when 'daily' then from + interval.days
+                when 'weekly' then from + interval.weeks
+                when 'monthly' then from.advance(months: interval)
+                end
+    return if next_time.blank?
+
+    ends_at = recurrence_ends_at
+    return if ends_at.present? && next_time > ends_at
+
+    next_time
+  end
+
+  def recurrence_ends_at
+    value = recurrence_config['ends_at']
+    return if value.blank?
+
+    Time.zone.parse(value.to_s)
+  rescue ArgumentError, TypeError
+    nil
   end
 
   private
 
   def set_display_id
     reload
+  end
+
+  def validate_campaign_content
+    return if message.present? || materials.attached?
+
+    errors.add(:message, 'or at least one campaign material is required')
   end
 
   def validate_campaign_inbox
@@ -102,6 +156,32 @@ class Campaign < ApplicationRecord
     end
   end
 
+  def validate_schedule
+    errors.add(:scheduled_at, 'is required') if scheduled_at.blank?
+  end
+
+  def validate_recurrence
+    return unless ongoing? && Campaigns::ChannelDriverResolver.supported?(inbox)
+
+    frequency = recurrence_config['frequency'].to_s
+    unless RECURRENCE_FREQUENCIES.include?(frequency)
+      errors.add(:trigger_rules, "recurrence frequency must be one of: #{RECURRENCE_FREQUENCIES.join(', ')}")
+      return
+    end
+
+    errors.add(:trigger_rules, 'recurrence interval must be greater than zero') if recurrence_config['interval'].to_i <= 0
+
+    ends_at_value = recurrence_config['ends_at']
+    return if ends_at_value.blank?
+
+    ends_at = recurrence_ends_at
+    if ends_at.blank?
+      errors.add(:trigger_rules, 'recurrence end date is invalid')
+    elsif scheduled_at.present? && ends_at < scheduled_at
+      errors.add(:trigger_rules, 'recurrence end date must be after the first scheduled execution')
+    end
+  end
+
   def ensure_correct_campaign_attributes
     return if inbox.blank?
 
@@ -110,24 +190,28 @@ class Campaign < ApplicationRecord
       write_attribute(:campaign_type, inferred_type)
     end
 
-    if one_off?
-      self.scheduled_at ||= Time.now.utc
-    else
-      self.scheduled_at = nil
-    end
+    self.scheduled_at ||= Time.current
   end
 
   def validate_url
     return unless inbox&.inbox_type == 'Website'
     return unless ongoing?
-    return unless trigger_rules['url']
+    return unless trigger_rules.to_h['url']
 
-    use_http_protocol = trigger_rules['url'].starts_with?('http://') || trigger_rules['url'].starts_with?('https://')
+    url = trigger_rules.to_h['url']
+    use_http_protocol = url.starts_with?('http://') || url.starts_with?('https://')
     errors.add(:url, 'invalid') unless use_http_protocol
   end
 
   def prevent_completed_campaign_from_update
     errors.add :status, 'The campaign is already completed' if !campaign_status_changed? && completed?
+  end
+
+  def enqueue_scheduled_delivery
+    return unless active? && enabled? && scheduled_delivery? && scheduled_at.present?
+    return unless previous_changes.key?('id') || previous_changes.key?('scheduled_at') || previous_changes.key?('enabled') || previous_changes.key?('campaign_status')
+
+    Campaigns::TriggerCampaignJob.set(wait_until: [scheduled_at, Time.current].max).perform_later(id, scheduled_at.iso8601(6))
   end
 
   trigger.before(:insert).for_each(:row) do
