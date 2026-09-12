@@ -33,6 +33,7 @@ class Campaign < ApplicationRecord
   include UrlHelper
 
   RECURRENCE_FREQUENCIES = %w[hourly daily weekly monthly].freeze
+  DEFAULT_RECURRENCE = { 'frequency' => 'daily', 'interval' => 1, 'ends_at' => nil }.freeze
 
   validates :account_id, presence: true
   validates :inbox_id, presence: true
@@ -191,6 +192,14 @@ class Campaign < ApplicationRecord
     end
 
     self.scheduled_at ||= Time.current
+    ensure_default_recurrence
+  end
+
+  def ensure_default_recurrence
+    return unless ongoing? && Campaigns::ChannelDriverResolver.supported?(inbox)
+    return if recurrence_config['frequency'].present?
+
+    self.trigger_rules = trigger_rules.to_h.merge('recurrence' => DEFAULT_RECURRENCE.deep_dup)
   end
 
   def validate_url
