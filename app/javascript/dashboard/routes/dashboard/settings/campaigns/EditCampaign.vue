@@ -7,12 +7,14 @@ import HubMessageEditor from 'dashboard/components/widgets/HubWriter/Editor.vue'
 import HubDateTimePicker from 'dashboard/components/ui/DateTimePicker.vue';
 import { useCampaign } from 'shared/composables/useCampaign';
 import { INBOX_TYPES } from 'shared/mixins/inboxMixin';
+import CampaignMaterials from './CampaignMaterials.vue';
 import { URLPattern } from 'urlpattern-polyfill';
 
 export default {
   components: {
     HubMessageEditor,
     HubDateTimePicker,
+    CampaignMaterials,
   },
   props: {
     selectedCampaign: {
@@ -39,6 +41,10 @@ export default {
       triggerOnlyDuringBusinessHours: false,
       enabled: true,
       scheduledAt: null,
+      recurrenceFrequency: 'daily',
+      recurrenceInterval: 1,
+      recurrenceEndsAt: null,
+      materials: [],
       selectedAudience: [],
       senderList: [],
     };
@@ -46,8 +52,13 @@ export default {
   validations() {
     const validations = {
       title: { required },
-      message: { required },
+      message: {
+        hasContent() {
+          return Boolean(this.message?.trim() || this.materials.length);
+        },
+      },
       selectedInbox: { required },
+      scheduledAt: { required },
     };
 
     if (this.isWebsiteCampaign) {
@@ -73,6 +84,15 @@ export default {
       validations.selectedAudience = {
         isEmpty() {
           return !!this.selectedAudience.length;
+        },
+      };
+    }
+
+    if (this.isScheduledRecurringCampaign) {
+      validations.recurrenceFrequency = { required };
+      validations.recurrenceInterval = {
+        positive(value) {
+          return Number(value) > 0;
         },
       };
     }
@@ -111,6 +131,9 @@ export default {
         this.isOngoingType &&
         this.selectedInboxRecord.channel_type === INBOX_TYPES.WEB
       );
+    },
+    isScheduledRecurringCampaign() {
+      return this.isOngoingType && this.selectedInbox && !this.isWebsiteCampaign;
     },
     isWhatsAppCampaign() {
       return this.selectedInboxRecord.channel_type === INBOX_TYPES.WHATSAPP;
@@ -175,6 +198,9 @@ export default {
     },
     onChange(value) {
       this.scheduledAt = value;
+    },
+    onRecurrenceEndsAtChange(value) {
+      this.recurrenceEndsAt = value;
     },
     async loadInboxMembers() {
       this.senderList = [];
@@ -276,6 +302,7 @@ export default {
     setFormValues() {
       const campaign = this.selectedCampaign;
       const rules = campaign.trigger_rules || {};
+      const recurrence = rules.recurrence || {};
       const attributes = campaign.message_attributes || {};
       const templateParams = attributes.template_params || {};
 
@@ -298,8 +325,23 @@ export default {
       this.scheduledAt = campaign.scheduled_at
         ? new Date(Number(campaign.scheduled_at) * 1000)
         : null;
+      this.recurrenceFrequency = recurrence.frequency || 'daily';
+      this.recurrenceInterval = Number(recurrence.interval || 1);
+      this.recurrenceEndsAt = recurrence.ends_at
+        ? new Date(recurrence.ends_at)
+        : null;
+      this.materials = [...(campaign.materials || [])];
       this.hydrateAudience();
       this.loadInboxMembers();
+    },
+    recurringTriggerRules() {
+      return {
+        recurrence: {
+          frequency: this.recurrenceFrequency,
+          interval: Number(this.recurrenceInterval),
+          ends_at: this.recurrenceEndsAt || null,
+        },
+      };
     },
     async editCampaign() {
       this.v$.$touch();
@@ -308,10 +350,12 @@ export default {
       const payload = {
         id: this.selectedCampaign.id,
         title: this.title,
-        message: this.message,
+        message: this.message || '',
         campaign_type: this.campaignType,
         inbox_id: this.selectedInbox,
+        scheduled_at: this.scheduledAt,
         message_attributes: this.getMessageAttributes(),
+        material_blob_ids: this.materials.map(material => material.signed_id),
       };
 
       if (this.isWebsiteCampaign) {
@@ -331,7 +375,9 @@ export default {
           type: 'Label',
         }));
         payload.enabled = this.isOngoingType ? this.enabled : true;
-        if (this.isOneOffType) payload.scheduled_at = this.scheduledAt;
+        if (this.isScheduledRecurringCampaign) {
+          payload.trigger_rules = this.recurringTriggerRules();
+        }
       }
 
       try {
@@ -445,6 +491,9 @@ export default {
               :readonly="isWhatsAppTemplateMode"
               @blur="v$.message.$touch"
             />
+            <span v-if="v$.message.$error" class="message">
+              Informe uma mensagem ou anexe pelo menos um material.
+            </span>
           </label>
 
           <label
@@ -473,6 +522,8 @@ export default {
             </span>
           </label>
         </template>
+
+        <CampaignMaterials v-if="selectedInbox" v-model="materials" />
 
         <template v-if="isWebsiteCampaign">
           <label :class="{ error: v$.selectedSender.$error }">
@@ -512,15 +563,46 @@ export default {
           </label>
         </template>
 
-        <label v-if="isOneOffType && !isWebsiteCampaign">
-          {{ $t('CAMPAIGN.ADD.FORM.SCHEDULED_AT.LABEL') }}
+        <label :class="{ error: v$.scheduledAt.$error }">
+          Data e hora da campanha
           <HubDateTimePicker
             :value="scheduledAt"
             :confirm-text="$t('CAMPAIGN.ADD.FORM.SCHEDULED_AT.CONFIRM')"
             :placeholder="$t('CAMPAIGN.ADD.FORM.SCHEDULED_AT.PLACEHOLDER')"
             @change="onChange"
           />
+          <span v-if="v$.scheduledAt.$error" class="message">
+            Informe a data e a hora da campanha.
+          </span>
         </label>
+
+        <div v-if="isScheduledRecurringCampaign" class="recurrence-grid">
+          <label :class="{ error: v$.recurrenceFrequency.$error }">
+            Recorrência
+            <select v-model="recurrenceFrequency">
+              <option value="hourly">Hora(s)</option>
+              <option value="daily">Dia(s)</option>
+              <option value="weekly">Semana(s)</option>
+              <option value="monthly">Mês(es)</option>
+            </select>
+          </label>
+          <label :class="{ error: v$.recurrenceInterval.$error }">
+            Repetir a cada
+            <input v-model.number="recurrenceInterval" type="number" min="1" step="1" />
+            <span v-if="v$.recurrenceInterval.$error" class="message">
+              O intervalo deve ser maior que zero.
+            </span>
+          </label>
+          <label>
+            Encerrar recorrência em (opcional)
+            <HubDateTimePicker
+              :value="recurrenceEndsAt"
+              :confirm-text="$t('CAMPAIGN.ADD.FORM.SCHEDULED_AT.CONFIRM')"
+              placeholder="Sem data de término"
+              @change="onRecurrenceEndsAtChange"
+            />
+          </label>
+        </div>
 
         <label v-if="isOngoingType">
           <input v-model="enabled" type="checkbox" />
@@ -551,5 +633,9 @@ export default {
 
 .campaign-warning {
   @apply p-3 mb-3 text-sm rounded border border-yellow-300 bg-yellow-50 text-yellow-900;
+}
+
+.recurrence-grid {
+  @apply grid grid-cols-1 gap-3 mb-3 md:grid-cols-3;
 }
 </style>

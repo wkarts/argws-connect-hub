@@ -24,7 +24,10 @@ class Campaigns::CampaignConversationBuilder
     end
     @conversation
   rescue StandardError => e
-    Rails.logger.info(e.message)
+    Rails.logger.error(
+      "Campaign #{@campaign&.id || campaign_display_id} conversation delivery failed for contact inbox #{contact_inbox_id}: " \
+      "#{e.class}: #{e.message}"
+    )
     nil
   end
 
@@ -33,12 +36,15 @@ class Campaigns::CampaignConversationBuilder
   def message_params
     persisted_attributes = @campaign.message_attributes || {}
     attributes = (message_attributes.presence || persisted_attributes).to_h.deep_symbolize_keys
-    ActionController::Parameters.new(
-      {
-        content: @campaign.message,
-        campaign_id: @campaign.id
-      }.merge(attributes)
-    )
+    payload = {
+      content: @campaign.message,
+      campaign_id: @campaign.id
+    }.merge(attributes)
+
+    material_blob_ids = @campaign.materials.map { |material| material.blob.signed_id }
+    payload[:attachments] = material_blob_ids if material_blob_ids.present?
+
+    ActionController::Parameters.new(payload)
   end
 
   def conversation_params
