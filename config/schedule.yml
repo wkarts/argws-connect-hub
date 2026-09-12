@@ -8,9 +8,10 @@ internal_check_new_versions_job:
   class: 'Internal::CheckNewVersionsJob'
   queue: scheduled_jobs
 
-# executed At every 5th minute..
+# Recovery scanner for scheduled campaigns and other scheduled items.
+# Campaigns also enqueue an exact delayed job when their schedule is saved.
 trigger_scheduled_items_job:
-  cron: '*/5 * * * *'
+  cron: '*/1 * * * *'
   class: 'TriggerScheduledItemsJob'
   queue: scheduled_jobs
 
