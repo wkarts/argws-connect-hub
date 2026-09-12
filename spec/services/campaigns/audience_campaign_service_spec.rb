@@ -17,7 +17,7 @@ RSpec.describe Campaigns::AudienceCampaignService do
   end
 
   describe '#perform' do
-    it 'marks one-off campaigns completed before delivering when requested' do
+    it 'marks one-off campaigns completed only after delivery finishes' do
       contact = create(:contact, :with_phone_number, account: account)
       contact.update_labels([label.title])
       driver = instance_double(Campaigns::ChannelDrivers::Sms)
@@ -26,10 +26,13 @@ RSpec.describe Campaigns::AudienceCampaignService do
       allow(driver).to receive(:validation_errors).and_return([])
       allow(driver).to receive(:deliverable?).with(contact).and_return(true)
       expect(driver).to receive(:deliver).with(contact) do
-        expect(campaign.reload).to be_completed
+        expect(campaign.reload).to be_active
       end
 
-      described_class.new(campaign: campaign).perform(mark_completed: true)
+      result = described_class.new(campaign: campaign).perform(mark_completed: true)
+
+      expect(campaign.reload).to be_completed
+      expect(result).to include(delivered: 1, failed: 0)
     end
 
     it 'does not complete recurring campaigns while delivering' do
@@ -46,6 +49,7 @@ RSpec.describe Campaigns::AudienceCampaignService do
       end
 
       described_class.new(campaign: campaign).perform(mark_completed: false)
+      expect(campaign.reload).to be_active
     end
 
     it 'skips contacts that cannot be delivered by the selected driver' do
@@ -58,7 +62,8 @@ RSpec.describe Campaigns::AudienceCampaignService do
       allow(driver).to receive(:deliverable?).with(contact).and_return(false)
       expect(driver).not_to receive(:deliver)
 
-      described_class.new(campaign: campaign).perform
+      result = described_class.new(campaign: campaign).perform
+      expect(result).to include(eligible: 0, delivered: 0, failed: 0)
     end
 
     it 'only delivers to contacts in the campaign audience labels' do
@@ -74,6 +79,23 @@ RSpec.describe Campaigns::AudienceCampaignService do
       expect(driver).not_to receive(:deliver).with(excluded)
 
       described_class.new(campaign: campaign).perform
+    end
+
+    it 'keeps a one-off campaign active when every eligible delivery raises' do
+      contact = create(:contact, :with_phone_number, account: account)
+      contact.update_labels([label.title])
+      driver = instance_double(Campaigns::ChannelDrivers::Sms)
+
+      allow(Campaigns::ChannelDriverResolver).to receive(:resolve).with(campaign).and_return(driver)
+      allow(driver).to receive(:validation_errors).and_return([])
+      allow(driver).to receive(:deliverable?).with(contact).and_return(true)
+      allow(driver).to receive(:deliver).with(contact).and_raise(StandardError, 'provider unavailable')
+
+      expect do
+        described_class.new(campaign: campaign).perform(mark_completed: true)
+      end.to raise_error(Campaigns::AudienceCampaignService::DeliveryError)
+
+      expect(campaign.reload).to be_active
     end
   end
 end
