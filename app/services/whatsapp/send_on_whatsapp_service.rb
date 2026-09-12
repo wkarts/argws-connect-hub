@@ -10,7 +10,7 @@ class Whatsapp::SendOnWhatsappService < Base::SendOnChannelService
 
     Whatsapp::ConnectApiOpeningMessageValidator.new(message).validate!
 
-    should_send_template_message = template_params.present? || !message.conversation.can_reply?
+    should_send_template_message = !campaign_freeform_message? && (template_params.present? || !message.conversation.can_reply?)
     if should_send_template_message
       send_template_message
     else
@@ -48,19 +48,11 @@ class Whatsapp::SendOnWhatsappService < Base::SendOnChannelService
     # Connect|API never infers a template from free text, bypassing the catalog.
     return [nil, nil, nil, nil] if channel.provider == 'connectapi'
 
-    # Delete the following logic once the update for template_params is stable
-    # see if we can match the message content to a template
-    # An example template may look like "Your package has been shipped. It will be delivered in {{1}} business days.
-    # We want to iterate over these templates with our message body and see if we can fit it to any of the templates
-    # Then we use regex to parse the template variables and convert them into the proper payload
     channel.message_templates&.each do |template|
       match_obj = template_match_object(template)
       next if match_obj.blank?
 
-      # we have a match, now we need to parse the template variables and convert them into the wa recommended format
       processed_parameters = match_obj.captures.map { |x| { type: 'text', text: x } }
-
-      # no need to look up further end the search
       return [template['name'], template['namespace'], template['language'], processed_parameters]
     end
     [nil, nil, nil, nil]
@@ -76,14 +68,8 @@ class Whatsapp::SendOnWhatsappService < Base::SendOnChannelService
   end
 
   def build_template_match_regex(template_text)
-    # Converts the whatsapp template to a comparable regex string to check against the message content
-    # the variables are of the format {{num}} ex:{{1}}
-
-    # transform the template text into a regex string
     template_text = template_text.gsub(/{{\d}}/, '(.*)')
-    # escape if there are regex characters in the template text
     template_text = Regexp.escape(template_text)
-    # ensuring only the variables remain as capture groups
     template_text = template_text.gsub(Regexp.escape('(.*)'), '(.*)')
 
     template_match_string = "^#{template_text}$"
@@ -91,11 +77,8 @@ class Whatsapp::SendOnWhatsappService < Base::SendOnChannelService
   end
 
   def validated_body_object(template)
-    # we don't care if its not approved template
     return if template['status'] != 'approved'
 
-    # we only care about text body object in template. if not present we discard the template
-    # we don't support other forms of templates
     template['components'].find { |obj| obj['type'] == 'BODY' && obj.key?('text') }
   end
 
@@ -108,6 +91,11 @@ class Whatsapp::SendOnWhatsappService < Base::SendOnChannelService
                    end
     message_id = channel.send_message(phone_number, message)
     message.update!(source_id: message_id) if message_id.present?
+  end
+
+  def campaign_freeform_message?
+    attributes = message.additional_attributes.to_h
+    attributes['campaign_id'].present? && template_params.blank?
   end
 
   def template_params
