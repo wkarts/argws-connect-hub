@@ -27,7 +27,6 @@ class Whatsapp::ConnectApiWebhookSetupService
     sync_instance_metadata!
     enable_meta_compatibility!
     verify_meta_compatibility!
-    configure_native_call_webhook!
 
     if config['disconnect']
       disconnect!
