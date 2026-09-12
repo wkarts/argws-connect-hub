@@ -74,6 +74,48 @@ export const getters = {
     }
     return [];
   },
+  getWhatsAppCampaignTemplates: ($state, $getters) => inboxId => {
+    const inbox = $state.records.find(record => record.id === Number(inboxId));
+    const templates = $getters.getWhatsAppTemplates(inboxId, false);
+
+    return templates.filter(template => {
+      const status = String(template.status || 'APPROVED').toUpperCase();
+      const enabled = ![false, 0, 'false', '0'].includes(template.enabled);
+      const available = ![false, 0, 'false', '0'].includes(template.available);
+      const approved = status === 'APPROVED';
+
+      if (inbox?.provider === 'connectapi') {
+        return (
+          approved &&
+          enabled &&
+          available &&
+          template.hub_remote_present === true &&
+          template.hub_remote_available === true
+        );
+      }
+
+      return approved && enabled && available;
+    });
+  },
+  getCampaignInboxes($state) {
+    return $state.records.filter(item => {
+      if (
+        [
+          INBOX_TYPES.API,
+          INBOX_TYPES.EMAIL,
+          INBOX_TYPES.SMS,
+          INBOX_TYPES.WHATSAPP,
+        ].includes(item.channel_type)
+      ) {
+        return true;
+      }
+
+      return (
+        item.channel_type === INBOX_TYPES.TWILIO &&
+        ['sms', 'whatsapp'].includes(item.medium)
+      );
+    });
+  },
   getNewConversationInboxes($state) {
     return $state.records.filter(inbox => {
       const { channel_type: channelType, phone_number: phoneNumber = '' } =
@@ -116,7 +158,6 @@ export const getters = {
     );
   },
 };
-
 
 export const actions = {
   setOpeningTemplate: async ({ commit, getters: inboxGetters }, { inboxId, ...attributes }) => {

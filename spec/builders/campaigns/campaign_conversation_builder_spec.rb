@@ -19,6 +19,24 @@ describe Campaigns::CampaignConversationBuilder do
       expect(campaign_conversation.messages.first.additional_attributes['campaign_id']).to eq(campaign.id)
     end
 
+    it 'passes polymorphic message attributes to the message builder' do
+      template_params = {
+        name: 'approved_template',
+        language: 'pt_BR',
+        processed_params: { '1' => 'Wallace' }
+      }
+
+      campaign_conversation = described_class.new(
+        contact_inbox_id: contact_inbox.id,
+        campaign_display_id: campaign.display_id,
+        message_attributes: { template_params: template_params }
+      ).perform
+
+      message = campaign_conversation.messages.first
+      expect(message.additional_attributes['template_params']['name']).to eq('approved_template')
+      expect(message.additional_attributes['template_params']['language']).to eq('pt_BR')
+    end
+
     it 'will not create a conversation with campaign id if another conversation exists' do
       create(:conversation, contact_inbox_id: contact_inbox.id, inbox: inbox, account: account)
       campaign_conversation = described_class.new(
@@ -27,6 +45,20 @@ describe Campaigns::CampaignConversationBuilder do
       ).perform
 
       expect(campaign_conversation).to be_nil
+    end
+
+    it 'allows outbound channel campaigns to create a dedicated conversation when another conversation exists' do
+      create(:conversation, contact_inbox_id: contact_inbox.id, inbox: inbox, account: account)
+
+      campaign_conversation = described_class.new(
+        contact_inbox_id: contact_inbox.id,
+        campaign_display_id: campaign.display_id,
+        skip_existing_conversation: false
+      ).perform
+
+      expect(campaign_conversation).to be_present
+      expect(campaign_conversation.campaign_id).to eq(campaign.id)
+      expect(contact_inbox.reload.conversations.count).to eq(2)
     end
   end
 end

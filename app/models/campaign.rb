@@ -9,6 +9,7 @@
 #  description                        :text
 #  enabled                            :boolean          default(TRUE)
 #  message                            :text             not null
+#  message_attributes                 :jsonb            default({}), not null
 #  scheduled_at                       :datetime
 #  title                              :string           not null
 #  trigger_only_during_business_hours :boolean          default(FALSE)
@@ -35,6 +36,7 @@ class Campaign < ApplicationRecord
   validates :title, presence: true
   validates :message, presence: true
   validate :validate_campaign_inbox
+  validate :validate_channel_message_attributes
   validate :validate_url
   validate :prevent_completed_campaign_from_update, on: :update
   belongs_to :account
@@ -54,8 +56,14 @@ class Campaign < ApplicationRecord
     return unless one_off?
     return if completed?
 
-    Twilio::OneoffSmsCampaignService.new(campaign: self).perform if inbox.inbox_type == 'Twilio SMS'
-    Sms::OneoffSmsCampaignService.new(campaign: self).perform if inbox.inbox_type == 'Sms'
+    Campaigns::OneoffCampaignService.new(campaign: self).perform
+  end
+
+  def channel_capabilities
+    return %w[ongoing url] if inbox&.inbox_type == 'Website'
+    return [] unless Campaigns::ChannelDriverResolver.supported?(inbox)
+
+    Campaigns::ChannelDriverResolver.resolve(self).capabilities
   end
 
   private
@@ -66,15 +74,25 @@ class Campaign < ApplicationRecord
 
   def validate_campaign_inbox
     return unless inbox
+    return if inbox.inbox_type == 'Website'
+    return if Campaigns::ChannelDriverResolver.supported?(inbox)
 
-    errors.add :inbox, 'Unsupported Inbox type' unless ['Website', 'Twilio SMS', 'Sms'].include? inbox.inbox_type
+    errors.add :inbox, 'Unsupported Inbox type'
+  end
+
+  def validate_channel_message_attributes
+    return unless Campaigns::ChannelDriverResolver.supported?(inbox)
+
+    Campaigns::ChannelDriverResolver.resolve(self).validation_errors.each do |message|
+      errors.add(:message_attributes, message)
+    end
   end
 
   # TO-DO we clean up with better validations when campaigns evolve into more inboxes
   def ensure_correct_campaign_attributes
     return if inbox.blank?
 
-    if ['Twilio SMS', 'Sms'].include?(inbox.inbox_type)
+    if Campaigns::ChannelDriverResolver.supported?(inbox)
       self.campaign_type = 'one_off'
       self.scheduled_at ||= Time.now.utc
     else
