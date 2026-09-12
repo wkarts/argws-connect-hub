@@ -2,10 +2,16 @@ class TriggerScheduledItemsJob < ApplicationJob
   queue_as :scheduled_jobs
 
   def perform
-    # trigger the scheduled campaign jobs
-    Campaign.where(campaign_type: :one_off,
-                   campaign_status: :active).where(scheduled_at: 3.days.ago..Time.current).all.find_each(batch_size: 100) do |campaign|
-      Campaigns::TriggerOneoffCampaignJob.perform_later(campaign)
+    # Recovery scanner for scheduled campaigns. Direct delayed jobs are queued
+    # when the campaign is created/updated; this pass guarantees recovery after
+    # worker restarts or queue interruptions without dropping older campaigns.
+    Campaign.where(campaign_status: :active, enabled: true)
+            .where.not(scheduled_at: nil)
+            .where('scheduled_at <= ?', Time.current)
+            .find_each(batch_size: 100) do |campaign|
+      next unless campaign.scheduled_delivery?
+
+      Campaigns::TriggerCampaignJob.perform_later(campaign.id, campaign.scheduled_at.iso8601(6))
     end
 
     # Job to reopen snoozed conversations
