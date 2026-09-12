@@ -5,6 +5,7 @@ import { required } from '@vuelidate/validators';
 import { useAlert } from 'dashboard/composables';
 import HubMessageEditor from 'dashboard/components/widgets/HubWriter/Editor.vue';
 import { useCampaign } from 'shared/composables/useCampaign';
+import { INBOX_TYPES } from 'shared/mixins/inboxMixin';
 import HubDateTimePicker from 'dashboard/components/ui/DateTimePicker.vue';
 import { URLPattern } from 'urlpattern-polyfill';
 
@@ -23,6 +24,9 @@ export default {
       message: '',
       selectedSender: 0,
       selectedInbox: null,
+      selectedTemplateKey: '',
+      templateParameters: {},
+      emailSubject: '',
       endPoint: '',
       timeOnPage: 10,
       show: true,
@@ -36,27 +40,20 @@ export default {
 
   validations() {
     const commonValidations = {
-      title: {
-        required,
-      },
-      message: {
-        required,
-      },
-      selectedInbox: {
-        required,
-      },
+      title: { required },
+      message: { required },
+      selectedInbox: { required },
     };
+
     if (this.isOngoingType) {
       return {
         ...commonValidations,
-        selectedSender: {
-          required,
-        },
+        selectedSender: { required },
         endPoint: {
           required,
           shouldBeAValidURLPattern(value) {
             try {
-              // eslint-disable-next-line
+              // eslint-disable-next-line no-new
               new URLPattern(value);
               return true;
             } catch (error) {
@@ -64,20 +61,15 @@ export default {
             }
           },
           shouldStartWithHTTP(value) {
-            if (value) {
-              return (
-                value.startsWith('https://') || value.startsWith('http://')
-              );
-            }
-            return false;
+            if (!value) return false;
+            return value.startsWith('https://') || value.startsWith('http://');
           },
         },
-        timeOnPage: {
-          required,
-        },
+        timeOnPage: { required },
       };
     }
-    return {
+
+    const oneOffValidations = {
       ...commonValidations,
       selectedAudience: {
         isEmpty() {
@@ -85,6 +77,24 @@ export default {
         },
       },
     };
+
+    if (this.isWhatsAppCampaign) {
+      oneOffValidations.selectedTemplateKey = { required };
+      oneOffValidations.templateParameters = {
+        allRequired() {
+          return this.templateVariableIndexes.every(position => {
+            const value = this.templateParameters[String(position)];
+            return typeof value === 'string' && value.trim().length > 0;
+          });
+        },
+      };
+    }
+
+    if (this.isEmailCampaign) {
+      oneOffValidations.emailSubject = { required };
+    }
+
+    return oneOffValidations;
   },
   computed: {
     ...mapGetters({
@@ -95,19 +105,64 @@ export default {
       if (this.isOngoingType) {
         return this.$store.getters['inboxes/getWebsiteInboxes'];
       }
-      return this.$store.getters['inboxes/getSMSInboxes'];
+      return this.$store.getters['inboxes/getCampaignInboxes'];
+    },
+    selectedInboxRecord() {
+      if (!this.selectedInbox) return {};
+      return this.$store.getters['inboxes/getInbox'](this.selectedInbox);
+    },
+    isWhatsAppCampaign() {
+      return (
+        this.isOneOffType &&
+        this.selectedInboxRecord.channel_type === INBOX_TYPES.WHATSAPP
+      );
+    },
+    isEmailCampaign() {
+      return (
+        this.isOneOffType &&
+        this.selectedInboxRecord.channel_type === INBOX_TYPES.EMAIL
+      );
+    },
+    isApiCampaign() {
+      return (
+        this.isOneOffType &&
+        this.selectedInboxRecord.channel_type === INBOX_TYPES.API
+      );
+    },
+    whatsAppTemplates() {
+      if (!this.isWhatsAppCampaign) return [];
+      return this.$store.getters['inboxes/getWhatsAppCampaignTemplates'](
+        this.selectedInbox
+      );
+    },
+    selectedTemplate() {
+      return this.whatsAppTemplates.find(
+        template => this.templateKey(template) === this.selectedTemplateKey
+      );
+    },
+    templateVariableIndexes() {
+      if (!this.selectedTemplate) return [];
+
+      const body = (this.selectedTemplate.components || []).find(
+        component => component.type === 'BODY'
+      );
+      if (!body?.text) return [];
+
+      const positions = [];
+      const pattern = /\{\{([1-9]\d*)\}\}/g;
+      let match = pattern.exec(body.text);
+      while (match) {
+        positions.push(Number(match[1]));
+        match = pattern.exec(body.text);
+      }
+      return [...new Set(positions)].sort((a, b) => a - b);
     },
     sendersAndBotList() {
       return [
-        {
-          id: 0,
-          name: 'Bot',
-        },
+        { id: 0, name: 'Bot' },
         ...this.senderList,
       ];
     },
-  },
-  mounted() {
   },
   methods: {
     onClose() {
@@ -117,6 +172,13 @@ export default {
       this.scheduledAt = value;
     },
     async onChangeInbox() {
+      this.selectedTemplateKey = '';
+      this.templateParameters = {};
+      this.emailSubject = '';
+      if (this.isOneOffType) this.message = '';
+
+      if (!this.isOngoingType) return;
+
       try {
         const response = await this.$store.dispatch('inboxMembers/get', {
           inboxId: this.selectedInbox,
@@ -131,55 +193,117 @@ export default {
         useAlert(errorMessage);
       }
     },
+    templateKey(template) {
+      return `${template.name}::${template.language}`;
+    },
+    templateLabel(template) {
+      const category = template.category ? ` · ${template.category}` : '';
+      return `${template.name} (${template.language})${category}`;
+    },
+    onTemplateChange() {
+      const parameters = {};
+      this.templateVariableIndexes.forEach(position => {
+        parameters[String(position)] = '';
+      });
+      this.templateParameters = parameters;
+      this.updateTemplateMessage();
+    },
+    updateTemplateMessage() {
+      if (!this.selectedTemplate) {
+        this.message = '';
+        return;
+      }
+
+      const order = ['HEADER', 'BODY', 'FOOTER'];
+      const components = [...(this.selectedTemplate.components || [])]
+        .filter(component => component?.text)
+        .sort(
+          (left, right) =>
+            order.indexOf(left.type) - order.indexOf(right.type)
+        );
+
+      this.message = components
+        .map(component =>
+          component.text.replace(/\{\{([1-9]\d*)\}\}/g, (match, position) => {
+            const value = this.templateParameters[String(position)];
+            return typeof value === 'string' && value.length ? value : match;
+          })
+        )
+        .join('\n\n');
+    },
+    whatsappTemplateParams() {
+      if (!this.selectedTemplate) return {};
+
+      const params = {
+        name: this.selectedTemplate.name,
+        language: this.selectedTemplate.language,
+        category: this.selectedTemplate.category,
+        namespace: this.selectedTemplate.namespace,
+        processed_params: { ...this.templateParameters },
+      };
+
+      if (Number.isInteger(this.selectedTemplate.version)) {
+        params.connect_api_version = this.selectedTemplate.version;
+      }
+
+      return params;
+    },
+    getMessageAttributes() {
+      if (this.isWhatsAppCampaign) {
+        return { template_params: this.whatsappTemplateParams() };
+      }
+      if (this.isEmailCampaign) {
+        return { subject: this.emailSubject };
+      }
+      if (this.isApiCampaign) {
+        return { payload_type: 'message_created' };
+      }
+      return {};
+    },
     getCampaignDetails() {
-      let campaignDetails = null;
       if (this.isOngoingType) {
-        campaignDetails = {
+        return {
           title: this.title,
           message: this.message,
           inbox_id: this.selectedInbox,
           sender_id: this.selectedSender || null,
           enabled: this.enabled,
           trigger_only_during_business_hours:
-            // eslint-disable-next-line prettier/prettier
             this.triggerOnlyDuringBusinessHours,
           trigger_rules: {
             url: this.endPoint,
             time_on_page: this.timeOnPage,
           },
         };
-      } else {
-        const audience = this.selectedAudience.map(item => {
-          return {
-            id: item.id,
-            type: 'Label',
-          };
-        });
-        campaignDetails = {
-          title: this.title,
-          message: this.message,
-          inbox_id: this.selectedInbox,
-          scheduled_at: this.scheduledAt,
-          audience,
-        };
       }
-      return campaignDetails;
+
+      const audience = this.selectedAudience.map(item => ({
+        id: item.id,
+        type: 'Label',
+      }));
+
+      return {
+        title: this.title,
+        message: this.message,
+        message_attributes: this.getMessageAttributes(),
+        inbox_id: this.selectedInbox,
+        scheduled_at: this.scheduledAt,
+        audience,
+      };
     },
     async addCampaign() {
       this.v$.$touch();
-      if (this.v$.$invalid) {
-        return;
-      }
-      try {
-        const campaignDetails = this.getCampaignDetails();
-        await this.$store.dispatch('campaigns/create', campaignDetails);
+      if (this.v$.$invalid) return;
 
-        // tracking this here instead of the store to track the type of campaign
+      try {
+        await this.$store.dispatch('campaigns/create', this.getCampaignDetails());
         useAlert(this.$t('CAMPAIGN.ADD.API.SUCCESS_MESSAGE'));
         this.onClose();
       } catch (error) {
         const errorMessage =
-          error?.response?.message || this.$t('CAMPAIGN.ADD.API.ERROR_MESSAGE');
+          error?.response?.data?.message ||
+          error?.response?.message ||
+          this.$t('CAMPAIGN.ADD.API.ERROR_MESSAGE');
         useAlert(errorMessage);
       }
     },
@@ -205,10 +329,21 @@ export default {
           @blur="v$.title.$touch"
         />
 
+        <label :class="{ error: v$.selectedInbox.$error }">
+          {{ $t('CAMPAIGN.ADD.FORM.INBOX.LABEL') }}
+          <select v-model="selectedInbox" @change="onChangeInbox">
+            <option disabled :value="null">Selecione uma caixa de saída</option>
+            <option v-for="item in inboxes" :key="item.id" :value="item.id">
+              {{ item.name }}
+            </option>
+          </select>
+          <span v-if="v$.selectedInbox.$error" class="message">
+            {{ $t('CAMPAIGN.ADD.FORM.INBOX.ERROR') }}
+          </span>
+        </label>
+
         <div v-if="isOngoingType" class="editor-wrap">
-          <label>
-            {{ $t('CAMPAIGN.ADD.FORM.MESSAGE.LABEL') }}
-          </label>
+          <label>{{ $t('CAMPAIGN.ADD.FORM.MESSAGE.LABEL') }}</label>
           <div>
             <HubMessageEditor
               v-model="message"
@@ -223,31 +358,76 @@ export default {
           </div>
         </div>
 
-        <label v-else :class="{ error: v$.message.$error }">
-          {{ $t('CAMPAIGN.ADD.FORM.MESSAGE.LABEL') }}
-          <textarea
-            v-model="message"
-            rows="5"
-            type="text"
-            :placeholder="$t('CAMPAIGN.ADD.FORM.MESSAGE.PLACEHOLDER')"
-            @blur="v$.message.$touch"
-          />
-          <span v-if="v$.message.$error" class="message">
-            {{ $t('CAMPAIGN.ADD.FORM.MESSAGE.ERROR') }}
-          </span>
-        </label>
+        <template v-else>
+          <label
+            v-if="isWhatsAppCampaign"
+            :class="{ error: v$.selectedTemplateKey.$error }"
+          >
+            Template WhatsApp
+            <select v-model="selectedTemplateKey" @change="onTemplateChange">
+              <option disabled value="">Selecione um template</option>
+              <option
+                v-for="template in whatsAppTemplates"
+                :key="templateKey(template)"
+                :value="templateKey(template)"
+              >
+                {{ templateLabel(template) }}
+              </option>
+            </select>
+            <span v-if="v$.selectedTemplateKey.$error" class="message">
+              Selecione um template disponível nesta caixa.
+            </span>
+          </label>
 
-        <label :class="{ error: v$.selectedInbox.$error }">
-          {{ $t('CAMPAIGN.ADD.FORM.INBOX.LABEL') }}
-          <select v-model="selectedInbox" @change="onChangeInbox($event)">
-            <option v-for="item in inboxes" :key="item.name" :value="item.id">
-              {{ item.name }}
-            </option>
-          </select>
-          <span v-if="v$.selectedInbox.$error" class="message">
-            {{ $t('CAMPAIGN.ADD.FORM.INBOX.ERROR') }}
-          </span>
-        </label>
+          <div v-if="isWhatsAppCampaign && templateVariableIndexes.length">
+            <label
+              v-for="position in templateVariableIndexes"
+              :key="position"
+            >
+              Variável {{ position }}
+              <input
+                v-model="templateParameters[String(position)]"
+                type="text"
+                :placeholder="`Valor de {{${position}}}`"
+                @input="updateTemplateMessage"
+                @blur="v$.templateParameters.$touch"
+              />
+            </label>
+            <span v-if="v$.templateParameters.$error" class="message">
+              Preencha todas as variáveis do template.
+            </span>
+          </div>
+
+          <hub-input
+            v-if="isEmailCampaign"
+            v-model="emailSubject"
+            label="Assunto do e-mail"
+            type="text"
+            :class="{ error: v$.emailSubject.$error }"
+            :error="v$.emailSubject.$error ? 'Informe o assunto do e-mail.' : ''"
+            placeholder="Assunto da campanha"
+            @blur="v$.emailSubject.$touch"
+          />
+
+          <label :class="{ error: v$.message.$error }">
+            {{ isApiCampaign ? 'Payload / mensagem' : $t('CAMPAIGN.ADD.FORM.MESSAGE.LABEL') }}
+            <textarea
+              v-model="message"
+              rows="6"
+              type="text"
+              :readonly="isWhatsAppCampaign"
+              :placeholder="
+                isApiCampaign
+                  ? 'Informe o conteúdo ou JSON que será entregue pelo webhook'
+                  : $t('CAMPAIGN.ADD.FORM.MESSAGE.PLACEHOLDER')
+              "
+              @blur="v$.message.$touch"
+            />
+            <span v-if="v$.message.$error" class="message">
+              {{ $t('CAMPAIGN.ADD.FORM.MESSAGE.ERROR') }}
+            </span>
+          </label>
+        </template>
 
         <label
           v-if="isOneOffType"
@@ -311,9 +491,7 @@ export default {
           :label="$t('CAMPAIGN.ADD.FORM.END_POINT.LABEL')"
           type="text"
           :class="{ error: v$.endPoint.$error }"
-          :error="
-            v$.endPoint.$error ? $t('CAMPAIGN.ADD.FORM.END_POINT.ERROR') : ''
-          "
+          :error="v$.endPoint.$error ? $t('CAMPAIGN.ADD.FORM.END_POINT.ERROR') : ''"
           :placeholder="$t('CAMPAIGN.ADD.FORM.END_POINT.PLACEHOLDER')"
           @blur="v$.endPoint.$touch"
         />
@@ -332,12 +510,7 @@ export default {
           @blur="v$.timeOnPage.$touch"
         />
         <label v-if="isOngoingType">
-          <input
-            v-model="enabled"
-            type="checkbox"
-            value="enabled"
-            name="enabled"
-          />
+          <input v-model="enabled" type="checkbox" value="enabled" name="enabled" />
           {{ $t('CAMPAIGN.ADD.FORM.ENABLED') }}
         </label>
         <label v-if="isOngoingType">
