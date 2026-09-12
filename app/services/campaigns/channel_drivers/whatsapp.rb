@@ -24,9 +24,25 @@ class Campaigns::ChannelDrivers::Whatsapp < Campaigns::ChannelDrivers::Base
   end
 
   def validation_errors
-    return [] if template_params.present?
+    return ['template_params is required for WhatsApp campaigns'] if template_params.blank?
+    return [] unless channel.provider == 'connectapi'
 
-    ['template_params is required for WhatsApp campaigns']
+    template = channel.opening_template_catalog.find_available(
+      name: template_params['name'],
+      language: template_params['language'],
+      opening_only: false
+    )
+    return ['selected template is not available for this Connect|API instance'] if template.blank?
+
+    if ConnectApi::LocalTemplateMessage.local?(template)
+      begin
+        ConnectApi::LocalTemplateMessage.new(template, template_params).validate_content!(campaign.message)
+      rescue ConnectApi::LocalTemplateMessage::Error => e
+        return [e.message]
+      end
+    end
+
+    []
   end
 
   private
