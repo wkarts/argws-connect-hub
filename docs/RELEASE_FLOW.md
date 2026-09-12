@@ -1,63 +1,44 @@
-# HUB Release Flow
+# HUB — fluxo de promoção para produção
 
-## Regra principal
+## Fonte de verdade
 
-`main` recebe alterações exclusivamente por Pull Request originada de `develop`.
+A fonte funcional de produção é sempre a revisão existente na `develop` no momento em que a PR `develop -> main` é aberta.
 
-Não fazer push direto, force-update, merge local ou sincronização manual de conteúdo para `main`.
+O fluxo de promoção não recalcula versão e não modifica arquivos de código.
 
-## Fluxo de desenvolvimento
+## O que foi removido
 
-1. Criar branch de feature/fix a partir de `develop`.
-2. Implementar, testar e abrir PR para `develop`.
-3. Mesclar a PR somente depois do CI aprovado.
-4. Repetir para as próximas implementações.
+O HUB não utiliza mais:
 
-## Preparação de release
+- `force_bump`;
+- `auto`, `patch`, `minor` ou `major` como estratégia de release;
+- labels `version:major`, `version:minor` ou `version:patch`;
+- `.github/scripts/compute-next-version.mjs`;
+- `.github/scripts/apply-version.mjs`;
+- commits automáticos de `VERSION`, `package.json` ou `RELEASE-MANIFEST.json`;
+- `git push` de workflow para `main` ou `develop`;
+- criação automática de tag/GitHub Release SemVer.
 
-Antes de abrir a PR `develop -> main`, a versão deve estar definida em `develop` e sincronizada nos três arquivos:
+## Develop
 
-- `VERSION`
-- `package.json`
-- `RELEASE-MANIFEST.json`
+Um merge em `develop` pode validar e construir artefatos, mas não altera a árvore Git.
 
-Use SemVer `X.Y.Z`. O script `scripts/validate-version-sync.sh` valida a consistência.
+A imagem de desenvolvimento usa identidade `develop-<sha-curto>` e é publicada nos aliases `develop`, `develop-<sha-curto>` e `sha-<sha-completo>`.
 
-A versão de release deve ser maior que a última tag `vX.Y.Z` publicada.
+## Main
 
-## PR de release
+`main` aceita promoção somente a partir de `develop`.
 
-A PR de publicação deve usar:
+Após o merge da PR `develop -> main`, o workflow `GHCR - Publish Main Image`:
 
-- head: `develop`
-- base: `main`
+1. confirma que o commit veio de PR mesclada `develop -> main`;
+2. valida exatamente o SHA recebido;
+3. constrói uma única imagem `linux/amd64`;
+4. publica o mesmo digest em `main`, `latest`, `main-<sha-curto>` e `sha-<sha-completo>`;
+5. verifica digest, revisão, build identity e canal `stable`.
 
-O workflow `Main Release PR Policy` rejeita PR para `main` criada a partir de qualquer outra branch e valida o versionamento antes do merge.
+Nenhum passo modifica `develop` ou `main`.
 
-Depois do merge de uma PR normal `develop -> main`, o workflow de release:
+## Histórico
 
-1. valida o código e os deployments;
-2. lê a versão já declarada no código;
-3. valida que a tag ainda não existe;
-4. constrói e publica a imagem imutável;
-5. publica as tags de imagem da versão;
-6. cria a tag Git anotada;
-7. cria a GitHub Release.
-
-O workflow não altera `VERSION`, `package.json` ou `RELEASE-MANIFEST.json` e não cria commit automático de versionamento na `main`.
-
-## Sincronização sem release
-
-Excepcionalmente, uma PR `develop -> main` pode ser usada apenas para normalização de fluxo/metadados sem gerar release nova. Nesse caso, o título deve conter:
-
-`[skip release]`
-
-Mesmo nesse modo, a PR continua obrigada a vir de `develop` e os três arquivos de versão precisam estar sincronizados.
-
-## Resultado esperado
-
-O histórico fica previsível:
-
-`feature/fix -> develop -> main -> tag/release`
-
-A versão é preparada antes da promoção e a `main` nunca passa a ser fonte de mudanças de produto que precisem voltar para `develop`.
+Tags, GitHub Releases e imagens versionadas já existentes não são apagadas nem reescritas. Elas permanecem como histórico das publicações anteriores.

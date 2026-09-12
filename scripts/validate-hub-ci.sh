@@ -13,9 +13,10 @@ if [[ -x ./scripts/audit-hub.sh ]]; then
   bash ./scripts/audit-hub.sh
 fi
 
-# VERSION is the single release-version source of truth. package.json and
-# RELEASE-MANIFEST.json are mirrors and must never drift from it.
+# Application version files are source metadata only. CI validates consistency,
+# but release workflows must never rewrite them or create version commits.
 bash ./scripts/validate-version-sync.sh
+bash ./scripts/validate-release-flow.sh
 
 if command -v ruby >/dev/null 2>&1; then
   echo "Validating Ruby syntax..."
