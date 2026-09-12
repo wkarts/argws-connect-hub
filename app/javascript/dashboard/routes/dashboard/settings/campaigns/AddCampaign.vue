@@ -148,6 +148,9 @@ export default {
     sendersAndBotList() {
       return [{ id: 0, name: 'Bot' }, ...this.senderList];
     },
+    audienceHasError() {
+      return Boolean(this.v$.selectedAudience && this.v$.selectedAudience.$error);
+    },
   },
   methods: {
     onClose() {
@@ -155,6 +158,9 @@ export default {
     },
     onChange(value) {
       this.scheduledAt = value;
+    },
+    touchAudience() {
+      if (this.v$.selectedAudience) this.v$.selectedAudience.$touch();
     },
     async onChangeInbox() {
       this.whatsappMode = 'freeform';
@@ -422,7 +428,7 @@ export default {
 
           <label
             class="multiselect-wrap--small"
-            :class="{ error: v$.selectedAudience?.$error }"
+            :class="{ error: audienceHasError }"
           >
             {{ $t('CAMPAIGN.ADD.FORM.AUDIENCE.LABEL') }}
             <multiselect
@@ -438,10 +444,10 @@ export default {
               selected-label
               :select-label="$t('FORMS.MULTISELECT.ENTER_TO_SELECT')"
               :deselect-label="$t('FORMS.MULTISELECT.ENTER_TO_REMOVE')"
-              @blur="v$.selectedAudience?.$touch"
-              @select="v$.selectedAudience?.$touch"
+              @blur="touchAudience"
+              @select="touchAudience"
             />
-            <span v-if="v$.selectedAudience?.$error" class="message">
+            <span v-if="audienceHasError" class="message">
               {{ $t('CAMPAIGN.ADD.FORM.AUDIENCE.ERROR') }}
             </span>
           </label>
