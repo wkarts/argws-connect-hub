@@ -14,15 +14,14 @@ describe Whatsapp::SendOnWhatsappService do
       stub_request(:post, 'https://waba.360dialog.io/v1/configs/webhook')
     end
 
-    context 'when a valid message' do
+    context 'when a valid legacy 360dialog message' do
       let(:whatsapp_request) { double }
       let!(:whatsapp_channel) do
-        create(
-          :channel_whatsapp,
-          provider: 'default',
-          sync_templates: false,
-          validate_provider_config: false
-        )
+        channel = build(:channel_whatsapp, provider: 'default')
+        channel.define_singleton_method(:sync_templates) { nil }
+        channel.save!(validate: false)
+        create(:inbox, channel: channel, account: channel.account)
+        channel
       end
       let!(:contact_inbox) { create(:contact_inbox, inbox: whatsapp_channel.inbox, source_id: '123456789') }
       let!(:conversation) { create(:conversation, contact_inbox: contact_inbox, inbox: whatsapp_channel.inbox) }
