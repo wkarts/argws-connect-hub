@@ -84,11 +84,14 @@ jobs:
         run: bundle exec rails db:prepare
       - name: Eager load Rails and Enterprise runtime
         run: bundle exec rails runner 'Rails.application.eager_load!; puts "HUB Enterprise eager load OK"'
-      - name: Campaign channel regression specs
+      - name: Campaign scheduling and channel regression specs
         run: >-
           bundle exec rspec
           spec/models/campaign_spec.rb
           spec/builders/campaigns/campaign_conversation_builder_spec.rb
+          spec/builders/campaigns/campaign_materials_spec.rb
+          spec/jobs/campaigns/trigger_campaign_job_spec.rb
+          spec/jobs/trigger_scheduled_items_job_spec.rb
           spec/services/campaigns/audience_campaign_service_spec.rb
           spec/services/campaigns/oneoff_campaign_service_spec.rb
           spec/services/campaigns/recurring_campaign_service_spec.rb
