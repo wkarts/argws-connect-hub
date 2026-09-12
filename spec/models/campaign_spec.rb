@@ -24,7 +24,7 @@ RSpec.describe Campaign do
     end
   end
 
-  context 'when Inbox other then Website or supported one-off channels' do
+  context 'when Inbox other then Website or supported campaign channels' do
     before do
       stub_request(:post, /graph.facebook.com/)
     end
@@ -33,7 +33,7 @@ RSpec.describe Campaign do
     let!(:facebook_inbox) { create(:inbox, channel: facebook_channel) }
     let(:campaign) { build(:campaign, inbox: facebook_inbox) }
 
-    it 'would not save the campaigns' do
+    it 'does not save campaigns' do
       expect(campaign.save).to be false
       expect(campaign.errors.full_messages.first).to eq 'Inbox Unsupported Inbox type'
     end
@@ -44,7 +44,7 @@ RSpec.describe Campaign do
     let(:web_widget) { create(:channel_widget, account: account) }
     let!(:campaign) { create(:campaign, inbox: web_widget.inbox, campaign_status: :completed, trigger_rules: { url: 'https://test.com' }) }
 
-    it 'would prevent further updates' do
+    it 'prevents further updates' do
       campaign.title = 'new name'
       expect(campaign.save).to be false
       expect(campaign.errors.full_messages.first).to eq 'Status The campaign is already completed'
@@ -55,32 +55,49 @@ RSpec.describe Campaign do
       expect(described_class.exists?(campaign.id)).to be false
     end
 
-    it 'cant be triggered' do
+    it 'cannot be triggered' do
       expect(Campaigns::OneoffCampaignService).not_to receive(:new).with(campaign: campaign)
+      expect(Campaigns::RecurringCampaignService).not_to receive(:new).with(campaign: campaign)
       expect(campaign.trigger!).to be_nil
     end
   end
 
-  describe 'ensure_correct_campaign_attributes' do
+  describe 'campaign channel modes' do
+    shared_examples 'polymorphic outbound campaign channel' do
+      it 'keeps the legacy implicit campaign as one-off' do
+        campaign.save!
+
+        expect(campaign.reload).to be_one_off
+        expect(campaign.scheduled_at).to be_present
+      end
+
+      it 'allows an explicit recurring campaign' do
+        campaign.campaign_type = 'ongoing'
+        campaign.save!
+
+        expect(campaign.reload).to be_ongoing
+        expect(campaign.scheduled_at).to be_nil
+        expect(campaign.channel_capabilities).to include('one_off', 'ongoing')
+      end
+
+      it 'dispatches explicit recurring campaigns through the recurring service' do
+        campaign.campaign_type = 'ongoing'
+        campaign.save!
+        campaign_service = double
+
+        expect(Campaigns::RecurringCampaignService).to receive(:new).with(campaign: campaign).and_return(campaign_service)
+        expect(campaign_service).to receive(:perform)
+
+        campaign.trigger!
+      end
+    end
+
     context 'when Twilio SMS campaign' do
       let!(:twilio_sms) { create(:channel_twilio_sms) }
       let!(:twilio_inbox) { create(:inbox, channel: twilio_sms) }
       let(:campaign) { build(:campaign, inbox: twilio_inbox) }
 
-      it 'only saves campaign type as oneoff and wont leave scheduled_at empty' do
-        campaign.campaign_type = 'ongoing'
-        campaign.save!
-        expect(campaign.reload.campaign_type).to eq 'one_off'
-        expect(campaign.scheduled_at.present?).to be true
-      end
-
-      it 'calls the polymorphic one-off service on trigger!' do
-        campaign_service = double
-        expect(Campaigns::OneoffCampaignService).to receive(:new).with(campaign: campaign).and_return(campaign_service)
-        expect(campaign_service).to receive(:perform)
-        campaign.save!
-        campaign.trigger!
-      end
+      include_examples 'polymorphic outbound campaign channel'
     end
 
     context 'when SMS campaign' do
@@ -88,20 +105,7 @@ RSpec.describe Campaign do
       let!(:sms_inbox) { create(:inbox, channel: sms_channel) }
       let(:campaign) { build(:campaign, inbox: sms_inbox) }
 
-      it 'only saves campaign type as oneoff and wont leave scheduled_at empty' do
-        campaign.campaign_type = 'ongoing'
-        campaign.save!
-        expect(campaign.reload.campaign_type).to eq 'one_off'
-        expect(campaign.scheduled_at.present?).to be true
-      end
-
-      it 'calls the polymorphic one-off service on trigger!' do
-        campaign_service = double
-        expect(Campaigns::OneoffCampaignService).to receive(:new).with(campaign: campaign).and_return(campaign_service)
-        expect(campaign_service).to receive(:perform)
-        campaign.save!
-        campaign.trigger!
-      end
+      include_examples 'polymorphic outbound campaign channel'
     end
 
     context 'when WhatsApp campaign' do
@@ -153,16 +157,19 @@ RSpec.describe Campaign do
           :campaign,
           inbox: whatsapp_inbox,
           account: account,
-          message_attributes: { 'template_params' => template_params }
+          message_attributes: {
+            'delivery_mode' => 'template',
+            'template_params' => template_params
+          }
         )
       end
 
-      it 'saves as one-off and exposes template capabilities' do
+      include_examples 'polymorphic outbound campaign channel'
+
+      it 'exposes freeform and template capabilities' do
         campaign.save!
 
-        expect(campaign.reload.campaign_type).to eq 'one_off'
-        expect(campaign.scheduled_at).to be_present
-        expect(campaign.channel_capabilities).to include('template', 'variables')
+        expect(campaign.channel_capabilities).to include('freeform', 'template', 'variables')
       end
 
       it 'accepts an available campaign template even when it is not enabled for opening conversations' do
@@ -170,15 +177,24 @@ RSpec.describe Campaign do
         expect(campaign).to be_valid
       end
 
-      it 'requires template params for a WhatsApp campaign' do
-        campaign.message_attributes = {}
+      it 'allows a freeform campaign without template params' do
+        campaign.message_attributes = { 'delivery_mode' => 'freeform' }
 
-        expect(campaign).not_to be_valid
-        expect(campaign.errors[:message_attributes]).to include('template_params is required for WhatsApp campaigns')
+        expect(campaign).to be_valid
+      end
+
+      it 'allows a freeform recurring campaign without template params' do
+        campaign.campaign_type = 'ongoing'
+        campaign.message_attributes = { 'delivery_mode' => 'freeform' }
+        campaign.save!
+
+        expect(campaign.reload).to be_ongoing
+        expect(campaign.message_attributes['delivery_mode']).to eq('freeform')
       end
 
       it 'rejects a template that is not available in the selected Connect|API instance' do
         campaign.message_attributes = {
+          'delivery_mode' => 'template',
           'template_params' => template_params.merge('name' => 'unknown_template')
         }
 
@@ -186,7 +202,7 @@ RSpec.describe Campaign do
         expect(campaign.errors[:message_attributes]).to include('selected template is not available for this Connect|API instance')
       end
 
-      it 'calls the polymorphic one-off service on trigger!' do
+      it 'dispatches implicit one-off campaigns through the one-off service' do
         campaign_service = double
         expect(Campaigns::OneoffCampaignService).to receive(:new).with(campaign: campaign).and_return(campaign_service)
         expect(campaign_service).to receive(:perform)
@@ -208,10 +224,10 @@ RSpec.describe Campaign do
         )
       end
 
-      it 'saves as one-off and exposes subject capability' do
-        campaign.save!
+      include_examples 'polymorphic outbound campaign channel'
 
-        expect(campaign.reload.campaign_type).to eq 'one_off'
+      it 'exposes subject capability' do
+        campaign.save!
         expect(campaign.channel_capabilities).to include('subject', 'text')
       end
 
@@ -228,10 +244,10 @@ RSpec.describe Campaign do
       let!(:api_channel) { create(:channel_api, account: account, webhook_url: 'https://example.com/hook') }
       let(:campaign) { build(:campaign, inbox: api_channel.inbox, account: account) }
 
-      it 'saves as one-off and exposes webhook capabilities' do
-        campaign.save!
+      include_examples 'polymorphic outbound campaign channel'
 
-        expect(campaign.reload.campaign_type).to eq 'one_off'
+      it 'exposes webhook capabilities' do
+        campaign.save!
         expect(campaign.channel_capabilities).to include('json', 'webhook')
       end
 
@@ -246,10 +262,16 @@ RSpec.describe Campaign do
     context 'when Website campaign' do
       let(:campaign) { build(:campaign) }
 
-      it 'only saves campaign type as ongoing' do
-        campaign.campaign_type = 'one_off'
+      it 'keeps website campaigns recurring by default' do
         campaign.save!
-        expect(campaign.reload.campaign_type).to eq 'ongoing'
+        expect(campaign.reload).to be_ongoing
+      end
+
+      it 'rejects website one-off campaigns instead of silently changing the selected mode' do
+        campaign.campaign_type = 'one_off'
+
+        expect(campaign).not_to be_valid
+        expect(campaign.errors[:inbox]).to include('Website inbox only supports recurring campaigns')
       end
     end
   end
