@@ -1,6 +1,6 @@
 # HUB immutable dependency base.
-# Rebuild only when dependency locks, Gemfile semantics, local HUB packages, or docker/base/VERSION change.
-ARG HUB_BUILD_BASE_IMAGE=ghcr.io/wkarts/argws-connect-hub-build-base:1.1.0
+# Content identity is derived from dependency inputs and the exact build-base definition.
+ARG HUB_BUILD_BASE_IMAGE=ghcr.io/wkarts/argws-connect-hub-build-base:latest
 FROM ${HUB_BUILD_BASE_IMAGE}
 
 ARG BASE_DEFINITION_SHA=unknown

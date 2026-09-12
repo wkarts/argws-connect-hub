@@ -1,7 +1,7 @@
 # HUB application image.
 # OS/toolchain and dependency installation live in immutable HUB base images.
-ARG HUB_DEPS_BASE_IMAGE=ghcr.io/wkarts/argws-connect-hub-deps-base:1.1.1
-ARG HUB_RUNTIME_BASE_IMAGE=ghcr.io/wkarts/argws-connect-hub-runtime-base:1.1.1
+ARG HUB_DEPS_BASE_IMAGE=ghcr.io/wkarts/argws-connect-hub-deps-base:latest
+ARG HUB_RUNTIME_BASE_IMAGE=ghcr.io/wkarts/argws-connect-hub-runtime-base:latest
 
 FROM ${HUB_DEPS_BASE_IMAGE} AS pre-builder
 
