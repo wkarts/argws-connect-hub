@@ -23,6 +23,7 @@ RSpec.describe Campaigns::OneoffCampaignService do
       driver = instance_double(Campaigns::ChannelDrivers::Sms)
 
       allow(Campaigns::ChannelDriverResolver).to receive(:resolve).with(campaign).and_return(driver)
+      allow(driver).to receive(:validation_errors).and_return([])
       allow(driver).to receive(:deliverable?).with(contact).and_return(true)
       expect(driver).to receive(:deliver).with(contact) do
         expect(campaign.reload).to be_completed
@@ -37,6 +38,7 @@ RSpec.describe Campaigns::OneoffCampaignService do
       driver = instance_double(Campaigns::ChannelDrivers::Sms)
 
       allow(Campaigns::ChannelDriverResolver).to receive(:resolve).with(campaign).and_return(driver)
+      allow(driver).to receive(:validation_errors).and_return([])
       allow(driver).to receive(:deliverable?).with(contact).and_return(false)
       expect(driver).not_to receive(:deliver)
 
