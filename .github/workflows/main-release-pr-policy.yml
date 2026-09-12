@@ -1,0 +1,67 @@
+name: Main Release PR Policy
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+
+jobs:
+  release-pr-policy:
+    name: Validate develop to main release flow
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Require develop as the only source branch for main
+        shell: bash
+        env:
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          set -euo pipefail
+          [[ "$BASE_REF" == "main" ]] || {
+            echo "Release PR base must be main." >&2
+            exit 1
+          }
+          [[ "$HEAD_REF" == "develop" ]] || {
+            echo "main only accepts release PRs from develop; got '$HEAD_REF'." >&2
+            exit 1
+          }
+
+      - name: Checkout proposed develop revision
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Validate synchronized version metadata
+        run: bash ./scripts/validate-version-sync.sh
+
+      - name: Validate version progression for release PRs
+        if: ${{ !contains(github.event.pull_request.title, '[skip release]') }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(tr -d '[:space:]' < VERSION)"
+          git fetch --tags --force
+          tag="v${version}"
+
+          if git rev-parse "refs/tags/${tag}" >/dev/null 2>&1; then
+            echo "Tag ${tag} already exists. Bump VERSION in develop before merging this release PR." >&2
+            exit 1
+          fi
+
+          latest="$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n1 || true)"
+          if [[ -n "$latest" ]]; then
+            latest_version="${latest#v}"
+            highest="$(printf '%s\n%s\n' "$latest_version" "$version" | sort -V | tail -n1)"
+            if [[ "$version" == "$latest_version" || "$highest" != "$version" ]]; then
+              echo "VERSION $version must be greater than latest release $latest_version." >&2
+              exit 1
+            fi
+          fi
+
+      - name: Explain non-release synchronization PR
+        if: ${{ contains(github.event.pull_request.title, '[skip release]') }}
+        run: echo "[skip release] detected; branch and version synchronization are validated without publishing a new release."
