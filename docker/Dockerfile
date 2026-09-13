@@ -28,10 +28,13 @@ RUN mkdir -p /app/log
 # Production removes development/test gems only after copying the immutable layer.
 # Keep `set -e` here: an assets:precompile failure must fail the image build instead
 # of being hidden by a later cleanup command.
+# HUB_ASSETS_PRECOMPILE is intentionally scoped to this command so model boot does
+# not attempt database-backed feature detection while no PostgreSQL exists yet.
 RUN set -eux; \
     if [ "$RAILS_ENV" = "production" ]; then \
       bundle config set without 'development test'; \
       bundle clean --force; \
+      HUB_ASSETS_PRECOMPILE=1 \
       SECRET_KEY_BASE=precompile_placeholder \
       RAILS_LOG_TO_STDOUT=enabled \
       bundle exec rake assets:precompile; \
