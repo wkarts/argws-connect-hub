@@ -21,3 +21,4 @@ json.name @account.name
 json.support_email @account.support_email
 json.status @account.status
 json.cache_keys @account.cache_keys
+json.two_factor_policy resource.two_factor_policy

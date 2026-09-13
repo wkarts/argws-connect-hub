@@ -58,6 +58,7 @@ module FrontendAuth
     def destroy
       return render_invalid_password unless valid_current_password?
       return render_not_enabled unless @user.two_factor_enabled?
+      return render_policy_required if @user.two_factor_disable_blocked?
       return render_invalid_code unless @user.verify_and_consume_two_factor_code(second_factor_code)
 
       @user.update!(
@@ -84,12 +85,18 @@ module FrontendAuth
       params[:recovery_code].presence || params[:code]
     end
 
+    def policy_accounts
+      @user.two_factor_policy_accounts
+    end
+
     def status_payload
       {
         enabled: @user.two_factor_enabled?,
         enabled_at: @user.two_factor_enabled_at,
         setup_pending: @user.two_factor_pending_secret_ciphertext.present?,
-        recovery_codes_remaining: Array(@user.two_factor_recovery_codes).length
+        recovery_codes_remaining: Array(@user.two_factor_recovery_codes).length,
+        required_by_policy: policy_accounts.any?,
+        required_by_accounts: policy_accounts.map(&:name)
       }
     end
 
@@ -103,6 +110,12 @@ module FrontendAuth
 
     def render_not_enabled
       render json: { error: 'A autenticação em duas etapas não está ativa.' }, status: :unprocessable_entity
+    end
+
+    def render_policy_required
+      render json: {
+        error: 'A autenticação em duas etapas é obrigatória pela política de segurança da empresa.'
+      }, status: :forbidden
     end
   end
 end

@@ -1,4 +1,5 @@
 <script>
+import qrcode from 'qrcode-generator';
 import { useAlert } from 'dashboard/composables';
 import TwoFactorAuthenticationAPI from 'dashboard/api/twoFactorAuthentication';
 
@@ -12,6 +13,8 @@ export default {
         enabled_at: null,
         setup_pending: false,
         recovery_codes_remaining: 0,
+        required_by_policy: false,
+        required_by_accounts: [],
       },
       currentPassword: '',
       code: '',
@@ -20,6 +23,23 @@ export default {
       setup: null,
       recoveryCodes: [],
     };
+  },
+  computed: {
+    qrCodeDataUrl() {
+      if (!this.setup?.provisioningUri) return '';
+
+      try {
+        const qr = qrcode(0, 'M');
+        qr.addData(this.setup.provisioningUri);
+        qr.make();
+        return qr.createDataURL(6, 24);
+      } catch (error) {
+        return '';
+      }
+    },
+    policyAccountNames() {
+      return (this.status.required_by_accounts || []).join(', ');
+    },
   },
   mounted() {
     this.loadStatus();
@@ -56,7 +76,7 @@ export default {
         };
         this.status = data;
         this.code = '';
-        useAlert('Chave 2FA gerada. Adicione-a ao seu aplicativo autenticador.');
+        useAlert('QR Code 2FA gerado. Escaneie-o no aplicativo autenticador.');
       } catch (error) {
         useAlert(this.errorMessage(error, 'Não foi possível iniciar o 2FA.'));
       } finally {
@@ -129,6 +149,10 @@ export default {
       }
     },
     async disableTwoFactor() {
+      if (this.status.required_by_policy) {
+        useAlert('A política de segurança da empresa não permite desativar o 2FA.');
+        return;
+      }
       if (!this.validateProtectedAction()) return;
 
       this.submitting = true;
@@ -199,6 +223,21 @@ export default {
         </span>
       </div>
 
+      <div
+        v-if="status.required_by_policy"
+        class="p-4 text-sm border rounded-lg border-amber-300 bg-amber-50 dark:bg-slate-900"
+      >
+        <p class="font-medium text-slate-900 dark:text-slate-100">
+          2FA obrigatório pela empresa
+        </p>
+        <p class="mt-1 text-slate-600 dark:text-slate-400">
+          Esta conta está sujeita à política corporativa de autenticação em duas etapas<span
+            v-if="policyAccountNames"
+          >: {{ policyAccountNames }}</span>. Enquanto a política estiver ativa, o 2FA não pode
+          ser desativado pelo usuário.
+        </p>
+      </div>
+
       <div v-if="!status.enabled" class="space-y-4">
         <label class="block">
           <span class="text-sm font-medium text-slate-700 dark:text-slate-200">
@@ -223,28 +262,45 @@ export default {
 
         <div
           v-if="setup"
-          class="p-4 space-y-4 border rounded-lg border-slate-200 dark:border-slate-700"
+          class="p-4 space-y-5 border rounded-lg border-slate-200 dark:border-slate-700"
         >
           <div>
             <p class="text-sm font-medium text-slate-900 dark:text-slate-100">
-              1. Adicione a conta no aplicativo autenticador
+              1. Escaneie o QR Code no aplicativo autenticador
             </p>
             <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
-              Use a chave abaixo no Google Authenticator, Microsoft Authenticator ou outro app TOTP.
+              Abra o Google Authenticator, Microsoft Authenticator ou outro aplicativo TOTP e
+              adicione uma nova conta.
             </p>
           </div>
-          <div class="flex items-center gap-2">
-            <code
-              class="flex-1 p-3 text-sm break-all rounded bg-slate-100 dark:bg-slate-900"
-            >{{ setup.secret }}</code>
-            <button
-              type="button"
-              class="button nice secondary"
-              @click="copyText(setup.secret, 'Chave 2FA copiada.')"
-            >
-              Copiar
-            </button>
+
+          <div
+            v-if="qrCodeDataUrl"
+            class="flex justify-center p-5 mx-auto bg-white border rounded-lg border-slate-200 w-fit"
+          >
+            <img
+              :src="qrCodeDataUrl"
+              alt="QR Code para configurar autenticação em duas etapas"
+              class="w-56 h-56"
+            />
           </div>
+
+          <div class="p-3 rounded bg-slate-50 dark:bg-slate-900">
+            <p class="text-xs font-medium text-slate-700 dark:text-slate-300">
+              Chave manual — use somente se não puder escanear o QR Code
+            </p>
+            <div class="flex items-center gap-2 mt-2">
+              <code class="flex-1 text-sm break-all">{{ setup.secret }}</code>
+              <button
+                type="button"
+                class="button nice secondary"
+                @click="copyText(setup.secret, 'Chave 2FA copiada.')"
+              >
+                Copiar
+              </button>
+            </div>
+          </div>
+
           <a :href="setup.provisioningUri" class="text-sm text-link">
             Abrir no aplicativo autenticador
           </a>
@@ -332,6 +388,7 @@ export default {
             Gerar novos códigos de recuperação
           </button>
           <button
+            v-if="!status.required_by_policy"
             type="button"
             class="button nice alert"
             :disabled="submitting"

@@ -27,6 +27,7 @@ export default {
       features: {},
       autoResolveDuration: null,
       autoResolveUnit: 'hours', // Nueva propiedad para la unidad de tiempo
+      twoFactorPolicy: 'optional',
       latestHubVersion: null,
     };
   },
@@ -110,6 +111,7 @@ export default {
           support_email,
           features,
           auto_resolve_duration,
+          two_factor_policy: twoFactorPolicy,
           latest_hub_version: latestHubVersion,
         } = this.getAccount(this.accountId);
 
@@ -121,6 +123,7 @@ export default {
         this.supportEmail = support_email;
         this.features = features;
         this.autoResolveDuration = auto_resolve_duration;
+        this.twoFactorPolicy = twoFactorPolicy || 'optional';
         this.latestHubVersion = latestHubVersion;
       } catch (error) {
         // Ignore error
@@ -144,9 +147,11 @@ export default {
           domain: this.domain,
           support_email: this.supportEmail,
           auto_resolve_duration: duration,
+          two_factor_policy: this.twoFactorPolicy,
         });
         this.$root.$i18n.locale = this.locale;
         this.getAccount(this.id).locale = this.locale;
+        this.getAccount(this.id).two_factor_policy = this.twoFactorPolicy;
         this.updateDirectionView(this.locale);
         useAlert(this.$t('GENERAL_SETTINGS.UPDATE.SUCCESS'));
       } catch (error) {
@@ -249,6 +254,55 @@ export default {
               {{ $t('GENERAL_SETTINGS.FORM.AUTO_RESOLVE_DURATION.ERROR') }}
             </span>
           </label>
+        </div>
+      </div>
+
+      <div
+        class="flex flex-row p-4 border-b border-slate-25 dark:border-slate-800 text-black-900 dark:text-slate-300"
+      >
+        <div
+          class="flex-grow-0 flex-shrink-0 flex-[25%] min-w-0 py-4 pr-6 pl-0"
+        >
+          <h4 class="text-lg font-medium text-black-900 dark:text-slate-200">
+            Autenticação em duas etapas
+          </h4>
+          <p>
+            Defina se a empresa exige 2FA para os usuários no acesso ao HUB.
+          </p>
+        </div>
+        <div class="p-4 flex-grow-0 flex-shrink-0 flex-[50%]">
+          <label>
+            Política de 2FA
+            <select v-model="twoFactorPolicy">
+              <option value="optional">
+                Opcional — cada usuário decide se deseja ativar
+              </option>
+              <option value="first_login">
+                Obrigatório no primeiro login — novos usuários configuram no primeiro acesso
+              </option>
+              <option value="next_login">
+                Obrigatório no próximo login — usuários sem 2FA configuram antes de entrar
+              </option>
+            </select>
+          </label>
+          <div
+            class="p-4 mt-4 text-sm border rounded-lg border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-900"
+          >
+            <p v-if="twoFactorPolicy === 'optional'">
+              O 2FA fica disponível no perfil do usuário, mas não é obrigatório.
+            </p>
+            <p v-else-if="twoFactorPolicy === 'first_login'">
+              Novos usuários desta empresa precisam escanear o QR Code e validar o TOTP antes
+              de concluir o primeiro acesso ao HUB.
+            </p>
+            <p v-else>
+              No próximo login, todo usuário desta empresa que ainda não possui 2FA será
+              obrigado a configurá-lo antes de receber a sessão do HUB.
+            </p>
+            <p v-if="twoFactorPolicy !== 'optional'" class="mt-2 font-medium">
+              Tokens de API e integrações REST não são alterados por esta política.
+            </p>
+          </div>
         </div>
       </div>
 
