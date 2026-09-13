@@ -13,9 +13,10 @@ if [[ -x ./scripts/audit-hub.sh ]]; then
   bash ./scripts/audit-hub.sh
 fi
 
-# VERSION is the single release-version source of truth. package.json and
-# RELEASE-MANIFEST.json are mirrors and must never drift from it.
+# Application version files are source metadata only. CI validates consistency,
+# but release workflows must never rewrite them or create version commits.
 bash ./scripts/validate-version-sync.sh
+bash ./scripts/validate-release-flow.sh
 
 if command -v ruby >/dev/null 2>&1; then
   echo "Validating Ruby syntax..."
@@ -34,14 +35,21 @@ while IFS= read -r -d '' file; do
   bash -n "$file"
 done < <(find scripts docker deployment -type f -name '*.sh' -print0 2>/dev/null)
 
-base_version="$(tr -d '[:space:]' < docker/base/VERSION)"
-[[ "$base_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] \
-  || fail "docker/base/VERSION must be SemVer X.Y.Z"
+[[ -x ./scripts/resolve-hub-base-refs.sh ]] \
+  || fail "missing executable scripts/resolve-hub-base-refs.sh"
 
-grep -Fq "argws-connect-hub-deps-base:${base_version}" docker/Dockerfile \
-  || fail "docker/Dockerfile does not reference dependency base ${base_version}"
-grep -Fq "argws-connect-hub-runtime-base:${base_version}" docker/Dockerfile \
-  || fail "docker/Dockerfile does not reference runtime base ${base_version}"
+base_refs="$(HUB_GHCR_OWNER=wkarts bash ./scripts/resolve-hub-base-refs.sh)"
+grep -Eq '^build_image=ghcr\.io/wkarts/argws-connect-hub-build-base:def-[0-9a-f]{64}$' <<<"$base_refs" \
+  || fail "content-addressed build-base identity is invalid"
+grep -Eq '^runtime_image=ghcr\.io/wkarts/argws-connect-hub-runtime-base:def-[0-9a-f]{64}$' <<<"$base_refs" \
+  || fail "content-addressed runtime-base identity is invalid"
+grep -Eq '^deps_image=ghcr\.io/wkarts/argws-connect-hub-deps-base:def-[0-9a-f]{64}$' <<<"$base_refs" \
+  || fail "content-addressed dependency-base identity is invalid"
+
+grep -Fq 'ARG HUB_DEPS_BASE_IMAGE=ghcr.io/wkarts/argws-connect-hub-deps-base:latest' docker/Dockerfile \
+  || fail "docker/Dockerfile must use the deps-base latest alias only as its local default"
+grep -Fq 'ARG HUB_RUNTIME_BASE_IMAGE=ghcr.io/wkarts/argws-connect-hub-runtime-base:latest' docker/Dockerfile \
+  || fail "docker/Dockerfile must use the runtime-base latest alias only as its local default"
 
 # HUB-owned infrastructure mirrors are the deployment contract. PostgreSQL and
 # Redis stay configurable through .env, but their defaults must resolve to the

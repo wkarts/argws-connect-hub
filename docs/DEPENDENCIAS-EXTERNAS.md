@@ -1,54 +1,22 @@
-# Política de dependências do HUB
+# Dependências externas e bases do HUB
 
-## Regras
+## Regra
 
-1. O `Gemfile` não instala gems diretamente de repositórios Git.
-2. O `package.json` não mascara pacotes de fornecedor com aliases `npm:`.
-3. Funcionalidades específicas do HUB ficam no próprio código ou em pacotes `@hub/*` mantidos neste repositório.
-4. Dependências genéricas e oficiais do ecossistema podem vir de RubyGems/npm/yarn normalmente.
-5. A camada `argws-connect-hub-deps-base` concentra `bundle install` e `yarn install`; builds comuns da aplicação não repetem essas instalações.
-6. Uma alteração que mude o conteúdo imutável de uma base exige incremento de `docker/base/VERSION` quando a tag correspondente já existir no GHCR.
-7. O código operacional do HUB usa somente namespace próprio `hub_`, `hub-`, `HUB_` e `@hub/*` para identificadores internos do produto.
+As dependências do HUB são materializadas em imagens-base content-addressed. Não existe número de versão manual para essas bases.
 
-## Pacotes próprios atuais
+A identidade é calculada por `scripts/resolve-hub-base-refs.sh` a partir dos arquivos que realmente determinam o conteúdo:
 
-- `@hub/utils`: utilidades de interface, variáveis, SLA e typing indicator.
-- `@hub/editor`: schema, Markdown, menu e suggestions do editor ProseMirror do HUB.
-- `@hub/command-palette`: web component da paleta de comandos do HUB.
-
-Esses pacotes são dependências locais (`file:packages/...`) e fazem parte da mesma árvore-fonte do HUB. Eles não são aliases para pacotes externos.
-
-## Storage
-
-A distribuição atual oferece Disk, S3, Google Cloud Storage e S3-compatible/MinIO. O adapter Azure Storage legado foi retirado porque dependia de uma implementação Git específica de terceiro. Integrações Microsoft OAuth para e-mail permanecem independentes dessa remoção.
-
-## Base de dependências
-
-A imagem:
-
-```text
-ghcr.io/wkarts/argws-connect-hub-deps-base:<base-version>
-```
-
-é construída a partir de:
-
+- Dockerfiles de `build`, `runtime` e `deps`;
 - `Gemfile` e `Gemfile.lock`;
-- campos de dependências do `package.json`;
+- campos de dependência de `package.json`;
 - `yarn.lock`;
-- `packages/**`;
-- `docker/base/deps/Dockerfile`;
-- `docker/base/VERSION`.
+- pacotes locais em `packages/`;
+- identidade exata da base `build` usada pela base de dependências.
 
-Ela contém o conjunto completo de gems e módulos JavaScript necessário para build e development. A imagem final de produção remove grupos Ruby de development/test e `node_modules` após a compilação dos assets.
+Uma mudança produz outra tag `def-<sha256>`. Tags content-addressed nunca são sobrescritas com definição diferente.
 
-## Gate de CI
+Os aliases `latest` existem somente para conveniência operacional/local. Os publishers de `develop` e `main` usam referências content-addressed exatas.
 
-`scripts/validate-hub-ci.sh` rejeita:
+## Aplicação
 
-- referências operacionais ao namespace histórico do fornecedor;
-- prefixos históricos de runtime que não pertençam ao namespace HUB;
-- gems instaladas diretamente de Git/GitHub;
-- ausência dos pacotes locais obrigatórios;
-- Dockerfile apontando para versão de base diferente de `docker/base/VERSION`.
-
-Avisos jurídicos de código histórico, quando aplicáveis, são tratados separadamente da cadeia operacional de dependências.
+`docker/Dockerfile` aceita `HUB_DEPS_BASE_IMAGE` e `HUB_RUNTIME_BASE_IMAGE`. Em CI esses argumentos recebem referências imutáveis calculadas do conteúdo; os defaults `:latest` servem apenas para uso local/conveniência.
