@@ -93,6 +93,7 @@ module FrontendAuth
 
       counter = TwoFactor::Totp.verify(secret: secret, code: params[:code])
       return render_invalid_code unless counter
+      return render_invalid_enrollment unless TwoFactor::EnrollmentChallenge.consume!(payload)
 
       recovery_codes = TwoFactor::RecoveryCodes.generate
       @resource.with_lock do
@@ -104,8 +105,6 @@ module FrontendAuth
           two_factor_recovery_codes: TwoFactor::RecoveryCodes.digests(recovery_codes)
         )
       end
-
-      return render_invalid_enrollment unless TwoFactor::EnrollmentChallenge.consume!(payload)
 
       TwoFactor::EnrollmentChallenge.clear_attempts!(payload)
       authenticate_resource_after_two_factor
