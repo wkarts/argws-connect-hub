@@ -141,7 +141,14 @@ jobs:
           provenance: true
           sbom: true
 
-      - name: Verify final develop image
+      - name: Cleanup build caches older than 2 hours
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CACHE_RETENTION_HOURS: '2'
+        run: bash ./scripts/cleanup-github-storage.sh cache
+
+      - name: Verify final develop image after maintenance
         timeout-minutes: 15
         env:
           IMAGE_REPOSITORY: ghcr.io/${{ github.repository_owner }}/argws-connect-hub
@@ -155,12 +162,3 @@ jobs:
           EXPECTED_CHANNEL: develop
           HUB_IMAGE_REQUIRE_ANONYMOUS_PULL: ${{ vars.HUB_IMAGE_REQUIRE_ANONYMOUS_PULL || 'false' }}
         run: bash ./scripts/verify-hub-image.sh
-
-      - name: Cleanup old GHCR images and build caches
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GHCR_OWNER: ${{ github.repository_owner }}
-          GHCR_PACKAGE: argws-connect-hub
-          CACHE_RETENTION_HOURS: '2'
-        run: bash ./scripts/cleanup-github-storage.sh all

@@ -42,8 +42,14 @@ grep -Fq 'ghcr.io/${{ github.repository_owner }}/argws-connect-hub:develop' .git
   || fail "develop publisher must keep ghcr.io/.../argws-connect-hub:develop"
 grep -Fq "CACHE_RETENTION_HOURS: '2'" .github/workflows/publish_hub_amd64.yml \
   || fail "develop publisher must prune build caches older than two hours"
-grep -Fq 'cleanup-github-storage.sh all' .github/workflows/publish_hub_amd64.yml \
-  || fail "develop publisher must prune old GHCR versions after a successful build"
+grep -Fq 'cleanup-github-storage.sh cache' .github/workflows/publish_hub_amd64.yml \
+  || fail "develop publisher may clean only Actions/Buildx cache, never GHCR package versions"
+if grep -Fq 'cleanup-github-storage.sh all' .github/workflows/publish_hub_amd64.yml || \
+   grep -Fq 'cleanup-github-storage.sh ghcr' .github/workflows/publish_hub_amd64.yml; then
+  fail "develop publisher must never delete GHCR image versions"
+fi
+grep -Fq 'Verify final develop image after maintenance' .github/workflows/publish_hub_amd64.yml \
+  || fail "develop image must be verified after cache maintenance"
 
 grep -Fq 'branches: [main]' .github/workflows/publish_main_amd64.yml \
   || fail "main release publisher must be bound to main"
@@ -72,7 +78,12 @@ grep -Fq 'gh release create "$TAG"' .github/workflows/publish_main_amd64.yml \
 grep -Fq "CACHE_RETENTION_HOURS: '2'" .github/workflows/publish_main_amd64.yml \
   || fail "main publisher must prune build caches older than two hours"
 grep -Fq 'cleanup-github-storage.sh all' .github/workflows/publish_main_amd64.yml \
-  || fail "main publisher must enforce GHCR retention after a successful build"
+  || fail "main publisher must enforce safe application GHCR retention after a successful release"
+
+grep -Fq 'PACKAGE" != "argws-connect-hub"' scripts/cleanup-github-storage.sh \
+  || fail "GHCR cleanup must refuse every package except argws-connect-hub"
+grep -Fq 'untagged OCI child/attestation manifest' scripts/cleanup-github-storage.sh \
+  || fail "GHCR cleanup must preserve untagged OCI child and attestation manifests"
 
 if grep -Fq 'argws-connect-hub:main-' .github/workflows/publish_main_amd64.yml; then
   fail "main-<sha> must not replace the canonical SemVer release aliases"
@@ -81,7 +92,7 @@ fi
 grep -Fq 'Require a new declared SemVer release' .github/workflows/main-release-pr-policy.yml \
   || fail "release PR policy must validate the declared next SemVer before merge"
 
-echo "HUB release-flow validation: develop=:develop; main=SemVer X.Y.Z/X.Y/X + latest + vX.Y.Z + GitHub Release; GHCR keeps current+previous+develop; caches keep <=2h; bases=def-<sha256>"
+echo "HUB release-flow validation: develop=:develop with cache-only maintenance; main=SemVer X.Y.Z/X.Y/X + latest + vX.Y.Z + GitHub Release; GHCR cleanup preserves OCI children and bases; caches keep <=2h"
 
 grep -Fq 'Content-Addressed Base Images' .github/workflows/hub-base-images.yml \
   || fail "base-image workflow must be content-addressed"

@@ -46,12 +46,20 @@ cleanup_cache() {
 }
 
 cleanup_ghcr() {
-  local tmp page json count current previous id tags protected tag
+  local tmp page json count current previous id tags exact_tag protected
+
+  # Hard safety boundary: this cleanup is ONLY for the application package.
+  # Content-addressed build/runtime/deps base packages must never be touched here.
+  if [[ "$PACKAGE" != "argws-connect-hub" ]]; then
+    echo "Refusing GHCR cleanup for package '$PACKAGE'; only argws-connect-hub is allowed." >&2
+    return 1
+  fi
+
   tmp="$(mktemp)"
   trap 'rm -f "$tmp"' RETURN
   page=1
 
-  echo "Resolving GHCR retention for ghcr.io/${OWNER}/${PACKAGE}..."
+  echo "Resolving safe GHCR retention for ghcr.io/${OWNER}/${PACKAGE}..."
 
   while :; do
     json="$(gh api -H 'Accept: application/vnd.github+json' \
@@ -82,29 +90,57 @@ cleanup_ghcr() {
     return
   fi
 
-  echo "Protected release images: current=${current}, previous=${previous:-none}, plus develop"
+  echo "Protected application images: current=${current}, previous=${previous:-none}, plus develop."
+  echo "Untagged OCI child/SBOM/provenance manifests are always preserved."
 
   while IFS= read -r version; do
     id="$(jq -r '.id' <<<"$version")"
     tags="$(jq -r '.metadata.container.tags[]?' <<<"$version")"
-    protected=false
 
+    # Buildx publishes OCI child/platform/SBOM/provenance manifests as untagged
+    # package versions. Deleting them can make a tagged parent manifest unreadable.
+    if [[ -z "$tags" ]]; then
+      echo "Keeping GHCR version id=${id}: untagged OCI child/attestation manifest."
+      continue
+    fi
+
+    if grep -qx 'develop' <<<"$tags"; then
+      echo "Keeping GHCR version id=${id}: active develop image."
+      continue
+    fi
+
+    exact_tag="$(jq -r '[.metadata.container.tags[]? | select(test("^[0-9]+\\.[0-9]+\\.[0-9]+$"))][0] // empty' <<<"$version")"
+    if [[ -n "$exact_tag" ]]; then
+      if [[ "$exact_tag" == "$current" || ( -n "$previous" && "$exact_tag" == "$previous" ) ]]; then
+        echo "Keeping GHCR release id=${id}: ${exact_tag}."
+        continue
+      fi
+
+      echo "Deleting old top-level SemVer release id=${id}: ${exact_tag}."
+      gh api --method DELETE -H 'Accept: application/vnd.github+json' \
+        "/users/${OWNER}/packages/container/${PACKAGE}/versions/${id}" >/dev/null
+      continue
+    fi
+
+    # Old development indexes are safe to remove only when every tag on the
+    # top-level version is a develop/sha tracking alias and the mutable
+    # 'develop' tag is no longer attached to it.
+    protected=false
     while IFS= read -r tag; do
       [[ -n "$tag" ]] || continue
-      if [[ "$tag" == "develop" || "$tag" == "$current" || ( -n "$previous" && "$tag" == "$previous" ) ]]; then
+      if [[ ! "$tag" =~ ^develop-[0-9a-f]{7,64}$ && ! "$tag" =~ ^sha-[0-9a-f]{7,64}$ ]]; then
         protected=true
         break
       fi
     done <<<"$tags"
 
-    if [[ "$protected" == true ]]; then
-      echo "Keeping GHCR version id=${id}: $(tr '\n' ',' <<<"$tags" | sed 's/,$//')"
-      continue
+    if [[ "$protected" == false ]]; then
+      echo "Deleting obsolete tagged development index id=${id}: $(tr '\n' ',' <<<"$tags" | sed 's/,$//')."
+      gh api --method DELETE -H 'Accept: application/vnd.github+json' \
+        "/users/${OWNER}/packages/container/${PACKAGE}/versions/${id}" >/dev/null
+    else
+      echo "Keeping GHCR version id=${id}: non-retention tags $(tr '\n' ',' <<<"$tags" | sed 's/,$//')."
     fi
-
-    echo "Deleting old GHCR version id=${id}: $(tr '\n' ',' <<<"$tags" | sed 's/,$//')"
-    gh api --method DELETE -H 'Accept: application/vnd.github+json' \
-      "/users/${OWNER}/packages/container/${PACKAGE}/versions/${id}" >/dev/null
   done < "$tmp"
 
   rm -f "$tmp"
