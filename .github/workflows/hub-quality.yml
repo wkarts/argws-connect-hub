@@ -113,3 +113,10 @@ jobs:
           spec/services/whatsapp/connect_api_opening_message_validator_spec.rb
           spec/services/whatsapp/send_on_whatsapp_service_spec.rb
           spec/controllers/api/v1/accounts/connect_api_templates_controller_spec.rb
+      - name: Two-factor authentication regression specs
+        run: >-
+          bundle exec rspec
+          spec/requests/frontend_two_factor_authentication_spec.rb
+          spec/requests/frontend_two_factor_policy_spec.rb
+          spec/requests/account_two_factor_policy_spec.rb
+          spec/services/two_factor/totp_spec.rb

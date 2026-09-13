@@ -2,6 +2,7 @@ import { frontendURL } from 'dashboard/helper/URLHelper';
 
 const Login = () => import('./login/Index.vue');
 const TwoFactor = () => import('./login/TwoFactor.vue');
+const TwoFactorSetup = () => import('./login/TwoFactorSetup.vue');
 const Signup = () => import('./auth/signup/Index.vue');
 const ResetPassword = () => import('./auth/reset/password/Index.vue');
 const Confirmation = () => import('./auth/confirmation/Index.vue');
@@ -25,6 +26,12 @@ export default [
     path: frontendURL('login/two-factor'),
     name: 'login_two_factor',
     component: TwoFactor,
+    meta: { ignoreSession: true },
+  },
+  {
+    path: frontendURL('login/two-factor/setup'),
+    name: 'login_two_factor_setup',
+    component: TwoFactorSetup,
     meta: { ignoreSession: true },
   },
   {
