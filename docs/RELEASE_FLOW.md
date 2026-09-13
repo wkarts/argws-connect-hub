@@ -1,46 +1,68 @@
-# HUB — promoção para produção
+# HUB — promoção versionada para produção
 
 ## Fonte de verdade
 
-A fonte funcional de produção é a revisão existente em `develop` no momento em que uma PR `develop -> main` é aberta.
+A fonte funcional de produção é a revisão existente em `develop` no momento da PR `develop -> main`.
 
-O fluxo de promoção não recalcula versão e não modifica arquivos de código.
+A versão de release também é definida na `develop` antes da promoção. `VERSION`, `package.json` e `RELEASE-MANIFEST.json` devem declarar o mesmo SemVer.
 
-## Removido definitivamente
+O workflow de `main` não faz bump, não reescreve a fonte e não cria commit de versão.
 
-O HUB não utiliza mais:
+## Desenvolvimento
 
-- `force_bump`;
-- `auto`, `patch`, `minor` ou `major` como estratégia de release;
-- labels `version:major`, `version:minor` ou `version:patch`;
-- `.github/scripts/compute-next-version.mjs`;
-- `.github/scripts/apply-version.mjs`;
-- `docker/base/VERSION`;
-- commits automáticos de `VERSION`, `package.json` ou `RELEASE-MANIFEST.json`;
-- `git push` de workflow para `main` ou `develop`;
-- criação automática de tag/GitHub Release SemVer.
+A imagem de desenvolvimento mantém como alias principal permanente:
 
-## Bases
+- `ghcr.io/wkarts/argws-connect-hub:develop`.
 
-As imagens-base são identificadas pelo hash SHA-256 de suas próprias definições. Quando uma entrada muda, surge uma nova referência `def-<sha256>` automaticamente, sem bump, sem reescrita e sem conflito com a base anterior.
+Os aliases `develop-<sha-curto>` e `sha-<sha-completo>` são apenas referências adicionais de rastreabilidade.
 
-## Develop
+Uma `develop` com `VERSION=1.1.2` continua publicando a imagem de desenvolvimento como `:develop`; `1.1.2` representa o próximo release preparado, não um release já publicado.
 
-Um merge em `develop` pode validar e construir artefatos, mas nunca altera a árvore Git.
-
-O publisher de desenvolvimento gera `develop`, `develop-<sha-curto>` e `sha-<sha-completo>`.
-
-## Main
+## Gate da PR para main
 
 `main` aceita promoção somente a partir de `develop`.
 
-Após o merge da PR `develop -> main`, `GHCR - Publish Main Image`:
+Antes do merge, o gate valida:
 
-1. confirma que o commit veio de PR mesclada `develop -> main`;
-2. valida exatamente o SHA recebido;
-3. resolve as bases content-addressed exatas;
+1. origem `develop -> main`;
+2. sincronismo de `VERSION`, `package.json` e `RELEASE-MANIFEST.json`;
+3. SemVer `X.Y.Z` válida;
+4. inexistência de `vX.Y.Z`;
+5. versão maior que o último release publicado;
+6. invariantes de build, deployments e bases content-addressed.
+
+## Publicação de main
+
+Após o merge da PR `develop -> main`, o workflow:
+
+1. valida exatamente o SHA recebido;
+2. lê a versão já declarada na fonte;
+3. resolve as bases `def-<sha256>` exatas;
 4. constrói uma única imagem `linux/amd64`;
-5. publica o mesmo digest em `main`, `latest`, `main-<sha-curto>` e `sha-<sha-completo>`;
-6. verifica digest, revisão, identidade de build e canal `stable`.
+5. publica o mesmo digest em `X.Y.Z`, `X.Y`, `X` e `latest`;
+6. pode publicar `sha-<sha-completo>` adicionalmente para auditoria;
+7. valida digest, revisão, versão e canal `stable`;
+8. cria a tag anotada `vX.Y.Z`;
+9. cria o GitHub Release correspondente.
 
-Nenhuma etapa altera `develop` ou `main`.
+Exemplo para `1.1.2`:
+
+- `:1.1.2`;
+- `:1.1`;
+- `:1`;
+- `:latest`;
+- tag `v1.1.2`;
+- GitHub Release `HUB v1.1.2`.
+
+## O que continua proibido
+
+O HUB não utiliza:
+
+- bump automático `major`, `minor` ou `patch`;
+- labels para calcular versão;
+- scripts `compute-next-version.mjs` ou `apply-version.mjs`;
+- commits automáticos de versão;
+- `git push` automático para `main` ou `develop`;
+- `docker/base/VERSION`.
+
+A única escrita Git do release é a criação da tag versionada após a imagem ter sido validada.

@@ -1,60 +1,90 @@
-# HUB — fluxo de branches, builds e publicação
+# HUB — fluxo de branches, versões, builds e publicação
 
 ## Regra principal
 
-A `develop` é a fonte estável de integração do HUB. Nenhum workflow altera automaticamente `VERSION`, `package.json`, `RELEASE-MANIFEST.json`, `develop`, `main` ou qualquer outro arquivo/branch para criar versão.
+A `develop` é a fonte estável de integração e prepara explicitamente a **próxima versão de release**. A `main` representa o último release de produção.
 
-Não existe controle automático de `major`, `minor`, `patch`, `auto`, labels `version:*`, cálculo SemVer por título de PR ou commit gerado por pipeline.
+O HUB usa SemVer explícito nos metadados da fonte:
 
-Os arquivos `VERSION`, `package.json` e `RELEASE-MANIFEST.json` permanecem somente como metadados compatíveis da fonte. O CI pode validar consistência entre eles, mas nunca os modifica.
+- `VERSION`;
+- `package.json`;
+- `RELEASE-MANIFEST.json`.
+
+Os três arquivos devem permanecer sincronizados. Nenhum workflow calcula `major`, `minor` ou `patch`, faz bump automático, reescreve esses arquivos ou cria commit automático de versão.
+
+Exemplo de ciclo:
+
+- produção atual: `main = 1.1.1`;
+- próximo release em desenvolvimento: `develop = 1.1.2`;
+- após a promoção `develop -> main`, ambas representam `1.1.2`;
+- antes do ciclo seguinte, `develop` passa explicitamente para a próxima versão planejada.
 
 ## Branches
 
-- `develop`: integração estável e imagem de desenvolvimento.
-- `main`: produção. Recebe somente promoção por PR `develop -> main`.
+- `develop`: integração estável e próxima versão de release em preparação;
+- `main`: produção e último release publicado;
 - feature/fix: partem de `develop` e retornam a `develop` por PR.
 
-Nenhuma automação faz `git push` ou cria commit em `develop`/`main`.
+A promoção oficial é sempre `develop -> main`.
 
-## Identidade dos builds da aplicação
+## Imagem de desenvolvimento
 
-A identidade de uma imagem é derivada da branch e do commit Git, não de SemVer automático.
+O nome/tag principal da imagem de desenvolvimento **permanece sempre**:
 
-### Develop
+- `ghcr.io/wkarts/argws-connect-hub:develop`.
 
-- `ghcr.io/wkarts/argws-connect-hub:develop`
-- `ghcr.io/wkarts/argws-connect-hub:develop-<sha-curto>`
-- `ghcr.io/wkarts/argws-connect-hub:sha-<sha-completo>`
+Tags `develop-<sha-curto>` e `sha-<sha-completo>` podem existir adicionalmente para rastreabilidade durante a build, mas imagens antigas desse canal são removidas pela política de retenção.
 
-`HUB_BUILD_VERSION=develop-<sha-curto>`.
+O valor SemVer preparado em `VERSION` não transforma a imagem de desenvolvimento em `:X.Y.Z`; a publicação SemVer acontece somente após promoção para `main`.
 
-### Main
+## Release de produção
 
-Após merge de uma PR `develop -> main`:
+Quando uma PR `develop -> main` é mesclada, a `main` recebe exatamente a mesma versão declarada na `develop`. O workflow não modifica arquivos de versão; ele apenas valida e publica.
 
-- `ghcr.io/wkarts/argws-connect-hub:main`
-- `ghcr.io/wkarts/argws-connect-hub:latest`
-- `ghcr.io/wkarts/argws-connect-hub:main-<sha-curto>`
-- `ghcr.io/wkarts/argws-connect-hub:sha-<sha-completo>`
+Para `VERSION=1.1.2`, o mesmo digest de produção é publicado como:
 
-`HUB_BUILD_VERSION=main-<sha-curto>`.
+- `ghcr.io/wkarts/argws-connect-hub:1.1.2`;
+- `ghcr.io/wkarts/argws-connect-hub:1.1`;
+- `ghcr.io/wkarts/argws-connect-hub:1`;
+- `ghcr.io/wkarts/argws-connect-hub:latest`.
 
-Tags e GitHub Releases SemVer históricas permanecem preservadas, mas o pipeline não cria novas versões SemVer automaticamente.
+Uma referência `sha-<sha-completo>` pode ser criada para auditoria durante a publicação.
 
-## Imagens-base sem versionamento manual
+A publicação também cria:
 
-As bases `build`, `runtime` e `deps` são **content-addressed**. Não existe `docker/base/VERSION` e não existe bump manual/automático de base.
+- tag Git anotada `v1.1.2`;
+- GitHub Release `HUB v1.1.2`.
 
-`scripts/resolve-hub-base-refs.sh` calcula SHA-256 determinístico das definições relevantes e gera tags no formato:
+A PR para `main` é bloqueada se a versão declarada não for SemVer válida, não estiver sincronizada ou não for maior que o release já publicado.
 
-- `argws-connect-hub-build-base:def-<sha256>`
-- `argws-connect-hub-runtime-base:def-<sha256>`
-- `argws-connect-hub-deps-base:def-<sha256>`
+## Retenção GHCR
 
-O alias `latest` de cada base aponta para a definição corrente, mas os builds da aplicação usam sempre a referência content-addressed exata. Assim, uma alteração real de dependências produz naturalmente uma nova tag sem sobrescrever a anterior e sem alterar arquivo de versão.
+O pacote principal `ghcr.io/wkarts/argws-connect-hub` mantém somente:
+
+1. a imagem do release atual (`X.Y.Z`);
+2. a imagem do release imediatamente anterior;
+3. a imagem que contém o alias permanente `:develop`.
+
+Aliases do release atual (`X.Y`, `X`, `latest`) permanecem no mesmo digest do release atual. Versões de pacote mais antigas são removidas do GHCR após builds bem-sucedidas.
+
+A remoção de uma imagem antiga do GHCR **não remove** a tag Git histórica nem o GitHub Release histórico.
+
+## Cache de build
+
+Após uma build bem-sucedida, o workflow remove caches do GitHub Actions que não foram acessados nas últimas **2 horas**. Caches usados dentro dessa janela permanecem disponíveis para acelerar builds próximas.
+
+## Imagens-base
+
+As bases `build`, `runtime` e `deps` continuam **content-addressed**. Não existe `docker/base/VERSION`.
+
+`scripts/resolve-hub-base-refs.sh` calcula SHA-256 determinístico das definições relevantes e gera referências no formato:
+
+- `argws-connect-hub-build-base:def-<sha256>`;
+- `argws-connect-hub-runtime-base:def-<sha256>`;
+- `argws-connect-hub-deps-base:def-<sha256>`.
+
+Versionamento SemVer da aplicação e identidade content-addressed das bases são mecanismos independentes.
 
 ## Fluxo oficial
 
-`feature/fix -> PR -> develop -> PR develop -> main -> GHCR main/latest/sha`
-
-A publicação de `main` só é autorizada quando o commit veio de PR mesclada `develop -> main` ou de `workflow_dispatch` explicitamente executado sobre `main`.
+`feature/fix -> PR -> develop -> definir próxima VERSION -> PR develop -> main -> GHCR X.Y.Z/X.Y/X/latest -> tag vX.Y.Z -> GitHub Release`
