@@ -14,6 +14,7 @@ import NotificationPreferences from './NotificationPreferences.vue';
 import AudioNotifications from './AudioNotifications.vue';
 import FormSection from 'dashboard/components/FormSection.vue';
 import AccessToken from './AccessToken.vue';
+import TwoFactorAuthentication from './TwoFactorAuthentication.vue';
 
 export default {
   components: {
@@ -26,6 +27,7 @@ export default {
     NotificationPreferences,
     AudioNotifications,
     AccessToken,
+    TwoFactorAuthentication,
   },
   setup() {
     const { useInstallationName } = useGlobalConfig();
@@ -100,13 +102,13 @@ export default {
         await this.$store.dispatch('updateProfile', payload);
         alertMessage = successMessage;
 
-        return true; // return the value so that the status can be known
+        return true;
       } catch (error) {
         alertMessage = error?.response?.data?.error
           ? error.response.data.error
           : errorMessage;
 
-        return false; // return the value so that the status can be known
+        return false;
       } finally {
         useAlert(alertMessage);
       }
@@ -235,6 +237,12 @@ export default {
       :title="$t('PROFILE_SETTINGS.FORM.PASSWORD_SECTION.TITLE')"
     >
       <ChangePassword />
+    </FormSection>
+    <FormSection
+      title="Autenticação em duas etapas"
+      description="Proteja o acesso ao HUB com Google Authenticator, Microsoft Authenticator ou qualquer aplicativo compatível com TOTP. Isso não altera tokens de API ou integrações REST."
+    >
+      <TwoFactorAuthentication />
     </FormSection>
     <FormSection
       :title="$t('PROFILE_SETTINGS.FORM.AUDIO_NOTIFICATIONS_SECTION.TITLE')"

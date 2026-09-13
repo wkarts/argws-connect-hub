@@ -3,8 +3,24 @@ import {
   throwErrorMessage,
   clearLocalStorageOnLogout,
 } from 'dashboard/store/utils/api';
+import { frontendURL } from 'dashboard/helper/URLHelper';
 import hubAPI from './apiClient';
 import { getLoginRedirectURL } from '../helpers/AuthHelper';
+
+const TWO_FACTOR_CHALLENGE_KEY = 'hub_two_factor_challenge';
+const TWO_FACTOR_CONTEXT_KEY = 'hub_two_factor_context';
+
+const completeLogin = ({ response, ssoAccountId, ssoConversationId }) => {
+  setAuthCredentials(response);
+  clearLocalStorageOnLogout();
+  sessionStorage.removeItem(TWO_FACTOR_CHALLENGE_KEY);
+  sessionStorage.removeItem(TWO_FACTOR_CONTEXT_KEY);
+  window.location = getLoginRedirectURL({
+    ssoAccountId,
+    ssoConversationId,
+    user: response.data.data,
+  });
+};
 
 export const login = async ({
   ssoAccountId,
@@ -12,14 +28,56 @@ export const login = async ({
   ...credentials
 }) => {
   try {
-    const response = await hubAPI.post('auth/sign_in', credentials);
-    setAuthCredentials(response);
-    clearLocalStorageOnLogout();
-    window.location = getLoginRedirectURL({
-      ssoAccountId,
-      ssoConversationId,
-      user: response.data.data,
+    const response = await hubAPI.post('frontend_auth/sign_in', credentials);
+
+    if (response.data?.two_factor_required) {
+      sessionStorage.setItem(TWO_FACTOR_CHALLENGE_KEY, response.data.challenge);
+      sessionStorage.setItem(
+        TWO_FACTOR_CONTEXT_KEY,
+        JSON.stringify({ ssoAccountId, ssoConversationId })
+      );
+      window.location = frontendURL('login/two-factor');
+      return;
+    }
+
+    completeLogin({ response, ssoAccountId, ssoConversationId });
+  } catch (error) {
+    throwErrorMessage(error);
+  }
+};
+
+export const getTwoFactorLoginContext = () => {
+  const challenge = sessionStorage.getItem(TWO_FACTOR_CHALLENGE_KEY);
+  let context = {};
+
+  try {
+    context = JSON.parse(sessionStorage.getItem(TWO_FACTOR_CONTEXT_KEY) || '{}');
+  } catch (error) {
+    context = {};
+  }
+
+  return { challenge, ...context };
+};
+
+export const clearTwoFactorLoginContext = () => {
+  sessionStorage.removeItem(TWO_FACTOR_CHALLENGE_KEY);
+  sessionStorage.removeItem(TWO_FACTOR_CONTEXT_KEY);
+};
+
+export const verifyTwoFactor = async ({
+  challenge,
+  code,
+  recoveryCode,
+  ssoAccountId,
+  ssoConversationId,
+}) => {
+  try {
+    const response = await hubAPI.post('frontend_auth/two_factor/verify', {
+      challenge,
+      code,
+      recovery_code: recoveryCode,
     });
+    completeLogin({ response, ssoAccountId, ssoConversationId });
   } catch (error) {
     throwErrorMessage(error);
   }
