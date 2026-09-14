@@ -140,7 +140,7 @@ module ConnectApi
       raise Error.new(error_message(payload, response), status: response.code, payload: payload)
     rescue Net::OpenTimeout, Net::ReadTimeout, Timeout::Error => e
       raise Error.new("Connect|API timeout: #{e.message}", status: 504)
-    rescue SocketError, Errno::ECONNREFUSED, Errno::EHOSTUNREACH => e
+    rescue SocketError, Errno::ECONNREFUSED, Errno::EHOSTUNREACH, Errno::ECONNRESET => e
       raise Error.new("Connect|API indisponível: #{e.message}", status: 503)
     end
 
