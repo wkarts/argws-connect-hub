@@ -33,6 +33,6 @@ RSpec.describe 'Agent inbox scope', type: :request do
         headers: agent.create_new_auth_token,
         as: :json
 
-    expect(response).to have_http_status(:forbidden)
+    expect(response).to have_http_status(:unauthorized)
   end
 end
