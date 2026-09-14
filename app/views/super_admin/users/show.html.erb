@@ -24,6 +24,17 @@ as well as a link to its edit page.
   </h1>
 
   <div>
+    <% if page.resource.two_factor_enabled? %>
+      <%= button_to(
+            "Resetar 2FA",
+            super_admin_user_path(page.resource),
+            method: :patch,
+            params: { reset_two_factor: true },
+            class: "button",
+            form: { style: "display: inline-block;" },
+            onclick: "return confirm('Resetar o 2FA deste usuário? O autenticador atual e os códigos de recuperação serão invalidados.')"
+          ) %>
+    <% end %>
     <%= link_to(
             t("administrate.actions.edit"),
             [:edit, namespace,  page.resource.becomes(User)],
