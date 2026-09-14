@@ -42,4 +42,8 @@ grep -Fq 'cleanup-github-storage.sh all' .github/workflows/publish_main_amd64.ym
 grep -Fq 'PACKAGE" != "argws-connect-hub"' scripts/cleanup-github-storage.sh || fail "cleanup guard must refuse other packages"
 grep -Fq 'Content-Addressed Base Images' .github/workflows/hub-base-images.yml || fail "base images must remain content-addressed"
 
+if command -v node >/dev/null 2>&1; then
+  node ./scripts/test-release-versioning.mjs
+fi
+
 echo "HUB release-flow validation: auto/patch/minor/major SemVer restored; canonical package=argws-connect-hub; tags=X.Y.Z/X.Y/X/latest/main/main-<sha>/sha-<sha>; same-SHA reruns are idempotent"
