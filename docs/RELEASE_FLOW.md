@@ -1,82 +1,53 @@
-# HUB — promoção idempotente para produção
+# HUB — release automático e promoção para produção
 
-## Fonte de verdade
+## Fluxo oficial
 
-A fonte funcional de produção é a revisão existente em `develop` no momento da PR `develop -> main`.
+`feature/fix -> develop -> PR develop -> main -> SemVer automático -> GHCR + tag + GitHub Release`
 
-`VERSION`, `package.json` e `RELEASE-MANIFEST.json` continuam declarando o mesmo SemVer, mas esse valor é **metadado da fonte**. Ele não é usado como trava para cada promoção e não precisa ser incrementado apenas porque uma nova revisão de `develop` será promovida para `main`.
+A promoção para `main` aceita somente `develop`. O workflow calcula a próxima versão a partir da última tag `vX.Y.Z`.
 
-O fluxo não faz bump automático, não reescreve a fonte e não cria commits ou tags de versão durante a promoção.
+## Modos
 
-## Desenvolvimento
+- `auto`: padrão; breaking/`version:major` => major, `feat:`/`version:minor` => minor, demais => patch.
+- `patch`: força patch.
+- `minor`: força minor.
+- `major`: força major.
 
-A publicação de desenvolvimento usa identidade por branch e SHA:
+No push normal de `develop -> main`, usa `auto`. No `workflow_dispatch`, o operador escolhe `auto`, `patch`, `minor` ou `major`.
 
-- `ghcr.io/wkarts/argws-connect-hub:develop`;
-- `ghcr.io/wkarts/argws-connect-hub:develop-<sha-curto>`;
-- `ghcr.io/wkarts/argws-connect-hub:sha-<sha-completo>`.
+Com `v1.1.3` como release atual, uma PR comum intitulada `Develop` gera `v1.1.4`.
 
-O alias `develop` é móvel. Os aliases derivados do SHA existem para rastreabilidade e recuperação exata de uma revisão.
+## Pacote GHCR canônico
 
-## Gate da PR para main
+Existe um único pacote de aplicação:
 
-`main` aceita promoção somente a partir de `develop`.
+`ghcr.io/wkarts/argws-connect-hub`
 
-Antes do merge, o gate valida:
+Um release `1.1.4` publica o mesmo digest em:
 
-1. origem `develop -> main`;
-2. sincronismo de `VERSION`, `package.json` e `RELEASE-MANIFEST.json`;
-3. formato SemVer válido do metadado de versão;
-4. invariantes de build, deployments e bases content-addressed;
-5. ausência de mecanismos de bump ou mutação automática de versão.
+- `:1.1.4`
+- `:1.1`
+- `:1`
+- `:latest`
+- `:main`
+- `:main-<sha-curto>`
+- `:sha-<sha-completo>`
 
-A existência prévia de `vX.Y.Z` **não bloqueia** uma nova promoção. Isso é intencional: tags SemVer históricas não são a identidade operacional de uma promoção `develop -> main`.
-
-## Publicação de main
-
-Após o merge da PR `develop -> main`, o workflow usa o SHA exato recebido em `main` e publica os aliases:
-
-- `ghcr.io/wkarts/argws-connect-hub:main`;
-- `ghcr.io/wkarts/argws-connect-hub:latest`;
-- `ghcr.io/wkarts/argws-connect-hub:main-<sha-curto>`;
-- `ghcr.io/wkarts/argws-connect-hub:sha-<sha-completo>`.
-
-A identidade gravada dentro da imagem é `main-<sha-curto>`, e a revisão OCI é o SHA completo de `main`.
-
-O workflow não cria `vX.Y.Z` nem GitHub Release automaticamente. Tags SemVer já existentes permanecem intactas e continuam servindo como histórico quando tiverem sido criadas por outro processo deliberado.
+O workflow rejeita qualquer referência fora desse pacote. `mains` não faz parte do contrato.
 
 ## Idempotência
 
-A promoção e a publicação podem ser executadas novamente para o mesmo SHA sem conflito de versionamento.
+- se o mesmo SHA já tem `vX.Y.Z`, reutiliza essa versão;
+- se `argws-connect-hub:X.Y.Z` já existe, não reconstrói; apenas reconcilia aliases;
+- tag e GitHub Release existentes no mesmo SHA são mantidos;
+- reexecução de SHA antigo não retrocede `latest`, `main`, `X` ou `X.Y`.
 
-Na primeira execução de um SHA de `main`:
+## Fonte Git sem conflito
 
-1. o workflow valida a fonte exata;
-2. resolve as bases `def-<sha256>`;
-3. constrói a imagem `linux/amd64`;
-4. publica `main`, `latest`, `main-<sha-curto>` e `sha-<sha-completo>`;
-5. valida digest, revisão, identidade e canal `stable`.
+`VERSION`, `package.json` e `RELEASE-MANIFEST.json` continuam sincronizados como metadados da fonte, mas o release não cria commit automático de versão em `main` ou `develop`.
 
-Em uma reexecução do mesmo SHA:
+A versão efetiva do artefato é passada ao Docker como `HUB_VERSION`, registrada em `/app/.hub_version`, nas labels OCI, nas tags GHCR e no GitHub Release. Assim o SemVer automático volta sem deixar `main` artificialmente à frente de `develop`.
 
-1. o workflow detecta `main-<sha-curto>` já publicado;
-2. reaplica `main`, `latest` e os aliases de SHA para o digest existente;
-3. não recompila a imagem já publicada;
-4. valida novamente todos os aliases e a identidade interna.
+## Bases
 
-Assim, reexecutar o pipeline converge para o mesmo artefato em vez de falhar por tag SemVer já existente.
-
-## O que continua proibido
-
-O HUB não utiliza:
-
-- bump automático `major`, `minor` ou `patch`;
-- labels para calcular versão;
-- scripts `compute-next-version.mjs` ou `apply-version.mjs`;
-- commits automáticos de versão;
-- `git push` automático para `main` ou `develop`;
-- `docker/base/VERSION`;
-- criação automática de tag SemVer durante uma promoção comum `develop -> main`;
-- exigência de incrementar `VERSION` apenas para permitir uma nova promoção.
-
-O metadado SemVer permanece sincronizado e auditável, mas a identidade operacional de cada build é determinada pela branch e pelo SHA.
+As bases continuam content-addressed por `def-<sha256>` e não participam do SemVer da aplicação.

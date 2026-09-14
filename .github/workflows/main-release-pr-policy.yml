@@ -1,4 +1,4 @@
-name: Main Promotion PR Policy
+name: Main Release PR Policy
 
 on:
   pull_request:
@@ -9,8 +9,8 @@ permissions:
   contents: read
 
 jobs:
-  promotion-policy:
-    name: Validate idempotent develop to main promotion
+  release-policy:
+    name: Validate develop to main release flow
     runs-on: ubuntu-24.04
     steps:
       - name: Require develop as the only source branch for main
@@ -20,14 +20,8 @@ jobs:
           BASE_REF: ${{ github.event.pull_request.base.ref }}
         run: |
           set -euo pipefail
-          [[ "$BASE_REF" == "main" ]] || {
-            echo "Promotion PR base must be main." >&2
-            exit 1
-          }
-          [[ "$HEAD_REF" == "develop" ]] || {
-            echo "main only accepts promotion PRs from develop; got '$HEAD_REF'." >&2
-            exit 1
-          }
+          [[ "$BASE_REF" == "main" ]] || { echo "Release PR base must be main." >&2; exit 1; }
+          [[ "$HEAD_REF" == "develop" ]] || { echo "main only accepts release PRs from develop; got '$HEAD_REF'." >&2; exit 1; }
 
       - name: Checkout proposed develop revision
         uses: actions/checkout@v5
@@ -35,23 +29,23 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
 
-      - name: Validate source and promotion-flow invariants
-        shell: bash
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.x'
+
+      - name: Validate source and release-flow invariants
         run: |
-          set -euo pipefail
           bash ./scripts/validate-hub-ci.sh
-          bash ./scripts/validate-release-flow.sh
+          node ./scripts/test-release-versioning.mjs
 
-      - name: Validate source metadata for idempotent promotion
+      - name: Preview automatic semantic release
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+          LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
         shell: bash
         run: |
           set -euo pipefail
-          bash ./scripts/validate-version-sync.sh
-          version="$(tr -d '[:space:]' < VERSION)"
-          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
-            echo "VERSION metadata must be SemVer X.Y.Z; got '$version'." >&2
-            exit 1
-          }
-
-          echo "Promotion candidate validated. VERSION=$version is source metadata only."
-          echo "Existing SemVer tags do not block develop -> main promotion."
+          git fetch --tags --force
+          latest="$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n1 || true)"
+          result="$(node .github/scripts/compute-next-version.mjs "$latest" "$LABELS" "$TITLE" auto)"
+          echo "Release preview: $(jq -r '.version + " (" + .bump + ")"' <<<"$result")"
