@@ -124,9 +124,14 @@ if resource.whatsapp?
     json.message_templates catalog.available_templates
     json.opening_templates catalog.available_templates(opening_only: true)
     json.opening_templates_required true
+
+    call_capabilities = (resource.channel.try(:provider_config) || {}).to_h.deep_stringify_keys
+    json.calls_supported call_capabilities['calls_supported']
+    json.incoming_call_ring_enabled call_capabilities['incoming_call_ring_enabled']
   else
     json.message_templates resource.channel.try(:message_templates)
   end
+
   if Current.account_user&.administrator?
     provider_config = resource.channel.try(:provider_config) || {}
     provider_config = provider_config.except('api_key') if resource.channel.try(:provider) == 'connectapi'
