@@ -108,6 +108,22 @@ export default {
       const { inbox_id: inboxId } = this.chat;
       return this.$store.getters['inboxes/getInbox'](inboxId);
     },
+    callInbox() {
+      if (this.inbox?.provider !== 'connectapi') return this.inbox;
+
+      const providerConfig = this.inbox.provider_config || {};
+      return {
+        ...this.inbox,
+        provider_config: {
+          ...providerConfig,
+          calls_supported:
+            this.inbox.calls_supported ?? providerConfig.calls_supported,
+          incoming_call_ring_enabled:
+            this.inbox.incoming_call_ring_enabled ??
+            providerConfig.incoming_call_ring_enabled,
+        },
+      };
+    },
     hasMultipleInboxes() {
       return this.$store.getters['inboxes/getInboxes'].length > 1;
     },
@@ -209,7 +225,7 @@ export default {
         <ConnectApiCallPanel
           v-if="inbox"
           :conversation-id="currentChat.id"
-          :inbox="inbox"
+          :inbox="callInbox"
           :contact="currentContact"
         />
         <MoreActions :conversation-id="currentChat.id" />
