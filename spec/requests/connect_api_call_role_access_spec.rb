@@ -27,7 +27,6 @@ RSpec.describe 'Connect API call access by account role', type: :request do
 
   before do
     create(:inbox_member, user: agent, inbox: inbox)
-    create(:inbox_member, user: admin, inbox: inbox)
 
     allow(Whatsapp::ConnectApiCallService).to receive(:new).and_return(call_service)
     allow(call_service).to receive(:capabilities).and_return(provider: 'WHATSAPP-ZAPO', calls: true, voice: true, video: false)
@@ -45,6 +44,15 @@ RSpec.describe 'Connect API call access by account role', type: :request do
       'callId' => 'outgoing-call-1',
       'direction' => 'outgoing',
       'status' => 'ringing'
+    )
+    allow(call_service).to receive(:accept).with('incoming-call-1').and_return(
+      'callId' => 'incoming-call-1',
+      'direction' => 'incoming',
+      'status' => 'answered'
+    )
+    allow(call_service).to receive(:media_ticket).with('incoming-call-1').and_return(
+      ticket: 'media-ticket-1',
+      media_url: 'wss://connect.example.test/voice/media'
     )
   end
 
@@ -70,6 +78,36 @@ RSpec.describe 'Connect API call access by account role', type: :request do
 
       expect(response).to have_http_status(:created)
       expect(response.parsed_body).to include('callId' => 'outgoing-call-1')
+    end
+  end
+
+  it 'allows both assigned agents and administrators to accept incoming calls' do
+    [agent, admin].each do |user|
+      post "#{calls_path}/accept",
+           params: { call_id: 'incoming-call-1' },
+           headers: user.create_new_auth_token,
+           as: :json
+
+      expect(response).to have_http_status(:ok)
+      expect(response.parsed_body).to include(
+        'callId' => 'incoming-call-1',
+        'status' => 'answered'
+      )
+    end
+  end
+
+  it 'allows both assigned agents and administrators to request voice media' do
+    [agent, admin].each do |user|
+      post "#{calls_path}/media_ticket",
+           params: { call_id: 'incoming-call-1' },
+           headers: user.create_new_auth_token,
+           as: :json
+
+      expect(response).to have_http_status(:ok)
+      expect(response.parsed_body).to include(
+        'ticket' => 'media-ticket-1',
+        'media_url' => 'wss://connect.example.test/voice/media'
+      )
     end
   end
 end

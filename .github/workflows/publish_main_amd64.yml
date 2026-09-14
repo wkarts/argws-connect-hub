@@ -43,11 +43,27 @@ jobs:
             echo "allowed=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          prs="$(gh api -H 'Accept: application/vnd.github+json' "/repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/pulls" 2>/dev/null || echo '[]')"
-          release_pr="$(jq -c '[.[] | select(.merged_at != null and .base.ref == "main" and .head.ref == "develop")][0] // empty' <<<"$prs")"
+
+          release_pr=''
+          for attempt in $(seq 1 6); do
+            prs="$(gh api -H 'Accept: application/vnd.github+json' "/repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/pulls" 2>/dev/null || echo '[]')"
+            release_pr="$(jq -c '[.[] | select(.merged_at != null and .base.ref == "main" and .head.ref == "develop")][0] // empty' <<<"$prs")"
+
+            if [[ -z "$release_pr" ]]; then
+              recent_prs="$(gh api -H 'Accept: application/vnd.github+json' "/repos/${GITHUB_REPOSITORY}/pulls?state=closed&base=main&sort=updated&direction=desc&per_page=30" 2>/dev/null || echo '[]')"
+              release_pr="$(jq -c --arg sha "$GITHUB_SHA" '[.[] | select(.merged_at != null and .base.ref == "main" and .head.ref == "develop" and .merge_commit_sha == $sha)][0] // empty' <<<"$recent_prs")"
+            fi
+
+            [[ -n "$release_pr" ]] && break
+            if (( attempt < 6 )); then
+              echo "Release PR metadata is not available yet (attempt ${attempt}/6); retrying in 3 seconds."
+              sleep 3
+            fi
+          done
+
           if [[ -z "$release_pr" ]]; then
             echo "allowed=false" >> "$GITHUB_OUTPUT"
-            echo "This main push did not come from a merged develop -> main PR; release is disabled."
+            echo "This main push did not come from a merged develop -> main PR, or GitHub did not expose the merged PR metadata after retries; release is disabled."
             exit 0
           fi
           title="$(jq -r '.title // ""' <<<"$release_pr")"
