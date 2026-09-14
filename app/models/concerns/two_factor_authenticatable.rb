@@ -46,6 +46,18 @@ module TwoFactorAuthenticatable
     two_factor_policy_accounts.any?
   end
 
+  def reset_two_factor_authentication!
+    with_lock do
+      update!(
+        two_factor_secret_ciphertext: nil,
+        two_factor_pending_secret_ciphertext: nil,
+        two_factor_enabled_at: nil,
+        two_factor_last_counter: nil,
+        two_factor_recovery_codes: []
+      )
+    end
+  end
+
   def verify_and_consume_two_factor_code(code)
     return false unless two_factor_enabled?
 

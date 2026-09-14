@@ -13,6 +13,20 @@ class SuperAdmin::UsersController < SuperAdmin::ApplicationController
       redirect_to new_super_admin_user_path, notice: notice
     end
   end
+
+  def update
+    if reset_two_factor_requested?
+      resource = requested_resource
+      authorize_resource(resource)
+      resource.reset_two_factor_authentication!
+      return redirect_to(
+        super_admin_user_path(resource),
+        notice: 'Autenticação de dois fatores resetada com sucesso. O usuário deverá configurá-la novamente.'
+      )
+    end
+
+    super
+  end
   #
   # def update
   #   super
@@ -66,5 +80,11 @@ class SuperAdmin::UsersController < SuperAdmin::ApplicationController
   # for more information
   def find_resource(param)
     super.becomes(User)
+  end
+
+  private
+
+  def reset_two_factor_requested?
+    ActiveModel::Type::Boolean.new.cast(params[:reset_two_factor])
   end
 end
