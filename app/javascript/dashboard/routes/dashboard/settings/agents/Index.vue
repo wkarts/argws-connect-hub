@@ -18,6 +18,7 @@ const loading = ref({});
 const showAddPopup = ref(false);
 const showDeletePopup = ref(false);
 const showEditPopup = ref(false);
+const showResetTwoFactorPopup = ref(false);
 const agentAPI = ref({ message: '' });
 const currentAgent = ref({});
 
@@ -30,6 +31,13 @@ const deleteRejectText = computed(() => {
 const deleteMessage = computed(() => {
   return ` ${currentAgent.value.name}?`;
 });
+const resetTwoFactorConfirmText = computed(
+  () => `${t('AGENT_MGMT.RESET_2FA.CONFIRM.YES')} ${currentAgent.value.name}`
+);
+const resetTwoFactorRejectText = computed(() =>
+  t('AGENT_MGMT.RESET_2FA.CONFIRM.NO')
+);
+const resetTwoFactorMessage = computed(() => ` ${currentAgent.value.name}?`);
 
 const agentList = computed(() => getters['agents/getAgents'].value);
 const uiFlags = computed(() => getters['agents/getUIFlags'].value);
@@ -93,6 +101,14 @@ const closeDeletePopup = () => {
   showDeletePopup.value = false;
 };
 
+const openResetTwoFactorPopup = agent => {
+  showResetTwoFactorPopup.value = true;
+  currentAgent.value = agent;
+};
+const closeResetTwoFactorPopup = () => {
+  showResetTwoFactorPopup.value = false;
+};
+
 const deleteAgent = async id => {
   try {
     await store.dispatch('agents/delete', id);
@@ -105,6 +121,20 @@ const confirmDeletion = () => {
   loading.value[currentAgent.value.id] = true;
   closeDeletePopup();
   deleteAgent(currentAgent.value.id);
+};
+
+const resetTwoFactor = async id => {
+  try {
+    await store.dispatch('agents/resetTwoFactor', id);
+    showAlertMessage(t('AGENT_MGMT.RESET_2FA.API.SUCCESS_MESSAGE'));
+  } catch (error) {
+    showAlertMessage(t('AGENT_MGMT.RESET_2FA.API.ERROR_MESSAGE'));
+  }
+};
+const confirmTwoFactorReset = () => {
+  loading.value[currentAgent.value.id] = true;
+  closeResetTwoFactorPopup();
+  resetTwoFactor(currentAgent.value.id);
 };
 </script>
 
@@ -138,7 +168,7 @@ const confirmDeletion = () => {
         <tbody
           class="divide-y divide-slate-50 dark:divide-slate-800 text-slate-700 dark:text-slate-300"
         >
-          <tr v-for="(agent, index) in agentList" :key="agent.email">
+          <tr v-for="agent in agentList" :key="agent.email">
             <td class="py-4 ltr:pr-4 rtl:pl-4">
               <div class="flex items-center flex-row gap-4">
                 <Thumbnail
@@ -172,6 +202,18 @@ const confirmDeletion = () => {
             <td class="py-4">
               <div class="flex justify-end gap-1">
                 <hub-button
+                  v-if="agent.two_factor_enabled"
+                  v-tooltip.top="$t('AGENT_MGMT.RESET_2FA.BUTTON_TEXT')"
+                  variant="smooth"
+                  size="tiny"
+                  color-scheme="alert"
+                  class-names="grey-btn"
+                  :is-loading="loading[agent.id]"
+                  @click="openResetTwoFactorPopup(agent)"
+                >
+                  2FA
+                </hub-button>
+                <hub-button
                   v-if="showEditAction(agent)"
                   v-tooltip.top="$t('AGENT_MGMT.EDIT.BUTTON_TEXT')"
                   variant="smooth"
@@ -190,7 +232,7 @@ const confirmDeletion = () => {
                   icon="dismiss-circle"
                   class-names="grey-btn"
                   :is-loading="loading[agent.id]"
-                  @click="openDeletePopup(agent, index)"
+                  @click="openDeletePopup(agent)"
                 />
               </div>
             </td>
@@ -224,6 +266,17 @@ const confirmDeletion = () => {
       :message-value="deleteMessage"
       :confirm-text="deleteConfirmText"
       :reject-text="deleteRejectText"
+    />
+
+    <hub-delete-modal
+      :show.sync="showResetTwoFactorPopup"
+      :on-close="closeResetTwoFactorPopup"
+      :on-confirm="confirmTwoFactorReset"
+      :title="$t('AGENT_MGMT.RESET_2FA.CONFIRM.TITLE')"
+      :message="$t('AGENT_MGMT.RESET_2FA.CONFIRM.MESSAGE')"
+      :message-value="resetTwoFactorMessage"
+      :confirm-text="resetTwoFactorConfirmText"
+      :reject-text="resetTwoFactorRejectText"
     />
   </SettingsLayout>
 </template>
