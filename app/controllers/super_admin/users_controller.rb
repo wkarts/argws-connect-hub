@@ -16,9 +16,11 @@ class SuperAdmin::UsersController < SuperAdmin::ApplicationController
 
   def update
     if reset_two_factor_requested?
-      requested_resource.reset_two_factor_authentication!
+      resource = requested_resource
+      authorize_resource(resource)
+      resource.reset_two_factor_authentication!
       return redirect_to(
-        super_admin_user_path(requested_resource),
+        super_admin_user_path(resource),
         notice: 'Autenticação de dois fatores resetada com sucesso. O usuário deverá configurá-la novamente.'
       )
     end
