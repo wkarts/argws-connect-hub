@@ -25,24 +25,7 @@ RSpec.describe Whatsapp::ConnectApiCallService do
   let(:conversation) do
     Whatsapp::IncomingConnectApiCallService.new(
       channel: whatsapp_channel,
-      params: {
-        event: 'call',
-        instance: 'hub-call-media-ticket-test',
-        date_time: '2026-09-14T14:20:00Z',
-        data: {
-          action: 'state',
-          provider: 'WHATSAPP-ZAPO',
-          call: {
-            callId: call_id,
-            direction: 'outgoing',
-            displayPeerJid: "#{contact_phone}@s.whatsapp.net",
-            status: 'ringing',
-            providerState: 'RINGING',
-            terminal: false,
-            isVideo: false
-          }
-        }
-      }
+      params: call_payload(status: 'ringing', provider_state: 'RINGING', terminal: false)
     ).perform
 
     whatsapp_channel.inbox.conversations.last
@@ -63,7 +46,29 @@ RSpec.describe Whatsapp::ConnectApiCallService do
       .and_return('https://connect.example.test')
   end
 
-  it 'requests media directly for the active call already bound to the conversation' do
+  def call_payload(status:, provider_state:, terminal:, provider_reason: nil)
+    {
+      event: 'call',
+      instance: 'hub-call-media-ticket-test',
+      date_time: '2026-09-14T14:20:00Z',
+      data: {
+        action: terminal ? 'ended' : 'state',
+        provider: 'WHATSAPP-ZAPO',
+        call: {
+          callId: call_id,
+          direction: 'outgoing',
+          displayPeerJid: "#{contact_phone}@s.whatsapp.net",
+          status: status,
+          providerState: provider_state,
+          providerReason: provider_reason,
+          terminal: terminal,
+          isVideo: false
+        }.compact
+      }
+    }
+  end
+
+  it 'requests media directly for the call already bound to the conversation' do
     expect(client).not_to receive(:list_calls)
     allow(client).to receive(:media_ticket)
       .with('hub-call-media-ticket-test', call_id)
@@ -85,7 +90,35 @@ RSpec.describe Whatsapp::ConnectApiCallService do
     )
   end
 
-  it 'does not allow a media ticket for a call that is not active in this conversation' do
+  it 'keeps the provider 404 after a terminal transition instead of replacing it with a HUB 422' do
+    conversation
+    Whatsapp::IncomingConnectApiCallService.new(
+      channel: whatsapp_channel,
+      conversation: conversation,
+      params: call_payload(
+        status: 'rejected',
+        provider_state: 'REJECTED',
+        provider_reason: 'DECLINED',
+        terminal: true
+      )
+    ).perform
+
+    conversation.reload
+    expect(
+      conversation.additional_attributes.dig('connect_api_call_state', 'active_call_id')
+    ).to be_blank
+
+    provider_error = ConnectApi::Error.new('Call not found', status: 404)
+    expect(client).not_to receive(:list_calls)
+    allow(client).to receive(:media_ticket)
+      .with('hub-call-media-ticket-test', call_id)
+      .and_raise(provider_error)
+
+    expect { service.media_ticket(call_id) }
+      .to raise_error(ConnectApi::Error) { |error| expect(error.status).to eq(404) }
+  end
+
+  it 'does not allow a media ticket for a call that was never bound to this conversation' do
     expect(client).not_to receive(:list_calls)
     expect(client).not_to receive(:media_ticket)
 
