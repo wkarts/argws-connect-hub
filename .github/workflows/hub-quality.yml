@@ -31,6 +31,7 @@ jobs:
           ruby ./scripts/test-connect-api-local-templates.rb
           node --test ./scripts/test-connect-api-local-templates.mjs
           node --test ./scripts/test-campaign-channel-ui.mjs
+          node --test ./scripts/test-connect-api-call-media-recovery.mjs
       - name: Enterprise runtime contracts
         run: ruby ./scripts/check-enterprise-contracts.rb
 

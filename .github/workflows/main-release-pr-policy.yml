@@ -1,4 +1,4 @@
-name: Main Release PR Policy
+name: Main Promotion PR Policy
 
 on:
   pull_request:
@@ -9,8 +9,8 @@ permissions:
   contents: read
 
 jobs:
-  release-policy:
-    name: Validate develop to main release flow
+  promotion-policy:
+    name: Validate idempotent develop to main promotion
     runs-on: ubuntu-24.04
     steps:
       - name: Require develop as the only source branch for main
@@ -21,11 +21,11 @@ jobs:
         run: |
           set -euo pipefail
           [[ "$BASE_REF" == "main" ]] || {
-            echo "Release PR base must be main." >&2
+            echo "Promotion PR base must be main." >&2
             exit 1
           }
           [[ "$HEAD_REF" == "develop" ]] || {
-            echo "main only accepts release PRs from develop; got '$HEAD_REF'." >&2
+            echo "main only accepts promotion PRs from develop; got '$HEAD_REF'." >&2
             exit 1
           }
 
@@ -35,39 +35,23 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
 
-      - name: Validate source and release-flow invariants
+      - name: Validate source and promotion-flow invariants
         shell: bash
         run: |
           set -euo pipefail
           bash ./scripts/validate-hub-ci.sh
           bash ./scripts/validate-release-flow.sh
 
-      - name: Require a new declared SemVer release
+      - name: Validate source metadata for idempotent promotion
         shell: bash
         run: |
           set -euo pipefail
           bash ./scripts/validate-version-sync.sh
           version="$(tr -d '[:space:]' < VERSION)"
           [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
-            echo "VERSION must be SemVer X.Y.Z; got '$version'." >&2
+            echo "VERSION metadata must be SemVer X.Y.Z; got '$version'." >&2
             exit 1
           }
 
-          git fetch --tags --force
-          tag="v${version}"
-          if git rev-parse "refs/tags/${tag}" >/dev/null 2>&1; then
-            echo "Release tag ${tag} already exists; develop must declare the next release before promotion to main." >&2
-            exit 1
-          fi
-
-          latest="$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n1 || true)"
-          if [[ -n "$latest" ]]; then
-            latest_version="${latest#v}"
-            highest="$(printf '%s\n%s\n' "$latest_version" "$version" | sort -V | tail -n1)"
-            if [[ "$version" == "$latest_version" || "$highest" != "$version" ]]; then
-              echo "Develop VERSION $version must be greater than current release $latest_version." >&2
-              exit 1
-            fi
-          fi
-
-          echo "Release candidate validated: v${version}"
+          echo "Promotion candidate validated. VERSION=$version is source metadata only."
+          echo "Existing SemVer tags do not block develop -> main promotion."

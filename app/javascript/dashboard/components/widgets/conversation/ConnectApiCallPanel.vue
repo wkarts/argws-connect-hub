@@ -53,6 +53,8 @@ export default {
       callTimerStarts: {},
       voiceSession: null,
       mediaCallId: '',
+      mediaAttachingCallId: '',
+      mediaAutoRecoveryCallId: '',
       mediaState: 'idle',
       mediaError: '',
     };
@@ -124,6 +126,16 @@ export default {
     },
     currentDirectionLabel() {
       return this.primaryCall ? this.directionLabel(this.primaryCall) : '';
+    },
+    canReconnectMedia() {
+      const call = this.primaryCall;
+      const callId = call ? this.callId(call) : '';
+      return Boolean(
+        callId &&
+          this.shouldRecoverMedia(call) &&
+          this.mediaState !== 'ready' &&
+          this.mediaAttachingCallId !== callId
+      );
     },
     mediaStateLabel() {
       const labels = {
@@ -214,6 +226,8 @@ export default {
       this.error = '';
       this.feedback = '';
       this.mediaError = '';
+      this.mediaAttachingCallId = '';
+      this.mediaAutoRecoveryCallId = '';
     },
     async toggle() {
       if (this.open) {
@@ -325,6 +339,16 @@ export default {
       }
       return this.canAccept(call);
     },
+    shouldRecoverMedia(call) {
+      if (!call || !this.isActive(call)) return false;
+      if (this.capabilities.voice === false) return false;
+      if (this.canAccept(call)) return false;
+
+      return (
+        this.isConnected(call) ||
+        String(call.direction || '').toLowerCase() === 'outgoing'
+      );
+    },
     callId(call) {
       return String(call.callId || call.id || '');
     },
@@ -406,6 +430,7 @@ export default {
 
         if (this.activeCalls.length === 0) {
           this.minimized = false;
+          this.mediaAutoRecoveryCallId = '';
         } else if (!this.open) {
           this.minimized = true;
         }
@@ -416,11 +441,48 @@ export default {
           );
           if (!current || !this.isActive(current)) this.closeMedia();
         }
+
+        const primaryCallId = this.primaryCall
+          ? this.callId(this.primaryCall)
+          : '';
+        if (
+          this.mediaAutoRecoveryCallId &&
+          this.mediaAutoRecoveryCallId !== primaryCallId
+        ) {
+          this.mediaAutoRecoveryCallId = '';
+        }
+
+        if (this.shouldRecoverMedia(this.primaryCall)) {
+          this.recoverActiveMedia();
+        }
       } catch (error) {
         if (!silent) this.error = this.apiError(error);
       } finally {
         if (!silent) this.loading = false;
       }
+    },
+    async recoverActiveMedia() {
+      const call = this.primaryCall;
+      if (!this.shouldRecoverMedia(call)) return;
+
+      const callId = this.callId(call);
+      if (!callId) return;
+      if (this.mediaAttachingCallId === callId) return;
+      if (this.mediaCallId === callId && this.voiceSession) return;
+      if (this.mediaAutoRecoveryCallId === callId) return;
+
+      this.mediaAutoRecoveryCallId = callId;
+      await this.attachMedia(callId, { recovered: true });
+    },
+    async reconnectMedia() {
+      const call = this.primaryCall;
+      if (!this.shouldRecoverMedia(call)) return;
+
+      const callId = this.callId(call);
+      if (!callId || this.mediaAttachingCallId === callId) return;
+
+      this.mediaAutoRecoveryCallId = callId;
+      await this.attachMedia(callId, { recovered: true });
     },
     async makeCall() {
       this.busy = true;
@@ -504,10 +566,21 @@ export default {
       }
       throw lastError;
     },
-    async attachMedia(callId) {
+    async attachMedia(callId, { recovered = false } = {}) {
+      if (!callId || this.mediaAttachingCallId === callId) return;
+      if (
+        this.mediaCallId === callId &&
+        this.voiceSession &&
+        this.mediaState === 'ready'
+      ) {
+        return;
+      }
+
       this.closeMedia();
+      this.mediaAttachingCallId = callId;
       this.mediaCallId = callId;
       this.mediaError = '';
+      this.mediaState = 'idle';
       try {
         const { data } = await this.requestMediaTicket(callId);
         this.voiceSession = new ConnectApiVoiceMediaSession(
@@ -522,11 +595,26 @@ export default {
           }
         );
         await this.voiceSession.start();
+
+        const current = this.calls.find(
+          call => this.callId(call) === callId
+        );
+        if (current) {
+          this.voiceSession.setMicMuted(Boolean(current.muted));
+        }
+        if (recovered) {
+          this.feedback = 'Áudio e microfone recuperados para a chamada em andamento.';
+        }
       } catch (error) {
         this.mediaError = this.apiError(error);
-        this.mediaState = 'error';
         if (this.voiceSession) this.voiceSession.stop();
         this.voiceSession = null;
+        this.mediaCallId = '';
+        this.mediaState = 'error';
+      } finally {
+        if (this.mediaAttachingCallId === callId) {
+          this.mediaAttachingCallId = '';
+        }
       }
     },
     closeMedia() {
@@ -840,14 +928,25 @@ export default {
                   </div>
                 </div>
               </div>
-              <button
-                type="button"
-                class="rounded-lg px-2 py-1 text-xs font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-800 dark:hover:bg-slate-800 dark:hover:text-slate-200"
-                :disabled="busy"
-                @click="loadCalls()"
-              >
-                Atualizar
-              </button>
+              <div class="flex shrink-0 items-center gap-1">
+                <button
+                  v-if="canReconnectMedia"
+                  type="button"
+                  class="rounded-lg px-2 py-1 text-xs font-semibold text-blue-600 hover:bg-blue-50 hover:text-blue-800 disabled:cursor-not-allowed disabled:opacity-50 dark:text-blue-300 dark:hover:bg-blue-950/30"
+                  :disabled="busy || Boolean(mediaAttachingCallId)"
+                  @click="reconnectMedia"
+                >
+                  Reconectar áudio
+                </button>
+                <button
+                  type="button"
+                  class="rounded-lg px-2 py-1 text-xs font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-800 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+                  :disabled="busy"
+                  @click="loadCalls()"
+                >
+                  Atualizar
+                </button>
+              </div>
             </div>
           </template>
 
