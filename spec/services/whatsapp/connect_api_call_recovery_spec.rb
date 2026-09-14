@@ -138,4 +138,29 @@ describe 'Connect|API call session recovery' do
     expect(result[:ticket]).to eq('media-ticket-1')
     expect(result[:media_url]).to eq('wss://connect.example.test/voice/media')
   end
+
+  it 'matches Brazilian mobile calls with legacy ninth-digit and local-number variants' do
+    conversation = create_active_call
+    legacy_mobile = raw_call.merge(
+      'callId' => 'legacy-mobile-call',
+      'displayPeerJid' => '557596236940@s.whatsapp.net'
+    )
+    local_mobile = raw_call.merge(
+      'callId' => 'local-mobile-call',
+      'displayPeerJid' => '75996236940@s.whatsapp.net'
+    )
+    unrelated_landline = raw_call.merge(
+      'callId' => 'unrelated-landline-call',
+      'displayPeerJid' => '557533221122@s.whatsapp.net'
+    )
+
+    allow(client).to receive(:list_calls)
+      .with('hub-call-recovery-test')
+      .and_return([legacy_mobile, local_mobile, unrelated_landline])
+
+    calls = call_service(conversation).list
+
+    expect(calls.map { |call| call['callId'] })
+      .to contain_exactly('legacy-mobile-call', 'local-mobile-call')
+  end
 end

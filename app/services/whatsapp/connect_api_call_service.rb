@@ -186,13 +186,49 @@ class Whatsapp::ConnectApiCallService
   def call_matches_contact?(call)
     return true if @contact_phone.blank?
 
+    contact_variants = comparable_number_variants(@contact_phone)
     item = call.to_h.deep_stringify_keys
     candidates = [item['number'], item['callerPn'], item['callerPnJid'], item['displayPeerJid'], item['peerJidAlt'], item['remoteJid'], item['peerJid']]
-    candidates.any? { |value| normalize_number(value) == @contact_phone }
+
+    candidates.any? do |value|
+      (comparable_number_variants(value) & contact_variants).any?
+    end
   end
 
   def normalize_number(value)
     value.to_s.split('@').first.to_s.gsub(/\D/, '')
+  end
+
+  def comparable_number_variants(value)
+    digits = normalize_number(value)
+    return [] if digits.blank?
+
+    variants = [digits]
+    brazilian_e164 = if digits.start_with?('55') && [12, 13].include?(digits.length)
+                       digits
+                     elsif [10, 11].include?(digits.length)
+                       "55#{digits}"
+                     end
+
+    return variants unless brazilian_e164
+
+    variants << brazilian_e164
+    variants << brazilian_e164.delete_prefix('55')
+
+    country_ddd = brazilian_e164[0, 4]
+    subscriber = brazilian_e164[4..]
+
+    if subscriber.match?(/\A9\d{8}\z/)
+      legacy_e164 = "#{country_ddd}#{subscriber[1..]}"
+      variants << legacy_e164
+      variants << legacy_e164.delete_prefix('55')
+    elsif subscriber.match?(/\A[6-9]\d{7}\z/)
+      modern_e164 = "#{country_ddd}9#{subscriber}"
+      variants << modern_e164
+      variants << modern_e164.delete_prefix('55')
+    end
+
+    variants.compact.uniq
   end
 
   def required_call_id(value)
