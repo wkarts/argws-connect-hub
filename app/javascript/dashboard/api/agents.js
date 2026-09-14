@@ -12,6 +12,12 @@ class Agents extends ApiClient {
       emails,
     });
   }
+
+  resetTwoFactor(id) {
+    return axios.patch(`${this.url}/${id}`, {
+      reset_two_factor: true,
+    });
+  }
 }
 
 export default new Agents();
