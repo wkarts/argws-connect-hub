@@ -117,7 +117,7 @@ class Whatsapp::ConnectApiCallService
   def media_ticket(call_id)
     ensure_call_provider!
     call_id = required_call_id(call_id)
-    find_call_for_contact!(call_id)
+    ensure_active_conversation_call!(call_id)
     ticket = @client.media_ticket(instance_name, call_id).to_h
     public_url = connect_api_public_url
     media_path = ticket['mediaPath'].presence || '/voice/media'
@@ -167,6 +167,14 @@ class Whatsapp::ConnectApiCallService
     return if calls_supported? && current_provider == CALL_PROVIDER
 
     raise ConnectApi::Error, 'Chamadas não estão habilitadas para esta conexão.'
+  end
+
+  def ensure_active_conversation_call!(call_id)
+    return find_call_for_contact!(call_id) if @conversation.blank?
+    return if persisted_active_call_id.to_s == call_id.to_s
+    return if timeline_active_call_id.to_s == call_id.to_s
+
+    raise ConnectApi::Error, 'Chamada não encontrada nesta conversa.'
   end
 
   def find_call_for_contact!(call_id)
