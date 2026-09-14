@@ -141,6 +141,46 @@ RSpec.describe 'Agents API', type: :request do
     end
   end
 
+  describe 'PATCH /api/v1/accounts/{account.id}/agents/:id with reset_two_factor' do
+    let(:other_agent) { create(:user, account: account, role: :agent) }
+
+    before do
+      other_agent.update!(
+        two_factor_secret_ciphertext: 'encrypted-secret',
+        two_factor_pending_secret_ciphertext: 'encrypted-pending-secret',
+        two_factor_enabled_at: Time.current,
+        two_factor_last_counter: 123,
+        two_factor_recovery_codes: ['recovery-digest']
+      )
+    end
+
+    it 'returns unauthorized for agents and preserves the 2FA state' do
+      patch "/api/v1/accounts/#{account.id}/agents/#{other_agent.id}",
+            params: { reset_two_factor: true },
+            headers: agent.create_new_auth_token,
+            as: :json
+
+      expect(response).to have_http_status(:unauthorized)
+      expect(other_agent.reload.two_factor_secret_ciphertext).to eq('encrypted-secret')
+    end
+
+    it 'allows an administrator to invalidate the complete 2FA state' do
+      patch "/api/v1/accounts/#{account.id}/agents/#{other_agent.id}",
+            params: { reset_two_factor: true },
+            headers: admin.create_new_auth_token,
+            as: :json
+
+      expect(response).to have_http_status(:no_content)
+
+      other_agent.reload
+      expect(other_agent.two_factor_secret_ciphertext).to be_nil
+      expect(other_agent.two_factor_pending_secret_ciphertext).to be_nil
+      expect(other_agent.two_factor_enabled_at).to be_nil
+      expect(other_agent.two_factor_last_counter).to be_nil
+      expect(other_agent.two_factor_recovery_codes).to eq([])
+    end
+  end
+
   describe 'POST /api/v1/accounts/{account.id}/agents' do
     let(:other_agent) { create(:user, account: account, role: :agent) }
 
