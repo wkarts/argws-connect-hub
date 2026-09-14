@@ -117,7 +117,7 @@ class Whatsapp::ConnectApiCallService
   def media_ticket(call_id)
     ensure_call_provider!
     call_id = required_call_id(call_id)
-    ensure_active_conversation_call!(call_id)
+    ensure_conversation_call!(call_id)
     ticket = @client.media_ticket(instance_name, call_id).to_h
     public_url = connect_api_public_url
     media_path = ticket['mediaPath'].presence || '/voice/media'
@@ -169,12 +169,19 @@ class Whatsapp::ConnectApiCallService
     raise ConnectApi::Error, 'Chamadas não estão habilitadas para esta conexão.'
   end
 
-  def ensure_active_conversation_call!(call_id)
+  def ensure_conversation_call!(call_id)
     return find_call_for_contact!(call_id) if @conversation.blank?
     return if persisted_active_call_id.to_s == call_id.to_s
-    return if timeline_active_call_id.to_s == call_id.to_s
+    return if conversation_has_call_id?(call_id)
 
     raise ConnectApi::Error, 'Chamada não encontrada nesta conversa.'
+  end
+
+  def conversation_has_call_id?(call_id)
+    @conversation.messages.exists?(source_id: "connect-api-call:#{call_id}")
+  rescue StandardError => e
+    Rails.logger.warn("[HUB Call Recovery] conversation call lookup failed: #{e.class}: #{e.message}")
+    false
   end
 
   def find_call_for_contact!(call_id)

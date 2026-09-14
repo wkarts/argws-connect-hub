@@ -11,7 +11,9 @@ class InboxPolicy < ApplicationPolicy
     end
 
     def resolve
-      user.assigned_inboxes
+      return scope if account_user&.administrator?
+
+      scope.where(id: user.assigned_inboxes.where(account_id: account.id).select(:id))
     end
   end
 
@@ -22,8 +24,9 @@ class InboxPolicy < ApplicationPolicy
   def show?
     # FIXME: for agent bots, lets bring this validation to policies as well in future
     return true if @user.is_a?(AgentBot)
+    return true if @account_user&.administrator?
 
-    Current.user.assigned_inboxes.include? record
+    record.account_id == account.id && user.assigned_inboxes.where(account_id: account.id).exists?(id: record.id)
   end
 
   def assignable_agents?

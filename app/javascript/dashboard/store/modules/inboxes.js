@@ -183,13 +183,10 @@ export const actions = {
     });
     return data;
   },
-  revalidate: async ({ commit }, { newKey }) => {
+  revalidate: async ({ commit }) => {
     try {
-      const isExistingKeyValid = await InboxesAPI.validateCacheKey(newKey);
-      if (!isExistingKeyValid) {
-        const response = await InboxesAPI.refetchAndCommit(newKey);
-        commit(types.default.SET_INBOXES, response.data.payload);
-      }
+      const response = await InboxesAPI.get(false);
+      commit(types.default.SET_INBOXES, response.data.payload);
     } catch (error) {
       // Ignore error
     }
@@ -197,7 +194,9 @@ export const actions = {
   get: async ({ commit }) => {
     commit(types.default.SET_INBOXES_UI_FLAG, { isFetching: true });
     try {
-      const response = await InboxesAPI.get(true);
+      // Inbox visibility is user-scoped. Do not reuse the account-wide IndexedDB
+      // cache because another user of the same account may have a different scope.
+      const response = await InboxesAPI.get(false);
       commit(types.default.SET_INBOXES_UI_FLAG, { isFetching: false });
       commit(types.default.SET_INBOXES, response.data.payload);
     } catch (error) {
