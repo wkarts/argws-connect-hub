@@ -4,6 +4,7 @@ require 'uri'
 
 class Whatsapp::ConnectApiCallService
   CALL_PROVIDER = 'WHATSAPP-ZAPO'
+  TERMINAL_STATUSES = %w[rejected missed unanswered ended failed answered_elsewhere].freeze
 
   def initialize(whatsapp_channel:, contact_phone: nil, conversation: nil, client: ConnectApi::Client.new)
     @channel = whatsapp_channel
@@ -195,7 +196,48 @@ class Whatsapp::ConnectApiCallService
   end
 
   def required_call_id(value)
-    value.to_s.presence || raise(ConnectApi::Error, 'call_id é obrigatório.')
+    explicit_call_id = value.to_s.presence
+    return explicit_call_id if explicit_call_id.present?
+
+    recovered_call_id = persisted_active_call_id || timeline_active_call_id
+    return recovered_call_id if recovered_call_id.present?
+
+    raise ConnectApi::Error, 'call_id é obrigatório e não foi possível recuperar uma chamada ativa para esta conversa.'
+  end
+
+  def persisted_active_call_id
+    return if @conversation.blank?
+
+    state = @conversation.additional_attributes.to_h.deep_stringify_keys['connect_api_call_state'].to_h
+    state['active_call_id'].to_s.presence
+  rescue StandardError => e
+    Rails.logger.warn("[HUB Call Recovery] persisted state read failed: #{e.class}: #{e.message}")
+    nil
+  end
+
+  def timeline_active_call_id
+    return if @conversation.blank?
+
+    @conversation.messages
+                 .where('source_id LIKE ?', 'connect-api-call:%')
+                 .order(updated_at: :desc)
+                 .limit(25)
+                 .each do |message|
+      snapshot = message.content_attributes.to_h.deep_stringify_keys['connect_api_call'].to_h
+      next if snapshot.blank? || terminal_snapshot?(snapshot)
+
+      call_id = snapshot['call_id'].to_s.presence
+      return call_id if call_id.present?
+    end
+
+    nil
+  rescue StandardError => e
+    Rails.logger.warn("[HUB Call Recovery] timeline lookup failed: #{e.class}: #{e.message}")
+    nil
+  end
+
+  def terminal_snapshot?(snapshot)
+    ActiveModel::Type::Boolean.new.cast(snapshot['terminal']) || TERMINAL_STATUSES.include?(snapshot['status'].to_s.downcase)
   end
 
   def response_call(response)
