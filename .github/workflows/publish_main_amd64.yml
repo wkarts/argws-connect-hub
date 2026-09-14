@@ -1,23 +1,30 @@
-name: GHCR - Publish Stable Main Image
+name: Release - Auto SemVer Main
 
 on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      force_bump:
+        description: Semantic version bump override
+        required: false
+        type: choice
+        options: [auto, patch, minor, major]
+        default: auto
 
 permissions:
   actions: write
-  contents: read
+  contents: write
   packages: write
   pull-requests: read
 
 concurrency:
-  group: argws-connect-hub-main-image
+  group: argws-connect-hub-release-main
   cancel-in-progress: false
 
 jobs:
   gate:
-    name: Authorize stable main publication
+    name: Authorize develop to main release
     runs-on: ubuntu-24.04
     outputs:
       allowed: ${{ steps.gate.outputs.allowed }}
@@ -31,158 +38,213 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
           if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
-            [[ "$REF_NAME" == "refs/heads/main" ]] || {
-              echo "Manual stable publication accepts only refs/heads/main (got $REF_NAME)." >&2
-              exit 1
-            }
+            [[ "$REF_NAME" == "refs/heads/main" ]] || { echo "Manual release accepts only refs/heads/main (got $REF_NAME)." >&2; exit 1; }
             echo "allowed=true" >> "$GITHUB_OUTPUT"
-            echo "Manual stable main publication authorized."
             exit 0
           fi
-
           prs="$(gh api -H 'Accept: application/vnd.github+json' "/repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/pulls" 2>/dev/null || echo '[]')"
-          promotion_pr="$(jq -c '[.[] | select(.merged_at != null and .base.ref == "main" and .head.ref == "develop")][0] // empty' <<<"$prs")"
-
-          if [[ -z "$promotion_pr" ]]; then
+          release_pr="$(jq -c '[.[] | select(.merged_at != null and .base.ref == "main" and .head.ref == "develop")][0] // empty' <<<"$prs")"
+          if [[ -z "$release_pr" ]]; then
             echo "allowed=false" >> "$GITHUB_OUTPUT"
-            echo "This main push did not come from a merged develop -> main PR; stable publication is disabled."
+            echo "This main push did not come from a merged develop -> main PR; release is disabled."
             exit 0
           fi
-
+          title="$(jq -r '.title // ""' <<<"$release_pr")"
+          if [[ "$title" == *"[skip release]"* ]]; then
+            echo "allowed=false" >> "$GITHUB_OUTPUT"
+            echo "Release PR requested [skip release]."
+            exit 0
+          fi
           echo "allowed=true" >> "$GITHUB_OUTPUT"
-          echo "Stable main publication authorized from merged develop -> main PR."
 
   validate:
-    name: Validate exact main source - no image build
+    name: Validate exact main source
     needs: gate
     if: ${{ needs.gate.outputs.allowed == 'true' }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
     steps:
-      - name: Checkout exact main revision
-        uses: actions/checkout@v5
+      - uses: actions/checkout@v5
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
-
-      - name: Install Ruby 3.3.10
-        uses: ruby/setup-ruby@v1
+      - uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.3.10'
           bundler-cache: false
-
-      - name: Install Node for validation tooling
-        uses: actions/setup-node@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: '24.x'
+      - run: bash ./scripts/validate-version-sync.sh
+      - run: bash ./scripts/validate-hub-ci.sh
+      - run: node ./scripts/test-release-versioning.mjs
+      - run: bash ./scripts/test-verify-hub-image.sh
 
-      - name: Validate canonical source metadata
-        run: bash ./scripts/validate-version-sync.sh
-
-      - name: Validate HUB source and deployments
-        run: bash ./scripts/validate-hub-ci.sh
-
-      - name: Test image publication verification
-        run: bash ./scripts/test-verify-hub-image.sh
-
-  publish:
-    name: Publish idempotent stable HUB main / amd64
-    needs: [gate, validate]
-    if: ${{ needs.gate.outputs.allowed == 'true' }}
+  plan:
+    name: Plan semantic release
+    needs: validate
     runs-on: ubuntu-24.04
-    timeout-minutes: 90
+    outputs:
+      version: ${{ steps.plan.outputs.version }}
+      tag: ${{ steps.plan.outputs.tag }}
+      major: ${{ steps.plan.outputs.major }}
+      minor: ${{ steps.plan.outputs.minor }}
+      advance_aliases: ${{ steps.plan.outputs.advance_aliases }}
     steps:
-      - name: Checkout validated main revision
-        uses: actions/checkout@v5
+      - uses: actions/checkout@v5
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
-
-      - name: Resolve content-addressed bases and stable build identity
-        id: identity
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.x'
+      - name: Resolve merged PR metadata
+        id: pr
         env:
-          HUB_GHCR_OWNER: ${{ github.repository_owner }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EVENT_NAME: ${{ github.event_name }}
         shell: bash
         run: |
           set -euo pipefail
-          short_sha="${GITHUB_SHA:0:12}"
-          main_version="main-${short_sha}"
-          echo "short_sha=$short_sha" >> "$GITHUB_OUTPUT"
-          echo "main_version=$main_version" >> "$GITHUB_OUTPUT"
-          bash ./scripts/resolve-hub-base-refs.sh --github-output
-          echo "Stable main build identity: $main_version"
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            echo 'title=manual release' >> "$GITHUB_OUTPUT"
+            echo 'labels=' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          json="$(gh api -H 'Accept: application/vnd.github+json' "/repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/pulls" 2>/dev/null || echo '[]')"
+          pr="$(jq -c '[.[] | select(.merged_at != null and .base.ref == "main" and .head.ref == "develop")][0] // {}' <<<"$json")"
+          echo "title=$(jq -r '.title // ""' <<<"$pr")" >> "$GITHUB_OUTPUT"
+          echo "labels=$(jq -r '[.labels[]?.name] | join(",")' <<<"$pr")" >> "$GITHUB_OUTPUT"
+      - name: Compute next version idempotently
+        id: plan
+        env:
+          LABELS: ${{ steps.pr.outputs.labels }}
+          TITLE: ${{ steps.pr.outputs.title }}
+          FORCE: ${{ inputs.force_bump || 'auto' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --tags --force
+          latest="$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n1 || true)"
+          existing_tag=''
+          if [[ "$FORCE" == "auto" || -z "$FORCE" ]]; then
+            existing_tag="$(git for-each-ref --format='%(refname:short)|%(objecttype)|%(objectname)|%(*objectname)' 'refs/tags/v*' | awk -F'|' -v sha="$GITHUB_SHA" '$1 ~ /^v[0-9]+\.[0-9]+\.[0-9]+$/ { target = ($2 == "tag" && $4 != "") ? $4 : $3; if (target == sha) print $1 }' | sort -V | tail -n1)"
+          fi
+          if [[ -n "$existing_tag" ]]; then
+            version="${existing_tag#v}"
+            tag="$existing_tag"
+            [[ "$existing_tag" == "$latest" ]] && advance_aliases=true || advance_aliases=false
+            echo "Reusing existing release $tag for this exact source SHA."
+          else
+            result="$(node .github/scripts/compute-next-version.mjs "$latest" "$LABELS" "$TITLE" "${FORCE:-auto}")"
+            version="$(jq -r .version <<<"$result")"
+            tag="v${version}"
+            advance_aliases=true
+            [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Invalid SemVer: $version" >&2; exit 1; }
+            if git rev-parse "refs/tags/${tag}" >/dev/null 2>&1; then echo "Computed tag $tag already exists on another source." >&2; exit 1; fi
+          fi
+          major="${version%%.*}"
+          rest="${version#*.}"
+          minor="${rest%%.*}"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "major=$major" >> "$GITHUB_OUTPUT"
+          echo "minor=$minor" >> "$GITHUB_OUTPUT"
+          echo "advance_aliases=$advance_aliases" >> "$GITHUB_OUTPUT"
 
-      - name: Set up Buildx
-        uses: docker/setup-buildx-action@v4.3.0
-
+  publish:
+    name: Publish versioned HUB release / amd64
+    needs: [gate, plan]
+    if: ${{ needs.gate.outputs.allowed == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    outputs:
+      digest: ${{ steps.final.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - name: Resolve content-addressed HUB bases
+        id: bases
+        env:
+          HUB_GHCR_OWNER: ${{ github.repository_owner }}
+        run: bash ./scripts/resolve-hub-base-refs.sh --github-output
+      - uses: docker/setup-buildx-action@v4.3.0
       - name: Login GHCR
         uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Wait for immutable HUB bases
-        shell: bash
         env:
-          DEPS_BASE: ${{ steps.identity.outputs.deps_image }}
-          RUNTIME_BASE: ${{ steps.identity.outputs.runtime_image }}
+          DEPS_BASE: ${{ steps.bases.outputs.deps_image }}
+          RUNTIME_BASE: ${{ steps.bases.outputs.runtime_image }}
+        shell: bash
         run: |
           set -euo pipefail
           for image in "$DEPS_BASE" "$RUNTIME_BASE"; do
             ready=false
             for attempt in $(seq 1 180); do
-              if docker buildx imagetools inspect "$image" >/dev/null 2>&1; then
-                ready=true
-                break
-              fi
-              echo "Waiting for $image ($attempt/180)..."
+              if docker buildx imagetools inspect "$image" >/dev/null 2>&1; then ready=true; break; fi
               sleep 10
             done
-            [[ "$ready" == true ]] || {
-              echo "Required immutable HUB base is unavailable: $image" >&2
-              exit 1
-            }
+            [[ "$ready" == true ]] || { echo "Required immutable HUB base is unavailable: $image" >&2; exit 1; }
           done
-
-      - name: Resolve stable image aliases
+      - name: Resolve canonical release tags
         id: meta
+        env:
+          VERSION: ${{ needs.plan.outputs.version }}
+          MAJOR: ${{ needs.plan.outputs.major }}
+          MINOR: ${{ needs.plan.outputs.minor }}
+          ADVANCE_ALIASES: ${{ needs.plan.outputs.advance_aliases }}
         shell: bash
         run: |
           set -euo pipefail
+          image="ghcr.io/${{ github.repository_owner }}/argws-connect-hub"
+          short_sha="${GITHUB_SHA:0:12}"
           {
             echo 'tags<<EOF'
-            echo "ghcr.io/${{ github.repository_owner }}/argws-connect-hub:main"
-            echo "ghcr.io/${{ github.repository_owner }}/argws-connect-hub:latest"
-            echo "ghcr.io/${{ github.repository_owner }}/argws-connect-hub:main-${{ steps.identity.outputs.short_sha }}"
-            echo "ghcr.io/${{ github.repository_owner }}/argws-connect-hub:sha-${{ github.sha }}"
+            echo "${image}:${VERSION}"
+            echo "${image}:main-${short_sha}"
+            echo "${image}:sha-${GITHUB_SHA}"
+            if [[ "$ADVANCE_ALIASES" == "true" ]]; then
+              echo "${image}:${MAJOR}.${MINOR}"
+              echo "${image}:${MAJOR}"
+              echo "${image}:latest"
+              echo "${image}:main"
+            fi
             echo EOF
+            echo "image=$image"
           } >> "$GITHUB_OUTPUT"
-
-      - name: Resolve existing stable SHA image
-        id: existing
+      - name: Guard canonical GHCR package
         env:
-          IMAGE_REPOSITORY: ghcr.io/${{ github.repository_owner }}/argws-connect-hub
-          SHORT_SHA: ${{ steps.identity.outputs.short_sha }}
+          IMAGE_REPOSITORY: ${{ steps.meta.outputs.image }}
+          IMAGE_TAGS: ${{ steps.meta.outputs.tags }}
         shell: bash
         run: |
           set -euo pipefail
-          candidate="${IMAGE_REPOSITORY}:main-${SHORT_SHA}"
+          expected="ghcr.io/${{ github.repository_owner }}/argws-connect-hub"
+          [[ "$IMAGE_REPOSITORY" == "$expected" ]] || { echo "Unexpected package repository: $IMAGE_REPOSITORY" >&2; exit 1; }
+          while IFS= read -r tag; do
+            [[ -z "$tag" ]] && continue
+            [[ "$tag" == "$expected":* ]] || { echo "Refusing non-canonical GHCR package tag: $tag" >&2; exit 1; }
+          done <<< "$IMAGE_TAGS"
+          echo "Canonical GHCR package locked to $expected"
+      - name: Resolve existing immutable version image
+        id: existing
+        env:
+          IMAGE_REPOSITORY: ${{ steps.meta.outputs.image }}
+          VERSION: ${{ needs.plan.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          candidate="${IMAGE_REPOSITORY}:${VERSION}"
           manifest="$(docker buildx imagetools inspect "$candidate" --format '{{json .Manifest}}' 2>/dev/null || true)"
           digest="$(jq -er '.digest | select(type == "string")' <<<"$manifest" 2>/dev/null || true)"
-
-          if [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
-            echo "exists=true" >> "$GITHUB_OUTPUT"
-            echo "digest=$digest" >> "$GITHUB_OUTPUT"
-            echo "Stable immutable alias already exists: $candidate@$digest"
-          else
-            echo "exists=false" >> "$GITHUB_OUTPUT"
-            echo "No existing stable immutable alias for this main SHA; one build is required."
-          fi
-
-      - name: Build once and publish stable main image
+          if [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then echo "exists=true" >> "$GITHUB_OUTPUT"; echo "digest=$digest" >> "$GITHUB_OUTPUT"; else echo "exists=false" >> "$GITHUB_OUTPUT"; fi
+      - name: Build once and publish versioned release image
         if: ${{ steps.existing.outputs.exists != 'true' }}
         id: build
         uses: docker/build-push-action@v7.3.0
@@ -193,41 +255,32 @@ jobs:
           push: true
           build-args: |
             GIT_SHA=${{ github.sha }}
-            HUB_VERSION=${{ steps.identity.outputs.main_version }}
-            HUB_DEPS_BASE_IMAGE=${{ steps.identity.outputs.deps_image }}
-            HUB_RUNTIME_BASE_IMAGE=${{ steps.identity.outputs.runtime_image }}
+            HUB_VERSION=${{ needs.plan.outputs.version }}
+            HUB_DEPS_BASE_IMAGE=${{ steps.bases.outputs.deps_image }}
+            HUB_RUNTIME_BASE_IMAGE=${{ steps.bases.outputs.runtime_image }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: |
             org.opencontainers.image.title=HUB
-            org.opencontainers.image.version=${{ steps.identity.outputs.main_version }}
+            org.opencontainers.image.version=${{ needs.plan.outputs.version }}
             org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.argws.hub.channel=stable
-            org.argws.hub.base.deps.definition-sha=${{ steps.identity.outputs.deps_definition_sha }}
-            org.argws.hub.base.runtime.definition-sha=${{ steps.identity.outputs.runtime_definition_sha }}
-          cache-from: type=gha,scope=hub-main-amd64
-          cache-to: type=gha,mode=max,scope=hub-main-amd64
+          cache-from: type=gha,scope=hub-release-amd64
+          cache-to: type=gha,mode=max,scope=hub-release-amd64
           provenance: true
           sbom: true
-
-      - name: Reapply moving aliases from existing immutable stable image
+      - name: Reapply aliases from existing version image
         if: ${{ steps.existing.outputs.exists == 'true' }}
         env:
-          IMAGE_REPOSITORY: ghcr.io/${{ github.repository_owner }}/argws-connect-hub
+          IMAGE_REPOSITORY: ${{ steps.meta.outputs.image }}
           IMAGE_TAGS: ${{ steps.meta.outputs.tags }}
           EXISTING_DIGEST: ${{ steps.existing.outputs.digest }}
         shell: bash
         run: |
           set -euo pipefail
-          mapfile -t tags < <(printf '%s\n' "$IMAGE_TAGS" | sed '/^[[:space:]]*$/d')
           args=()
-          for tag in "${tags[@]}"; do
-            args+=(--tag "$tag")
-          done
+          while IFS= read -r tag; do [[ -z "$tag" ]] || args+=(--tag "$tag"); done <<< "$IMAGE_TAGS"
           docker buildx imagetools create "${args[@]}" "${IMAGE_REPOSITORY}@${EXISTING_DIGEST}"
-          echo "Stable aliases converged without rebuilding the already-published main SHA."
-
-      - name: Resolve final stable digest
+      - name: Resolve final release digest
         id: final
         env:
           EXISTING: ${{ steps.existing.outputs.exists }}
@@ -236,30 +289,20 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [[ "$EXISTING" == "true" ]]; then
-            digest="$EXISTING_DIGEST"
-          else
-            digest="$BUILD_DIGEST"
-          fi
-          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || {
-            echo "Invalid final stable digest: $digest" >&2
-            exit 1
-          }
+          if [[ "$EXISTING" == "true" ]]; then digest="$EXISTING_DIGEST"; else digest="$BUILD_DIGEST"; fi
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || exit 1
           echo "digest=$digest" >> "$GITHUB_OUTPUT"
-
-      - name: Verify final stable main aliases
-        timeout-minutes: 15
+      - name: Verify version and canonical package aliases
         env:
-          IMAGE_REPOSITORY: ghcr.io/${{ github.repository_owner }}/argws-connect-hub
+          IMAGE_REPOSITORY: ${{ steps.meta.outputs.image }}
           IMAGE_TAGS: ${{ steps.meta.outputs.tags }}
           EXPECTED_DIGEST: ${{ steps.final.outputs.digest }}
-          EXPECTED_VERSION: ${{ steps.identity.outputs.main_version }}
+          EXPECTED_VERSION: ${{ needs.plan.outputs.version }}
           EXPECTED_REVISION: ${{ github.sha }}
           EXPECTED_CHANNEL: stable
           HUB_IMAGE_REQUIRE_ANONYMOUS_PULL: ${{ vars.HUB_IMAGE_REQUIRE_ANONYMOUS_PULL || 'true' }}
         run: bash ./scripts/verify-hub-image.sh
-
-      - name: Cleanup old GHCR images and build caches
+      - name: Cleanup old HUB images and build caches
         continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -267,3 +310,40 @@ jobs:
           GHCR_PACKAGE: argws-connect-hub
           CACHE_RETENTION_HOURS: '2'
         run: bash ./scripts/cleanup-github-storage.sh all
+
+  release:
+    name: Tag and publish GitHub Release
+    needs: [gate, plan, publish]
+    if: ${{ needs.gate.outputs.allowed == 'true' }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - name: Configure Git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+      - name: Create semantic tag and GitHub Release idempotently
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.plan.outputs.tag }}
+          VERSION: ${{ needs.plan.outputs.version }}
+          RELEASE_SHA: ${{ github.sha }}
+          IMAGE_DIGEST: ${{ needs.publish.outputs.digest }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --tags --force
+          if git rev-parse "refs/tags/${TAG}" >/dev/null 2>&1; then
+            existing="$(git rev-list -n1 "$TAG")"
+            [[ "$existing" == "$RELEASE_SHA" ]] || { echo "Tag $TAG points to $existing, expected $RELEASE_SHA." >&2; exit 1; }
+          else
+            git tag -a "$TAG" "$RELEASE_SHA" -m "HUB $TAG"
+            git push origin "refs/tags/${TAG}"
+          fi
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            notes="$(printf 'Image: ghcr.io/%s/argws-connect-hub:%s\nLatest: ghcr.io/%s/argws-connect-hub:latest\nDigest: %s' '${{ github.repository_owner }}' "$VERSION" '${{ github.repository_owner }}' "$IMAGE_DIGEST")"
+            gh release create "$TAG" --verify-tag --title "HUB $TAG" --generate-notes --notes "$notes"
+          fi
