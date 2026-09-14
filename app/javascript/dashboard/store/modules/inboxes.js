@@ -24,7 +24,7 @@ const buildInboxData = inboxParams => {
     }
   }
   Object.keys(channelParams).forEach(key => {
-    formData.append(`channel[${key}]`, channelParams[key]);
+    formData.append(`channel[${key}]`, channel[key]);
   });
   return formData;
 };
@@ -242,6 +242,7 @@ export const actions = {
   },
   createFBChannel: async ({ commit }, params) => {
     try {
+      commit(types.default.SET_INBOXES_UI_FLAG, { isCreating: true });
       const response = await FBChannel.create(params);
       commit(types.default.ADD_INBOXES, response.data);
       commit(types.default.SET_INBOXES_UI_FLAG, { isCreating: false });
