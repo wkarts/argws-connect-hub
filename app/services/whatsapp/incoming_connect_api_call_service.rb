@@ -344,6 +344,7 @@ class Whatsapp::IncomingConnectApiCallService
     terminal = ActiveModel::Type::Boolean.new.cast(snapshot['terminal']) || TERMINAL_STATUSES.include?(status)
     state_updated_at = snapshot['updated_at'].presence || snapshot['received_at'].presence || Time.current.utc.iso8601(3)
 
+    conversation.reload
     conversation.with_lock do
       attributes = conversation.additional_attributes.to_h.deep_stringify_keys
       state = attributes['connect_api_call_state'].to_h.deep_stringify_keys
