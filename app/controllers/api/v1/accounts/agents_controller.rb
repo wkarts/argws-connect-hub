@@ -23,6 +23,11 @@ class Api::V1::Accounts::AgentsController < Api::V1::Accounts::BaseController
   end
 
   def update
+    if reset_two_factor_requested?
+      @agent.reset_two_factor_authentication!
+      return head :no_content
+    end
+
     @agent.update!(agent_params.slice(:name).compact)
     @agent.current_account_user.update!(agent_params.slice(*account_user_attributes).compact)
   end
@@ -65,6 +70,10 @@ class Api::V1::Accounts::AgentsController < Api::V1::Accounts::BaseController
 
   def fetch_agent
     @agent = agents.find(params[:id])
+  end
+
+  def reset_two_factor_requested?
+    ActiveModel::Type::Boolean.new.cast(params[:reset_two_factor] || params.dig(:agent, :reset_two_factor))
   end
 
   def account_user_attributes

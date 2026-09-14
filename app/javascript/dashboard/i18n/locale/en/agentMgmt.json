@@ -59,6 +59,19 @@
         "NO": "No, Keep "
       }
     },
+    "RESET_2FA": {
+      "BUTTON_TEXT": "Reset two-factor authentication",
+      "API": {
+        "SUCCESS_MESSAGE": "Two-factor authentication reset successfully. The user must enroll again.",
+        "ERROR_MESSAGE": "Could not reset two-factor authentication. Please try again later."
+      },
+      "CONFIRM": {
+        "TITLE": "Confirm 2FA reset",
+        "MESSAGE": "Are you sure you want to invalidate the current authenticator and recovery codes for ",
+        "YES": "Yes, reset 2FA for",
+        "NO": "Cancel"
+      }
+    },
     "EDIT": {
       "TITLE": "Edit agent",
       "FORM": {

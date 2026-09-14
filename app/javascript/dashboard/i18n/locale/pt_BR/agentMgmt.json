@@ -60,6 +60,19 @@
         "NO": "Não, Mantenha "
       }
     },
+    "RESET_2FA": {
+      "BUTTON_TEXT": "Resetar autenticação 2FA",
+      "API": {
+        "SUCCESS_MESSAGE": "Autenticação 2FA resetada com sucesso. O usuário deverá configurá-la novamente.",
+        "ERROR_MESSAGE": "Não foi possível resetar a autenticação 2FA. Tente novamente mais tarde."
+      },
+      "CONFIRM": {
+        "TITLE": "Confirmar reset do 2FA",
+        "MESSAGE": "Você tem certeza que deseja invalidar o autenticador atual e os códigos de recuperação de ",
+        "YES": "Sim, resetar 2FA de",
+        "NO": "Cancelar"
+      }
+    },
     "EDIT": {
       "TITLE": "Editar Agente",
       "FORM": {
