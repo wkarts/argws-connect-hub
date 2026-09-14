@@ -48,7 +48,9 @@ class Whatsapp::IncomingConnectApiCallService
 
     previous_snapshot = existing&.content_attributes.to_h.deep_stringify_keys&.fetch('connect_api_call', {}) || {}
     snapshot = enrich_contact_snapshot(build_snapshot(data, call, previous_snapshot), conversation)
-    upsert_timeline_message(conversation, existing, snapshot)
+    message = upsert_timeline_message(conversation, existing, snapshot)
+    persist_conversation_call_state(conversation, message)
+    message
   end
 
   private
@@ -331,6 +333,44 @@ class Whatsapp::IncomingConnectApiCallService
     return unless retry_message
 
     upsert_timeline_message(conversation, retry_message, snapshot)
+  end
+
+  def persist_conversation_call_state(conversation, message)
+    snapshot = (message&.content_attributes || {}).to_h.deep_stringify_keys['connect_api_call'].to_h
+    call_id = snapshot['call_id'].to_s.presence
+    return if call_id.blank?
+
+    status = snapshot['status'].to_s.downcase
+    terminal = ActiveModel::Type::Boolean.new.cast(snapshot['terminal']) || TERMINAL_STATUSES.include?(status)
+    state_updated_at = snapshot['updated_at'].presence || snapshot['received_at'].presence || Time.current.utc.iso8601(3)
+
+    conversation.with_lock do
+      attributes = conversation.additional_attributes.to_h.deep_stringify_keys
+      state = attributes['connect_api_call_state'].to_h.deep_stringify_keys
+
+      state['last_call_id'] = call_id
+      state['last_status'] = status
+      state['last_direction'] = snapshot['direction'].to_s
+      state['last_terminal'] = terminal
+      state['updated_at'] = state_updated_at
+
+      if terminal
+        if state['active_call_id'].blank? || state['active_call_id'].to_s == call_id
+          state.delete('active_call_id')
+          state.delete('active_status')
+          state.delete('active_updated_at')
+        end
+      else
+        state['active_call_id'] = call_id
+        state['active_status'] = status
+        state['active_updated_at'] = state_updated_at
+      end
+
+      attributes['connect_api_call_state'] = state.compact
+      conversation.update_column(:additional_attributes, attributes)
+    end
+  rescue StandardError => e
+    Rails.logger.warn("[HUB Call Recovery] conversation state persist failed: #{e.class}: #{e.message}")
   end
 
   def snapshot_changed?(current, incoming)
