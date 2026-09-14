@@ -70,6 +70,10 @@ export const actions = {
       throw new Error(error);
     }
   },
+  resetTwoFactor: async ({ dispatch }, agentId) => {
+    await AgentAPI.resetTwoFactor(agentId);
+    await dispatch('get');
+  },
   updateSingleAgentPresence: ({ commit }, { id, availabilityStatus }) => {
     commit(types.default.UPDATE_SINGLE_AGENT_PRESENCE, {
       id,
