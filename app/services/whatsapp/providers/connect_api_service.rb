@@ -165,7 +165,11 @@ class Whatsapp::Providers::ConnectApiService < Whatsapp::Providers::WhatsappClou
   end
 
   def process_native_response(message, response)
-    HubDiagnostics::Recorder.emit('send.http_response', HubDiagnostics::Recorder.message_attributes(message).merge(http_status: response.code))
+    http_status = response.code if response.respond_to?(:code)
+    HubDiagnostics::Recorder.emit(
+      'send.http_response',
+      HubDiagnostics::Recorder.message_attributes(message).merge(http_status: http_status).compact
+    )
     if response.success?
       message_id = extract_message_id(response.parsed_response)
       return message_id if message_id.present?
