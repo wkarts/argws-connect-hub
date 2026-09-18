@@ -1,16 +1,22 @@
 class Webhooks::WhatsappEventsJob < ApplicationJob
   queue_as :low
+  self.log_arguments = false
+  retry_on HubDiagnostics::SourceMessagePending, wait: 5.seconds, attempts: 24
+  retry_on HubDiagnostics::BindingBusy, wait: 5.seconds, attempts: 24
   retry_on ActiveRecord::RecordNotFound, wait: 30.seconds, attempts: 5
 
   def perform(params = {})
     channel = find_channel_from_whatsapp_business_payload(params)
-    return if channel_is_inactive?(channel)
+    if channel_is_inactive?(channel)
+      HubDiagnostics::Recorder.emit('webhook.skipped', level: 'warn', channel_id: channel&.id, reason: 'channel_missing_or_inactive')
+      return
+    end
 
     case channel.provider
     when 'whatsapp_cloud'
       Whatsapp::IncomingMessageWhatsappCloudService.new(inbox: channel.inbox, params: params).perform
     when 'connectapi'
-      Whatsapp::IncomingMessageConnectApiStatusAwareService.new(inbox: channel.inbox, params: params).perform
+      (ENV['HUB_CONNECT_RELIABILITY_ENABLED'] == 'true' ? Whatsapp::IncomingMessageConnectApiReliableService : Whatsapp::IncomingMessageConnectApiStatusAwareService).new(inbox: channel.inbox, params: params).perform
     else
       Whatsapp::IncomingMessageService.new(inbox: channel.inbox, params: params).perform
     end

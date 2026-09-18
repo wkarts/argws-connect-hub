@@ -1,0 +1,41 @@
+<% content_for(:title) { 'Diagnóstico e mitigação' } %>
+<header class="main-content__header hub-ops hub-ops-header">
+  <div><h1 class="hub-ops-title">Diagnóstico e mitigação</h1><p class="hub-ops-subtitle">Rastreamento da aplicação, mensagens e confirmações. A conclusão de um job não significa entrega ao destinatário.</p></div>
+  <div class="hub-ops-toolbar"><%= link_to 'Connect|API', super_admin_connect_api_path, class: 'button' %><%= link_to 'Baixar diagnóstico (.jsonl.gz)', download_super_admin_diagnostics_path(@filters), class: 'button hub-primary' %></div>
+</header>
+<section class="main-content__body hub-ops">
+  <div class="hub-alert">Eventos instrumentados do HUB, com dados sensíveis omitidos. Para reunir Rails e Sidekiq, ambos precisam montar o mesmo volume em <code>HUB_DIAGNOSTICS_DIR</code>. Não inclui logs internos da Connect|API nem dos daemons Docker/PostgreSQL.</div>
+  <% if ENV['HUB_DIAGNOSTICS_ENABLED'] == 'false' %><div class="hub-alert hub-alert-danger">A gravação de novos eventos está desativada pela configuração.</div><% end %>
+  <div class="hub-metrics"><div class="hub-metric"><strong><%= (@health[:bytes] / 1_048_576.0).round(2) %> MB</strong><span>Armazenamento atual</span></div><div class="hub-metric"><strong><%= @health[:max_bytes] / 1_048_576 %> MB</strong><span>Limite por volume</span></div><div class="hub-metric"><strong><%= @health[:retention_seconds] / 3600 %> h</strong><span>Janela consultável máxima</span></div><div class="hub-metric"><strong><%= @health[:writable] ? 'Gravação disponível' : 'Sem gravação' %></strong><span>Diretório visto pelo processo web</span></div></div>
+  <form action="<%= super_admin_diagnostics_path %>" method="get" class="hub-card">
+    <h2>Filtrar eventos</h2><div class="hub-form-grid">
+    <% { 'since' => 'De (ISO 8601 ou horário da Bahia)', 'until' => 'Até (limite exclusivo)', 'account_id' => 'Conta', 'inbox_id' => 'Caixa de entrada', 'channel_id' => 'Canal', 'conversation_id' => 'Conversa', 'message_id' => 'Mensagem HUB', 'source_id' => 'ID da mensagem na API', 'trace_id' => 'ID de rastreamento', 'operation_id' => 'Operação', 'level' => 'Nível (info/warn/error)', 'event' => 'Evento exato' }.each do |name, label| %>
+      <div><label for="filter_<%= name %>"><%= label %></label><input id="filter_<%= name %>" name="<%= name %>" value="<%= @filters[name] %>" maxlength="160" /></div>
+    <% end %></div><button type="submit" class="hub-primary">Aplicar filtros</button>
+  </form>
+  <section class="hub-card"><h2>Recuperar mensagens já existentes na Connect|API</h2><p>Consulta paginada limitada a 500 registros e a até 120 minutos. A consulta não envia mensagens. Registros temporários e de visualização única não são importados por esta ação.</p>
+    <form action="<%= sync_messages_super_admin_diagnostics_path %>" method="post">
+      <%= hidden_field_tag :authenticity_token, form_authenticity_token %>
+      <div class="hub-form-grid"><div><label for="sync_channel">Caixa</label><select id="sync_channel" name="channel_id" required><% @channels.each do |channel| %><option value="<%= channel.id %>">#<%= channel.inbox&.id %> · <%= channel.inbox&.name %></option><% end %></select></div><div><label for="sync_minutes">Últimos minutos</label><input id="sync_minutes" name="minutes" type="number" value="15" min="1" max="120" required /></div></div>
+      <button type="submit" data-hub-confirm="Importar os registros ausentes desta janela, preservando os IDs existentes e sem reenviar mensagens?">Reconciliar mensagens</button>
+    </form>
+  </section>
+  <% @channels.each do |channel| %><% operation = channel.provider_config.to_h['hub_binding_operation'].to_h %><% next unless operation['state'] == 'needs_review' %>
+    <div class="hub-alert hub-alert-danger"><strong>Caixa #<%= channel.inbox&.id %>: estado remoto indeterminado.</strong><p>O envio está bloqueado até confirmar a restauração do webhook anterior. A instância antiga não foi excluída.</p>
+      <form action="<%= recover_super_admin_connect_api_binding_path %>" method="post"><%= hidden_field_tag :authenticity_token, form_authenticity_token %><%= hidden_field_tag :channel_id, channel.id %><button type="submit" data-hub-confirm="Verificar e restaurar o webhook anterior? A restauração será recusada se outro administrador tiver alterado o destino.">Verificar e restaurar vínculo anterior</button></form>
+    </div>
+  <% end %>
+  <h2>Últimos 200 eventos do filtro</h2><p><small>O download considera até 50.000 registros e 16 MB de linhas de eventos; o relatório informa quando houver corte. Eventos expirados ou rotacionados não podem ser recuperados por este painel.</small></p>
+  <div class="hub-table-wrap"><table class="hub-table-cards"><thead><tr><th>Horário</th><th>Evento</th><th>Contexto</th><th>Informações</th></tr></thead><tbody>
+    <% @events.each do |event| %><tr>
+      <td data-label="Horário"><%= Time.iso8601(event['timestamp']).in_time_zone('America/Bahia').strftime('%d/%m/%Y %H:%M:%S.%L') %><br><small>UTC−03:00 · <%= event['level'] %></small></td>
+      <td data-label="Evento"><strong><%= event['event'] %></strong><br><small><%= event['reason'] %></small></td>
+      <td data-label="Contexto">Caixa: <%= event['inbox_id'] || '—' %><br>Mensagem: <%= event['message_id'] || '—' %><br><small><%= event['source_id'] %></small></td>
+      <td data-label="Informações"><details><summary>Ver dados técnicos</summary><pre><%= JSON.pretty_generate(event) %></pre></details>
+        <% if %w[status.deferred status.orphaned].include?(event['event']) && %w[sent delivered read failed].include?(event['status']) %>
+          <form action="<%= replay_status_super_admin_diagnostics_path %>" method="post"><%= hidden_field_tag :authenticity_token, form_authenticity_token %><%= hidden_field_tag :event_id, event['event_id'] %><button type="submit" data-hub-confirm="Reprocessar somente a confirmação recebida? Esta ação não reenvia a mensagem.">Reprocessar status</button></form>
+        <% end %>
+      </td></tr>
+    <% end %><% if @events.empty? %><tr><td colspan="4" class="hub-empty">Nenhum evento retido corresponde ao filtro. Isso não comprova ausência de falhas.</td></tr><% end %>
+  </tbody></table></div>
+</section>

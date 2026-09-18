@@ -165,6 +165,11 @@ class Whatsapp::Providers::ConnectApiService < Whatsapp::Providers::WhatsappClou
   end
 
   def process_native_response(message, response)
+    http_status = response.code if response.respond_to?(:code)
+    HubDiagnostics::Recorder.emit(
+      'send.http_response',
+      HubDiagnostics::Recorder.message_attributes(message).merge(http_status: http_status).compact
+    )
     if response.success?
       message_id = extract_message_id(response.parsed_response)
       return message_id if message_id.present?
@@ -180,6 +185,7 @@ class Whatsapp::Providers::ConnectApiService < Whatsapp::Providers::WhatsappClou
   end
 
   def process_native_exception(message, error)
+    HubDiagnostics::Recorder.error('send.transport_failed', error, HubDiagnostics::Recorder.message_attributes(message))
     safe_error = "#{error.class}: #{error.message}".slice(0, 1000)
     Rails.logger.error("[HUB Connect|API] send exception: #{safe_error}")
     message.update!(status: :failed, external_error: safe_error)
@@ -216,7 +222,7 @@ class Whatsapp::Providers::ConnectApiService < Whatsapp::Providers::WhatsappClou
 
   def native_headers
     {
-      'apikey' => installation_token,
+      'apikey' => whatsapp_channel.provider_config.to_h['connect_api_binding_mode'] == 'existing' ? (instance_token || raise('Instance token required')) : installation_token,
       'Content-Type' => 'application/json'
     }
   end

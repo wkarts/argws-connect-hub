@@ -6,6 +6,9 @@ class SuperAdmin::ConnectApiController < SuperAdmin::ApplicationController
 
   def show
     @overview = registry.overview
+    @binding_channel_ids = Channel::Whatsapp.where(provider: 'connectapi').includes(:inbox).each_with_object({}) do |channel, mapping|
+      mapping[channel.inbox.id] = channel.id if channel.inbox
+    end
   end
 
   def instance_action

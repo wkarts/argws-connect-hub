@@ -422,6 +422,12 @@ class Whatsapp::IncomingMessageConnectApiService < Whatsapp::IncomingMessageWhat
   end
 
   def native_headers
+    if inbox.channel.provider_config.to_h['connect_api_binding_mode'] == 'existing'
+      token = inbox.channel.provider_config.to_h['api_key'].to_s.strip
+      raise 'Instance token required' if token.blank?
+      return { 'apikey' => token, 'Content-Type' => 'application/json' }
+    end
+
     {
       'apikey' => GlobalConfigService.load(
         'CONNECT_API_AUTH_TOKEN',

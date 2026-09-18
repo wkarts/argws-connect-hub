@@ -4,6 +4,7 @@ class SuperAdmin::ApplicationController < Administrate::ApplicationController
   include ActionView::Context
   include SwitchLocale
 
+  helper HubAdminUiHelper
   helper_method :render_vue_component
   before_action :authenticate_super_admin!
   around_action :switch_locale
