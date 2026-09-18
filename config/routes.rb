@@ -508,6 +508,16 @@ Rails.application.routes.draw do
       resources :platform_apps, only: [:index, :new, :create, :show, :edit, :update]
       resource :instance_status, only: [:show]
 
+      resource :diagnostics, only: [:show], controller: 'diagnostics' do
+        get :download
+        post :replay_status
+        post :sync_messages
+      end
+      resource :connect_api_binding, only: [:show, :create], controller: 'connect_api_bindings' do
+        post :preview
+        post :recover
+      end
+
       resource :connect_api, only: [:show], controller: 'connect_api' do
         post :instance_action
         post :migrate_provider

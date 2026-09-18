@@ -71,7 +71,7 @@ class SuperAdmin::ConnectApiController < SuperAdmin::ApplicationController
       syncFullHistory: boolean_setting(current_settings, 'syncFullHistory', !channel_config.fetch('ignore_history_messages', true)),
       voipMaxConcurrentCalls: value
     }
-    settings_payload[:msgCall] = current_settings['msgCall'] if current_settings.key?(key)
+    settings_payload[:msgCall] = current_settings['msgCall'] if current_settings.key?('msgCall')
 
     result = client.set_settings(instance_name, settings_payload)
     channel_config['voip_max_concurrent_calls'] = value
