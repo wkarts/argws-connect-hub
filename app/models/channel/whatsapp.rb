@@ -89,6 +89,7 @@ class Channel::Whatsapp < ApplicationRecord
 
   def remember_connect_api_instance_for_cleanup
     return unless provider == 'connectapi'
+    return if provider_config.to_h['connect_api_binding_mode'] == 'existing'
 
     @connect_api_instance_name_for_cleanup = provider_config.to_h['instance_name'].to_s.strip.presence
   end

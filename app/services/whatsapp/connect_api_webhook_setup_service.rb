@@ -9,6 +9,10 @@ class Whatsapp::ConnectApiWebhookSetupService
 
   def perform(whatsapp_channel)
     @channel = whatsapp_channel
+    operation = @channel.provider_config.to_h['hub_binding_operation'].to_h
+    raise HubDiagnostics::BindingBusy, 'Binding requires verification' if %w[binding needs_review].include?(operation['state'])
+    return ConnectApi::ExternalInstanceConfiguration.refresh(@channel) if @channel.provider_config.to_h['connect_api_binding_mode'] == 'existing'
+
     normalize_config!
 
     if ActiveModel::Type::Boolean.new.cast(config.delete('force_reconcile'))

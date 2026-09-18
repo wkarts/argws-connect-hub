@@ -11,6 +11,9 @@ class Webhooks::WhatsappController < ActionController::API
       return head :accepted
     end
 
+    channel = HubDiagnostics::WebhookRouter.channel_for_route(params)
+    return head(HubDiagnostics::WebhookRouter.enqueue(channel, params)) if channel && ENV['HUB_CONNECT_RELIABILITY_ENABLED'] == 'true'
+
     Webhooks::WhatsappEventsJob.perform_later(params.to_unsafe_hash)
     head :ok
   end

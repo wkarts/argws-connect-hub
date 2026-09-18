@@ -6,6 +6,9 @@ class SuperAdmin::ConnectApiController < SuperAdmin::ApplicationController
 
   def show
     @overview = registry.overview
+    @binding_channel_ids = Channel::Whatsapp.where(provider: 'connectapi').includes(:inbox).each_with_object({}) do |channel, mapping|
+      mapping[channel.inbox.id] = channel.id if channel.inbox
+    end
   end
 
   def instance_action
@@ -68,7 +71,7 @@ class SuperAdmin::ConnectApiController < SuperAdmin::ApplicationController
       syncFullHistory: boolean_setting(current_settings, 'syncFullHistory', !channel_config.fetch('ignore_history_messages', true)),
       voipMaxConcurrentCalls: value
     }
-    settings_payload[:msgCall] = current_settings['msgCall'] if current_settings.key?('msgCall')
+    settings_payload[:msgCall] = current_settings['msgCall'] if current_settings.key?(key)
 
     result = client.set_settings(instance_name, settings_payload)
     channel_config['voip_max_concurrent_calls'] = value

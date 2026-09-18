@@ -90,7 +90,7 @@ class Channels::Whatsapp::ConnectApiMediaSyncJob < ApplicationJob
 
     from_me = ActiveModel::Type::Boolean.new.cast(key['fromMe'])
     payload = synthetic_webhook(record, key, id, peer_phone, from_me, media_type, media_node)
-    Whatsapp::IncomingMessageConnectApiService.new(inbox: @channel.inbox, params: payload.with_indifferent_access).perform
+    (ENV['HUB_CONNECT_RELIABILITY_ENABLED'] == 'true' ? Whatsapp::IncomingMessageConnectApiReliableService : Whatsapp::IncomingMessageConnectApiService).new(inbox: @channel.inbox, params: payload.with_indifferent_access).perform
 
     # The synthetic webhook still tries the normal Graph media path first. If
     # that path is unavailable, repair the just-created message in the same run
@@ -168,7 +168,7 @@ class Channels::Whatsapp::ConnectApiMediaSyncJob < ApplicationJob
   end
 
   def synthetic_webhook(record, key, id, peer_phone, from_me, media_type, media_node)
-    own_phone = @channel.provider_config.to_h['phone_number_id'].to_s.gsub(/\D/, '').presence || @channel.phone_number.to_s.gsub(/\D/, '')
+    own_phone = @channel.phone_number.to_s.gsub(/\D/, '')
     attachment = {
       id: id,
       mime_type: media_node['mimetype'].presence || media_node['mimeType'].presence || 'application/octet-stream'
@@ -183,7 +183,7 @@ class Channels::Whatsapp::ConnectApiMediaSyncJob < ApplicationJob
           field: 'messages',
           value: {
             messaging_product: 'whatsapp',
-            metadata: { display_phone_number: own_phone, phone_number_id: own_phone },
+            metadata: { display_phone_number: own_phone, phone_number_id: @channel.provider_config.to_h['phone_number_id'].to_s },
             contacts: [{ profile: { name: record['pushName'].to_s.presence || peer_phone }, wa_id: peer_phone }],
             messages: [{
               from: from_me ? own_phone : peer_phone,
@@ -276,6 +276,9 @@ class Channels::Whatsapp::ConnectApiMediaSyncJob < ApplicationJob
   end
 
   def client
+    if @channel.provider_config.to_h['connect_api_binding_mode'] == 'existing'
+      return @client ||= ConnectApi::BoundInstanceClient.new(api_key: @channel.provider_config.to_h['api_key'])
+    end
     @client ||= ConnectApi::Client.new
   end
 end
