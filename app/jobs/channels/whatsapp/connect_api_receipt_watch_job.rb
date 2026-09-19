@@ -28,9 +28,12 @@ class Channels::Whatsapp::ConnectApiReceiptWatchJob < ApplicationJob
     apply_status(message, status) if status.present?
 
     message.reload
-    return if terminal?(message.status)
+    if terminal?(message.status)
+      emit_completed(message, attempt, 'terminal')
+      return
+    end
 
-    schedule_next(message.id, attempt)
+    schedule_next(message.id, attempt, message.status)
   rescue ConnectApi::Error => error
     HubDiagnostics::Recorder.emit(
       'receipt.watch_failed',
@@ -99,11 +102,40 @@ class Channels::Whatsapp::ConnectApiReceiptWatchJob < ApplicationJob
     end
   end
 
-  def schedule_next(message_id, attempt)
-    next_attempt = attempt.to_i + 1
-    return if next_attempt >= CHECK_DELAYS.length
+  def schedule_next(message_id, attempt, current_status = nil)
+    current_attempt = attempt.to_i
+
+    if current_status.to_s == 'delivered'
+      final_attempt = CHECK_DELAYS.length - 1
+      return if current_attempt >= final_attempt
+
+      self.class.set(wait: CHECK_DELAYS.last.seconds).perform_later(message_id, final_attempt)
+      return
+    end
+
+    next_attempt = current_attempt + 1
+    if next_attempt >= CHECK_DELAYS.length
+      message = Message.find_by(id: message_id)
+      emit_completed(message, current_attempt, 'watch_window_exhausted') if message
+      return
+    end
 
     self.class.set(wait: CHECK_DELAYS[next_attempt].seconds).perform_later(message_id, next_attempt)
+  end
+
+  def emit_completed(message, attempt, reason)
+    HubDiagnostics::Recorder.emit(
+      'receipt.watch_completed',
+      component: 'connectapi_receipt',
+      account_id: message.account_id,
+      inbox_id: message.inbox_id,
+      conversation_id: message.conversation_id,
+      message_id: message.id,
+      source_id: message.source_id,
+      status: message.status,
+      attempt: attempt,
+      reason: reason
+    )
   end
 
   def terminal?(status)
