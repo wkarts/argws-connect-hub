@@ -75,6 +75,24 @@ export default {
     inbox() {
       return this.$store.getters['inboxes/getInbox'](this.inboxId);
     },
+    deletesForEveryoneOnWhatsApp() {
+      return (
+        this.inbox?.provider === 'connectapi' &&
+        [1, 3].includes(this.message.message_type) &&
+        !this.message.private &&
+        !!this.message.source_id
+      );
+    },
+    deleteConfirmationTitle() {
+      return this.deletesForEveryoneOnWhatsApp
+        ? 'Apagar mensagem para todos?'
+        : this.$t('CONVERSATION.CONTEXT_MENU.DELETE_CONFIRMATION.TITLE');
+    },
+    deleteConfirmationMessage() {
+      return this.deletesForEveryoneOnWhatsApp
+        ? 'A mensagem será apagada no WhatsApp e no HUB. Se o WhatsApp recusar a exclusão, ela será mantida no HUB para evitar divergência.'
+        : this.$t('CONVERSATION.CONTEXT_MENU.DELETE_CONFIRMATION.MESSAGE');
+    },
   },
   methods: {
     async copyLinkToMessage() {
@@ -137,10 +155,18 @@ export default {
           conversationId: this.conversationId,
           messageId: this.messageId,
         });
-        useAlert(this.$t('CONVERSATION.SUCCESS_DELETE_MESSAGE'));
+        useAlert(
+          this.deletesForEveryoneOnWhatsApp
+            ? 'Mensagem apagada para todos no WhatsApp e no HUB.'
+            : this.$t('CONVERSATION.SUCCESS_DELETE_MESSAGE')
+        );
+        this.closeDeleteModal();
         this.handleClose();
       } catch (error) {
-        useAlert(this.$t('CONVERSATION.FAIL_DELETE_MESSSAGE'));
+        const apiMessage = error?.response?.data?.error;
+        useAlert(
+          apiMessage || this.$t('CONVERSATION.FAIL_DELETE_MESSSAGE')
+        );
       }
     },
     closeDeleteModal() {
@@ -200,8 +226,8 @@ export default {
       :show.sync="showDeleteModal"
       :on-close="closeDeleteModal"
       :on-confirm="confirmDeletion"
-      :title="$t('CONVERSATION.CONTEXT_MENU.DELETE_CONFIRMATION.TITLE')"
-      :message="$t('CONVERSATION.CONTEXT_MENU.DELETE_CONFIRMATION.MESSAGE')"
+      :title="deleteConfirmationTitle"
+      :message="deleteConfirmationMessage"
       :confirm-text="$t('CONVERSATION.CONTEXT_MENU.DELETE_CONFIRMATION.DELETE')"
       :reject-text="$t('CONVERSATION.CONTEXT_MENU.DELETE_CONFIRMATION.CANCEL')"
     />
