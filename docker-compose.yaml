@@ -27,6 +27,7 @@ services:
       - ${HUB_PACKS_DATA_PATH:-./volumes/development/packs}:/app/public/packs
       - ${HUB_CACHE_DATA_PATH:-./volumes/development/cache}:/app/tmp/cache
       - ${HUB_BUNDLE_DATA_PATH:-./volumes/development/bundle}:/usr/local/bundle
+      - ${HUB_DIAGNOSTICS_DATA_PATH:-./volumes/development/diagnostics}:${HUB_DIAGNOSTICS_DIR:-/app/log/hub_diagnostics}
     depends_on:
       - postgres
       - redis
@@ -40,6 +41,9 @@ services:
       - WEBPACKER_DEV_SERVER_HOST=webpack
       - NODE_ENV=development
       - RAILS_ENV=development
+      - HUB_DIAGNOSTICS_ENABLED=${HUB_DIAGNOSTICS_ENABLED:-true}
+      - HUB_CONNECT_RELIABILITY_ENABLED=${HUB_CONNECT_RELIABILITY_ENABLED:-true}
+      - HUB_EXISTING_INSTANCE_BINDING_ENABLED=${HUB_EXISTING_INSTANCE_BINDING_ENABLED:-true}
     entrypoint: docker/entrypoints/rails.sh
     command: ["bundle", "exec", "rails", "s", "-p", "3000", "-b", "0.0.0.0"]
 
@@ -53,6 +57,7 @@ services:
       - ${HUB_PACKS_DATA_PATH:-./volumes/development/packs}:/app/public/packs
       - ${HUB_CACHE_DATA_PATH:-./volumes/development/cache}:/app/tmp/cache
       - ${HUB_BUNDLE_DATA_PATH:-./volumes/development/bundle}:/usr/local/bundle
+      - ${HUB_DIAGNOSTICS_DATA_PATH:-./volumes/development/diagnostics}:${HUB_DIAGNOSTICS_DIR:-/app/log/hub_diagnostics}
     depends_on:
       - postgres
       - redis
@@ -60,6 +65,9 @@ services:
     environment:
       - NODE_ENV=development
       - RAILS_ENV=development
+      - HUB_DIAGNOSTICS_ENABLED=${HUB_DIAGNOSTICS_ENABLED:-true}
+      - HUB_CONNECT_RELIABILITY_ENABLED=${HUB_CONNECT_RELIABILITY_ENABLED:-true}
+      - HUB_EXISTING_INSTANCE_BINDING_ENABLED=${HUB_EXISTING_INSTANCE_BINDING_ENABLED:-true}
     command: ["bundle", "exec", "sidekiq", "-C", "config/sidekiq.yml"]
 
   webpack:
@@ -75,6 +83,7 @@ services:
       - ${HUB_PACKS_DATA_PATH:-./volumes/development/packs}:/app/public/packs
       - ${HUB_CACHE_DATA_PATH:-./volumes/development/cache}:/app/tmp/cache
       - ${HUB_BUNDLE_DATA_PATH:-./volumes/development/bundle}:/usr/local/bundle
+      - ${HUB_DIAGNOSTICS_DATA_PATH:-./volumes/development/diagnostics}:${HUB_DIAGNOSTICS_DIR:-/app/log/hub_diagnostics}
     ports:
       - "3035"
     environment:
@@ -82,6 +91,9 @@ services:
       - NODE_ENV=development
       - NODE_OPTIONS=--openssl-legacy-provider
       - RAILS_ENV=development
+      - HUB_DIAGNOSTICS_ENABLED=${HUB_DIAGNOSTICS_ENABLED:-true}
+      - HUB_CONNECT_RELIABILITY_ENABLED=${HUB_CONNECT_RELIABILITY_ENABLED:-true}
+      - HUB_EXISTING_INSTANCE_BINDING_ENABLED=${HUB_EXISTING_INSTANCE_BINDING_ENABLED:-true}
     entrypoint: docker/entrypoints/webpack.sh
     command: bin/webpack-dev-server
 

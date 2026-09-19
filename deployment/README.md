@@ -45,7 +45,10 @@ HUB:
 ./volumes/storage
 ./volumes/postgres
 ./volumes/redis
+./volumes/diagnostics
 ```
+
+O diretório `./volumes/diagnostics` é montado no mesmo caminho interno por Rails, Sidekiq e, nas variantes com migrator persistente, pelo serviço de migração. Isso permite que o HUB Admin consulte e baixe uma linha do tempo única dos eventos instrumentados, mesmo quando eles foram produzidos por processos diferentes.
 
 No deployment com Connect|API embutida também são usados:
 
@@ -188,3 +191,23 @@ Além do profile, habilite `CONNECT_NATS_ENABLED=true` e/ou `CONNECT_KAFKA_ENABL
 9. Na variante embutida de development, use `connect-api-hub-develop`.
 
 Os bancos e Redis do HUB nunca são compartilhados com a Connect|API na variante embutida.
+
+
+## Diagnóstico, mitigação e confiabilidade de mensageria
+
+As quatro variantes de deployment habilitam, por padrão, os recursos de confiabilidade e o vínculo de instância existente:
+
+```env
+HUB_DIAGNOSTICS_ENABLED=true
+HUB_DIAGNOSTICS_DIR=/app/log/hub_diagnostics
+HUB_DIAGNOSTICS_FILE_BYTES=8388608
+HUB_DIAGNOSTICS_FILE_COUNT=8
+HUB_DIAGNOSTICS_RETENTION_SECONDS=259200
+HUB_DIAGNOSTICS_DATA_PATH=./volumes/diagnostics
+HUB_CONNECT_RELIABILITY_ENABLED=true
+HUB_EXISTING_INSTANCE_BINDING_ENABLED=true
+```
+
+`HUB_DIAGNOSTICS_DATA_PATH` é o caminho no host. `HUB_DIAGNOSTICS_DIR` é o caminho dentro dos containers HUB e deve permanecer idêntico em Rails e Sidekiq. O padrão acima limita os arquivos ativos a aproximadamente 64 MiB por stack (8 × 8 MiB); a janela de 72 horas é um teto temporal e pode ser menor se houver muita atividade e os arquivos rotacionarem antes.
+
+Para desabilitar temporariamente apenas a coleta de novos eventos, use `HUB_DIAGNOSTICS_ENABLED=false`. Para voltar ao processamento legado de webhooks durante uma mitigação, use `HUB_CONNECT_RELIABILITY_ENABLED=false`; nesse estado, a vinculação de instância existente permanece bloqueada pelo HUB Admin.
