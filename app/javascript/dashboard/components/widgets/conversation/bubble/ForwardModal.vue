@@ -41,9 +41,11 @@
         >
           <span class="forward-contact__check" aria-hidden="true">
             <fluent-icon
-              :icon="isSelected(contact.id) ? 'checkmark-circle' : 'circle'"
+              v-if="isSelected(contact.id)"
+              icon="checkmark-circle"
               size="20"
             />
+            <span v-else class="forward-contact__check-ring" />
           </span>
           <Thumbnail
             :src="contact.thumbnail"
@@ -201,13 +203,12 @@ export default {
         const destination = response?.destination;
         if (this.selectedCount === 1 && destination?.conversation_id) {
           useAlert('Mensagem encaminhada com sucesso.');
+          const destinationUrl = conversationUrl({
+            accountId: this.currentAccountId,
+            id: destination.conversation_id,
+          });
           this.$emit('close');
-          await this.$router.push(
-            conversationUrl({
-              accountId: this.currentAccountId,
-              id: destination.conversation_id,
-            })
-          );
+          this.$router.push(destinationUrl).catch(() => {});
           return;
         }
 
@@ -288,6 +289,10 @@ export default {
   .is-selected & {
     @apply text-hub-600 dark:text-hub-300;
   }
+}
+
+.forward-contact__check-ring {
+  @apply block w-5 h-5 rounded-full border-2 border-slate-300 dark:border-slate-600;
 }
 
 .forward-contact__identity {
