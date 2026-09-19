@@ -1,3 +1,17 @@
+export const sortMessagesChronologically = (messages = []) => {
+  return [...messages].sort((a, b) => {
+    const timeA = Number(a.created_at || 0);
+    const timeB = Number(b.created_at || 0);
+    if (timeA !== timeB) return timeA - timeB;
+
+    const idA = Number(a.id);
+    const idB = Number(b.id);
+    if (Number.isFinite(idA) && Number.isFinite(idB)) return idA - idB;
+
+    return String(a.id || '').localeCompare(String(b.id || ''));
+  });
+};
+
 /**
  * Determines the last non-activity message between store and API messages.
  * @param {Object} messageInStore - The last non-activity message from the store.

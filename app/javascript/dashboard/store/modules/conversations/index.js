@@ -3,6 +3,7 @@ import types from '../../mutation-types';
 import getters, { getSelectedChatConversation } from './getters';
 import actions from './actions';
 import { findPendingMessageIndex } from './helpers';
+import { sortMessagesChronologically } from 'dashboard/helper/conversationHelper';
 import { MESSAGE_STATUS } from 'shared/constants/messages';
 import hubConstants from 'dashboard/constants/globals';
 import { BUS_EVENTS } from '../../../../shared/constants/busEvents';
@@ -75,6 +76,7 @@ export const mutations = {
     if (data.length) {
       const [chat] = _state.allConversations.filter(c => c.id === id);
       chat.messages.unshift(...data);
+      Vue.set(chat, 'messages', sortMessagesChronologically(chat.messages));
     }
   },
   [types.SET_ALL_ATTACHMENTS](_state, { id, data }) {
@@ -193,7 +195,10 @@ export const mutations = {
       Vue.set(chat.messages, pendingMessageIndex, message);
     } else {
       chat.messages.push(message);
-      chat.timestamp = message.created_at;
+      chat.timestamp = Math.max(
+        Number(chat.timestamp || 0),
+        Number(message.created_at || 0)
+      );
       const { conversation: { unread_count: unreadCount = 0 } = {} } = message;
       chat.unread_count = unreadCount;
       if (selectedChatId === conversationId) {
@@ -201,6 +206,7 @@ export const mutations = {
         emitter.emit(BUS_EVENTS.SCROLL_TO_MESSAGE);
       }
     }
+    Vue.set(chat, 'messages', sortMessagesChronologically(chat.messages));
   },
 
   [types.ADD_CONVERSATION](_state, conversation) {

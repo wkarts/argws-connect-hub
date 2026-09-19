@@ -6,12 +6,10 @@ module HubDiagnostics
       send.started send.http_response send.finished send.failed send.transport_failed
       webhook.received webhook.unrouted webhook.enqueued webhook.rejected
       webhook.processing_started webhook.processing_completed webhook.processing_failed
+      webhook.health_ok webhook.health_repaired webhook.health_failed
       message.persisted message.duplicate message.skipped
       status.received status.applied status.deferred status.orphaned status.ignored status.unknown
       media.downloaded media.unavailable
-      sync.background_started sync.background_finished sync.background_failed
-      sync.text_processed sync.status_processed sync.record_failed sync.skipped
-      receipt.watch_started receipt.watch_applied receipt.watch_completed receipt.watch_failed
       reconciliation.requested reconciliation.message_imported reconciliation.status_updated
       reconciliation.skipped reconciliation.record_failed reconciliation.completed reconciliation.failed
     ].freeze

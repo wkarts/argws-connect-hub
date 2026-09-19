@@ -52,6 +52,26 @@ class SuperAdmin::ConnectApiController < SuperAdmin::ApplicationController
     redirect_to super_admin_connect_api_path
   end
 
+  def verify_realtime
+    instance_name = required_instance_name
+    ensure_hub_managed!(instance_name)
+    channel = registry.managed_channel(instance_name)
+
+    result = Whatsapp::ConnectApiRealtimeWebhookService.new(channel: channel).ensure!
+    flash[:notice] = case result
+                     when :ok
+                       "Tempo real validado para #{instance_name}. O webhook já estava correto."
+                     when :repaired
+                       "Tempo real reparado para #{instance_name}. O webhook da Connect|API foi regravado."
+                     else
+                       "Não foi possível validar o tempo real de #{instance_name}. Consulte Diagnóstico e logs."
+                     end
+  rescue ConnectApi::Error => e
+    flash[:error] = e.message
+  ensure
+    redirect_to super_admin_connect_api_path
+  end
+
   def update_voip_limit
     instance_name = required_instance_name
     ensure_hub_managed!(instance_name)

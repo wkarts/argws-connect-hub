@@ -3,6 +3,7 @@ import {
   getLastMessage,
   getReadMessages,
   getUnreadMessages,
+  sortMessagesChronologically,
 } from '../conversationHelper';
 import {
   conversationData,
@@ -34,6 +35,24 @@ describe('conversationHelper', () => {
         { source_id: 'wa_3', id: 9 },
       ];
       expect(filterDuplicateSourceMessages(input)).toEqual(expected);
+    });
+  });
+
+
+  describe('#sortMessagesChronologically', () => {
+    it('sorts by created_at and uses id only as a deterministic tiebreaker', () => {
+      const input = [
+        { id: 90, created_at: 200 },
+        { id: 300, created_at: 100 },
+        { id: 20, created_at: 200 },
+      ];
+
+      expect(sortMessagesChronologically(input)).toEqual([
+        { id: 300, created_at: 100 },
+        { id: 20, created_at: 200 },
+        { id: 90, created_at: 200 },
+      ]);
+      expect(input.map(message => message.id)).toEqual([90, 300, 20]);
     });
   });
 

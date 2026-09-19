@@ -21,14 +21,6 @@ trigger_imap_email_inboxes_job:
   class: 'Inboxes::FetchImapEmailInboxesJob'
   queue: scheduled_jobs
 
-# Connect|API persisted messages are reconciled every minute as a fallback.
-# The webhook remains the primary path; this recovery pass covers text/media
-# emitted by the linked device and receipt/status events missed by the webhook.
-connect_api_media_sync_scheduler_job:
-  cron: '*/1 * * * *'
-  class: 'Channels::Whatsapp::ConnectApiMediaSyncSchedulerJob'
-  queue: low
-
 # Backfill WhatsApp profile pictures without depending on the Meta-compatible
 # webhook to carry profile.picture.
 connect_api_profile_picture_scheduler_job:
