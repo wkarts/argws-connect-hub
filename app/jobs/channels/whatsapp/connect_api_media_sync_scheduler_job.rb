@@ -8,6 +8,7 @@ class Channels::Whatsapp::ConnectApiMediaSyncSchedulerJob < ApplicationJob
       next if ActiveModel::Type::Boolean.new.cast(channel.provider_config.to_h['connect_api_manual_deletion'])
       next if channel.provider_config.to_h['instance_name'].to_s.blank?
 
+      Channels::Whatsapp::ConnectApiRealtimeWebhookHealthJob.perform_later(channel.id)
       Channels::Whatsapp::ConnectApiMediaSyncJob.perform_later(channel.id)
     end
   end
