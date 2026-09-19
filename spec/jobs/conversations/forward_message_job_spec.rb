@@ -54,7 +54,8 @@ RSpec.describe Conversations::ForwardMessageJob do
       user_id: user.id,
       account_id: account.id,
       message_id: source_message.id,
-      contacts: [target_contact.id]
+      contacts: [target_contact.id],
+      operation_id: 'forward-op-1'
     }
   end
 
@@ -70,6 +71,7 @@ RSpec.describe Conversations::ForwardMessageJob do
     expect(forwarded.outgoing?).to be(true)
     expect(forwarded.additional_attributes).to include(
       'forwarded' => true,
+      'forward_operation_id' => 'forward-op-1',
       'forwarded_from_message_id' => source_message.id,
       'forwarded_to_contact_id' => target_contact.id,
       'forwarded_by_user_id' => user.id
@@ -93,6 +95,16 @@ RSpec.describe Conversations::ForwardMessageJob do
       }.to_json
     )
     expect(matching.count).to eq(1)
+  end
+
+  it 'allows the user to forward the same source again in a new operation' do
+    first = described_class.perform_now(payload).first
+    second = described_class.perform_now(payload.merge(operation_id: 'forward-op-2')).first
+
+    expect(second[:message_id]).not_to eq(first[:message_id])
+
+    destination = account.conversations.find_by!(display_id: first[:conversation_id])
+    expect(destination.messages.where("additional_attributes ->> 'forwarded_from_message_id' = ?", source_message.id.to_s).count).to eq(2)
   end
 
   it 'does not hide a new forwarded message inside an old resolved conversation' do
