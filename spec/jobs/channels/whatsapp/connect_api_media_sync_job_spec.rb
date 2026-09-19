@@ -37,6 +37,14 @@ describe Channels::Whatsapp::ConnectApiMediaSyncJob do
     }
   end
 
+  around do |example|
+    previous = ENV['HUB_CONNECT_RELIABILITY_ENABLED']
+    ENV['HUB_CONNECT_RELIABILITY_ENABLED'] = 'true'
+    example.run
+  ensure
+    ENV['HUB_CONNECT_RELIABILITY_ENABLED'] = previous
+  end
+
   before do
     allow(ConnectApi::Client).to receive(:new).and_return(client)
     allow(Channels::Whatsapp::ConnectApiProfilePictureJob).to receive(:perform_later)
@@ -77,4 +85,83 @@ describe Channels::Whatsapp::ConnectApiMediaSyncJob do
     expect(message.attachments.first.file_type).to eq('audio')
     expect(message.attachments.first.file.download).to eq('voice-bytes')
   end
+  it 'recovers text sent from the linked smartphone even when no webhook reached HUB' do
+    text_record = {
+      'key' => {
+        'id' => 'TEXT-SYNC-DEVICE-1',
+        'fromMe' => true,
+        'remoteJid' => '557588449231@s.whatsapp.net'
+      },
+      'messageTimestamp' => Time.current.to_i,
+      'pushName' => 'Conta conectada',
+      'messageType' => 'conversation',
+      'source' => 'android',
+      'message' => {
+        'conversation' => 'Texto enviado no smartphone'
+      },
+      'MessageUpdate' => []
+    }
+
+    allow(client).to receive(:request).with(
+      :post,
+      '/chat/findMessages/hub-test-instance',
+      body: { page: 1, offset: described_class::MAX_RECORDS }
+    ).and_return('messages' => { 'records' => [text_record] })
+
+    described_class.perform_now(channel.id)
+
+    message = Message.find_by(
+      account_id: channel.account_id,
+      inbox_id: channel.inbox.id,
+      source_id: 'TEXT-SYNC-DEVICE-1'
+    )
+
+    expect(message).to be_present
+    expect(message).to be_outgoing
+    expect(message.content).to eq('Texto enviado no smartphone')
+    expect(message.content_attributes.to_h['connect_api_external_outgoing']).to be(true)
+    expect(message.content_attributes.to_h['connect_api_source']).to eq('android')
+  end
+
+  it 'reconciles the best persisted receipt status when the webhook status was missed' do
+    message = create(
+      :message,
+      account: channel.account,
+      inbox: channel.inbox,
+      conversation: conversation,
+      message_type: :outgoing,
+      status: :progress,
+      source_id: 'STATUS-SYNC-1',
+      content: 'Mensagem enviada pelo HUB'
+    )
+
+    status_record = {
+      'key' => {
+        'id' => 'STATUS-SYNC-1',
+        'fromMe' => true,
+        'remoteJid' => '557588449231@s.whatsapp.net'
+      },
+      'messageTimestamp' => Time.current.to_i,
+      'messageType' => 'conversation',
+      'message' => {
+        'conversation' => 'Mensagem enviada pelo HUB'
+      },
+      'MessageUpdate' => [
+        { 'status' => 'SERVER_ACK' },
+        { 'status' => 'DELIVERY_ACK' },
+        { 'status' => 'READ' }
+      ]
+    }
+
+    allow(client).to receive(:request).with(
+      :post,
+      '/chat/findMessages/hub-test-instance',
+      body: { page: 1, offset: described_class::MAX_RECORDS }
+    ).and_return('messages' => { 'records' => [status_record] })
+
+    described_class.perform_now(channel.id)
+
+    expect(message.reload.status).to eq('read')
+  end
+
 end

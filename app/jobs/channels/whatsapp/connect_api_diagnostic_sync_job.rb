@@ -64,7 +64,7 @@ class Channels::Whatsapp::ConnectApiDiagnosticSyncJob < Channels::Whatsapp::Conn
                                     operation_id: @operation_id, reason: 'peer_phone_unresolved')
       return
     end
-    own = @channel.phone_number.to_s.gsub(/D/, '')
+    own = @channel.phone_number.to_s.gsub(/\D/, '')
     from_me = ActiveModel::Type::Boolean.new.cast(key['fromMe'])
     payload = synthetic_webhook(record, key, id, peer, from_me, 'text', {})
     value = payload[:entry].first[:changes].first[:value]
