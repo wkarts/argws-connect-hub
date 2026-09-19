@@ -60,7 +60,7 @@ class Whatsapp::Providers::ConnectApiService < Whatsapp::Providers::WhatsappClou
       template_name: template['name'],
       template_version: template['version'],
       parameter_count: params.to_h.fetch('processed_params', {}).to_h.length,
-      instance_name: instance_name,
+      instance_name: whatsapp_channel.provider_config.to_h['instance_name'].to_s.presence,
       direction: 'outbound'
     ).compact
     emit_diagnostic('template.send_started', diagnostic_attributes)
