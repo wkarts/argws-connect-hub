@@ -110,7 +110,7 @@ import { mapGetters } from 'vuex';
 import { useAlert } from 'dashboard/composables';
 import TimeAgo from 'dashboard/components/ui/TimeAgo';
 import Thumbnail from 'dashboard/components/widgets/Thumbnail.vue';
-import { conversationUrl } from 'dashboard/helper/URLHelper';
+import { conversationUrl, frontendURL } from 'dashboard/helper/URLHelper';
 
 const DEFAULT_PAGE = 1;
 const SEARCH_DELAY = 250;
@@ -203,10 +203,12 @@ export default {
         const destination = response?.destination;
         if (this.selectedCount === 1 && destination?.conversation_id) {
           useAlert('Mensagem encaminhada com sucesso.');
-          const destinationUrl = conversationUrl({
-            accountId: this.currentAccountId,
-            id: destination.conversation_id,
-          });
+          const destinationUrl = frontendURL(
+            conversationUrl({
+              accountId: this.currentAccountId,
+              id: destination.conversation_id,
+            })
+          );
           this.$emit('close');
           this.$router.push(destinationUrl).catch(() => {});
           return;
