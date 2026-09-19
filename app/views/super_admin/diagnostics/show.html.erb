@@ -13,13 +13,7 @@
       <div><label for="filter_<%= name %>"><%= label %></label><input id="filter_<%= name %>" name="<%= name %>" value="<%= @filters[name] %>" maxlength="160" /></div>
     <% end %></div><button type="submit" class="hub-primary">Aplicar filtros</button>
   </form>
-  <section class="hub-card"><h2>Recuperar mensagens já existentes na Connect|API</h2><p>Consulta paginada limitada a 500 registros e a até 120 minutos. A consulta não envia mensagens. Registros temporários e de visualização única não são importados por esta ação.</p>
-    <form action="<%= sync_messages_super_admin_diagnostics_path %>" method="post">
-      <%= hidden_field_tag :authenticity_token, form_authenticity_token %>
-      <div class="hub-form-grid"><div><label for="sync_channel">Caixa</label><select id="sync_channel" name="channel_id" required><% @channels.each do |channel| %><option value="<%= channel.id %>">#<%= channel.inbox&.id %> · <%= channel.inbox&.name %></option><% end %></select></div><div><label for="sync_minutes">Últimos minutos</label><input id="sync_minutes" name="minutes" type="number" value="15" min="1" max="120" required /></div></div>
-      <button type="submit" data-hub-confirm="Importar os registros ausentes desta janela, preservando os IDs existentes e sem reenviar mensagens?">Reconciliar mensagens</button>
-    </form>
-  </section>
+  <div class="hub-alert">A reconciliação de histórico foi movida para <%= link_to 'Connect|API → Reconciliação e importação', super_admin_connect_api_reconciliation_path %>. Este painel permanece dedicado a diagnóstico e logs.</div>
   <% @channels.each do |channel| %><% operation = channel.provider_config.to_h['hub_binding_operation'].to_h %><% next unless operation['state'] == 'needs_review' %>
     <div class="hub-alert hub-alert-danger"><strong>Caixa #<%= channel.inbox&.id %>: estado remoto indeterminado.</strong><p>O envio está bloqueado até confirmar a restauração do webhook anterior. A instância antiga não foi excluída.</p>
       <form action="<%= recover_super_admin_connect_api_binding_path %>" method="post"><%= hidden_field_tag :authenticity_token, form_authenticity_token %><%= hidden_field_tag :channel_id, channel.id %><button type="submit" data-hub-confirm="Verificar e restaurar o webhook anterior? A restauração será recusada se outro administrador tiver alterado o destino.">Verificar e restaurar vínculo anterior</button></form>
