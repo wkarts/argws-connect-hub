@@ -90,4 +90,33 @@ RSpec.describe 'Connect|API template HUB variables' do
     expect(message.reload.source_id).to eq('REAL-LIQUID-MESSAGE-ID')
     expect(message.status).not_to eq('failed')
   end
+
+  it 'fails closed before provider delivery when a HUB variable has no value' do
+    message = Messages::MessageBuilder.new(
+      user,
+      conversation,
+      {
+        content: 'Olá! {{contact.email}}',
+        message_type: 'outgoing',
+        template_params: {
+          name: 'hello',
+          language: 'pt_BR',
+          connect_api_version: 1,
+          processed_params: { '1' => '{{contact.email}}' }
+        }
+      }
+    ).perform
+
+    expect(message.content).to eq('Olá! ')
+    expect(message.additional_attributes.dig('template_params', 'processed_params', '1')).to eq('')
+
+    Whatsapp::SendOnWhatsappService.new(message: message).perform
+
+    expect(
+      a_request(:post, 'https://connect.example/graph/v20.0/5575988881111/messages')
+    ).not_to have_been_made
+    expect(message.reload.status).to eq('failed')
+    expect(message.external_error).to include('texto não vazio')
+  end
+
 end
