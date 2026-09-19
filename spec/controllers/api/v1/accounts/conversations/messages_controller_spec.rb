@@ -3,6 +3,10 @@ require 'rails_helper'
 RSpec.describe 'Conversation Messages API', type: :request do
   let!(:account) { create(:account, locale: 'en') }
 
+  around do |example|
+    I18n.with_locale(:en) { example.run }
+  end
+
   describe 'POST /api/v1/accounts/{account.id}/conversations/<id>/messages' do
     let!(:inbox) { create(:inbox, account: account) }
     let!(:conversation) { create(:conversation, inbox: inbox, account: account) }
