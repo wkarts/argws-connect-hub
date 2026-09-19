@@ -181,6 +181,7 @@ export default {
         <ContactAvatarPreview
           v-if="showAvatar"
           :src="contact.thumbnail"
+          :preview-src="contact.avatar_url || contact.thumbnail"
           size="56px"
           :username="contact.name"
           :status="contact.availability_status"
