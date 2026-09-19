@@ -7,6 +7,7 @@ json.phone_number resource.phone_number
 json.date_of_birth resource.date_of_birth&.iso8601
 json.identifier resource.identifier
 json.thumbnail resource.avatar_url
+json.avatar_url resource.avatar_full_url
 json.custom_attributes resource.custom_attributes
 json.last_activity_at resource.last_activity_at.to_i if resource[:last_activity_at].present?
 json.created_at resource.created_at.to_i if resource[:created_at].present?
