@@ -203,12 +203,13 @@ HUB_DIAGNOSTICS_DIR=/app/log/hub_diagnostics
 HUB_DIAGNOSTICS_FILE_BYTES=8388608
 HUB_DIAGNOSTICS_FILE_COUNT=8
 HUB_DIAGNOSTICS_RETENTION_SECONDS=259200
+HUB_DIAGNOSTICS_CAPTURE_MODE=session
 HUB_DIAGNOSTICS_QUEUE_SIZE=2048
 HUB_DIAGNOSTICS_DATA_PATH=./volumes/diagnostics
 HUB_CONNECT_RELIABILITY_ENABLED=true
 HUB_EXISTING_INSTANCE_BINDING_ENABLED=true
 ```
 
-`HUB_DIAGNOSTICS_DATA_PATH` é o caminho no host. `HUB_DIAGNOSTICS_DIR` é o caminho dentro dos containers HUB e deve permanecer idêntico em Rails e Sidekiq. O padrão acima limita os arquivos ativos a aproximadamente 64 MiB por stack (8 × 8 MiB); a janela de 72 horas é um teto temporal e pode ser menor se houver muita atividade e os arquivos rotacionarem antes.
+`HUB_DIAGNOSTICS_DATA_PATH` é o caminho no host. `HUB_DIAGNOSTICS_DIR` é o caminho dentro dos containers HUB e deve permanecer idêntico em Rails e Sidekiq. O padrão acima limita os arquivos ativos a aproximadamente 64 MiB por stack (8 × 8 MiB); a janela de 72 horas é um teto temporal e pode ser menor se houver muita atividade e os arquivos rotacionarem antes. Com `HUB_DIAGNOSTICS_CAPTURE_MODE=session`, somente eventos críticos são mantidos continuamente; a coleta detalhada é ativada temporariamente em **HUB Admin → Diagnóstico e mitigação**.
 
 Para desabilitar temporariamente apenas a coleta de novos eventos, use `HUB_DIAGNOSTICS_ENABLED=false`. A gravação usa uma fila em memória limitada por `HUB_DIAGNOSTICS_QUEUE_SIZE`; se a fila saturar, eventos de diagnóstico são descartados sem bloquear mensagens, webhooks ou jobs. `HUB_CONNECT_RELIABILITY_ENABLED` permanece apenas por compatibilidade com deployments anteriores e não altera mais o roteamento realtime. A vinculação de instância existente é controlada somente por `HUB_EXISTING_INSTANCE_BINDING_ENABLED`.
