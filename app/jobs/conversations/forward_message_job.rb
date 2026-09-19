@@ -5,7 +5,7 @@ class Conversations::ForwardMessageJob < ApplicationJob
     payload = payload.to_h.with_indifferent_access
     @user = User.find(payload[:user_id])
     @account = Account.find(payload[:account_id])
-    @message = @account.messages.find(payload[:message_id])
+    @message = Message.find_by!(id: payload[:message_id], account_id: @account.id)
     @contacts = Array(payload[:contacts]).map(&:to_i).uniq
 
     return [] if @contacts.empty?
