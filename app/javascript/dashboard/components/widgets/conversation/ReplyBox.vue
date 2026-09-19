@@ -23,6 +23,7 @@ import {
   getMessageVariables,
   getUndefinedVariablesInMessage,
   replaceVariablesInMessage,
+  resolveTemplateVariables,
 } from '@hub/utils';
 import WhatsappTemplates from './WhatsappTemplates/Modal.vue';
 import { MESSAGE_MAX_LENGTH } from 'shared/helpers/MessageTypeHelper';
@@ -720,9 +721,27 @@ export default {
       }
     },
     async onSendWhatsAppReply(messagePayload) {
+      const resolved = resolveTemplateVariables({
+        message: messagePayload.message,
+        templateParams: messagePayload.templateParams,
+        variables: this.messageVariables,
+      });
+
+      if (resolved.unresolvedVariables.length) {
+        useAlert(
+          this.$t('CONVERSATION.REPLYBOX.UNDEFINED_VARIABLES.MESSAGE', {
+            undefinedVariablesCount: resolved.unresolvedVariables.length,
+            undefinedVariables: resolved.unresolvedVariables.join(', '),
+          })
+        );
+        return;
+      }
+
       this.sendMessage({
         conversationId: this.currentChat.id,
         ...messagePayload,
+        message: resolved.message,
+        templateParams: resolved.templateParams,
       });
       this.hideWhatsappTemplatesModal();
     },
