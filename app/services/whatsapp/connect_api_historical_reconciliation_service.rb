@@ -89,7 +89,12 @@ class Whatsapp::ConnectApiHistoricalReconciliationService
     if message.outgoing? && status.present?
       decision = HubDiagnostics::StatusPolicy.decision(message.status.to_s, status)
       if decision == :apply
-        message.update_columns(status: Message.statuses.fetch(status), updated_at: message.updated_at)
+        if status == 'deleted'
+          attributes = message.content_attributes.to_h.merge('deleted' => true)
+          message.update_columns(content_attributes: attributes, updated_at: message.updated_at)
+        else
+          message.update_columns(status: Message.statuses.fetch(status), updated_at: message.updated_at)
+        end
         HubDiagnostics::Recorder.emit(
           'reconciliation.status_updated',
           diagnostic_context.merge(
@@ -109,8 +114,9 @@ class Whatsapp::ConnectApiHistoricalReconciliationService
   def insert_message(record, key, source_id, timestamp, contact_inbox, conversation)
     from_me = ActiveModel::Type::Boolean.new.cast(key['fromMe'])
     content = text_body(record) || media_caption(record)
-    status = if from_me
-               native_status(record) || 'sent'
+    native_message_status = native_status(record)
+    status = if from_me && native_message_status.present? && native_message_status != 'deleted'
+               native_message_status
              else
                'sent'
              end
@@ -121,6 +127,7 @@ class Whatsapp::ConnectApiHistoricalReconciliationService
       'connect_api_source' => record['source'].to_s.presence
     }.compact
     content_attributes['connect_api_external_outgoing'] = true if from_me
+    content_attributes['deleted'] = true if native_message_status == 'deleted'
     content_attributes['is_unsupported'] = true if content.blank? && media_descriptor(record).blank?
 
     row = {
@@ -171,7 +178,9 @@ class Whatsapp::ConnectApiHistoricalReconciliationService
       }],
       returning: %w[id]
     )
-    ContactInbox.find(result.rows.first.first)
+    contact_inbox = ContactInbox.find(result.rows.first.first)
+    Channels::Whatsapp::ConnectApiProfilePictureJob.perform_later(contact.id, @channel.id, force: true)
+    contact_inbox
   rescue ActiveRecord::RecordNotUnique
     ContactInbox.find_by!(inbox_id: @channel.inbox.id, source_id: source_id)
   end
