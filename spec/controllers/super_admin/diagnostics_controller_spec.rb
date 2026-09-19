@@ -9,13 +9,18 @@ RSpec.describe 'Super Admin diagnostics download', type: :request do
 
   around do |example|
     previous_dir = ENV['HUB_DIAGNOSTICS_DIR']
+    previous_mode = ENV['HUB_DIAGNOSTICS_CAPTURE_MODE']
 
     Dir.mktmpdir('hub-diagnostics-spec') do |directory|
       ENV['HUB_DIAGNOSTICS_DIR'] = directory
+      ENV['HUB_DIAGNOSTICS_CAPTURE_MODE'] = 'session'
+      HubDiagnostics::CaptureSession.stop!
       example.run
+      HubDiagnostics::CaptureSession.stop!
     end
   ensure
-    ENV['HUB_DIAGNOSTICS_DIR'] = previous_dir
+    previous_dir.nil? ? ENV.delete('HUB_DIAGNOSTICS_DIR') : ENV['HUB_DIAGNOSTICS_DIR'] = previous_dir
+    previous_mode.nil? ? ENV.delete('HUB_DIAGNOSTICS_CAPTURE_MODE') : ENV['HUB_DIAGNOSTICS_CAPTURE_MODE'] = previous_mode
   end
 
   it 'downloads a valid gzip diagnostic package without encoding conversion errors' do
@@ -53,4 +58,32 @@ RSpec.describe 'Super Admin diagnostics download', type: :request do
   ensure
     reader&.close
   end
+
+  it 'starts and stops a bounded diagnostic capture without changing messaging state' do
+    sign_in(super_admin, scope: :super_admin)
+
+    post start_capture_super_admin_diagnostics_path, params: { duration_minutes: 30 }
+
+    expect(response).to have_http_status(:redirect)
+    session = HubDiagnostics::CaptureSession.current
+    expect(session).to include('actor_id' => super_admin.id)
+    expect(Time.iso8601(session['expires_at']) - Time.iso8601(session['started_at'])).to be_within(1).of(30.minutes)
+
+    post stop_capture_super_admin_diagnostics_path
+
+    expect(response).to have_http_status(:redirect)
+    expect(HubDiagnostics::CaptureSession.current).to be_nil
+  end
+
+  it 'rejects an unsupported capture duration' do
+    sign_in(super_admin, scope: :super_admin)
+
+    expect do
+      post start_capture_super_admin_diagnostics_path, params: { duration_minutes: 10 }
+    end.not_to change { HubDiagnostics::CaptureSession.current }
+
+    expect(response).to have_http_status(:redirect)
+    expect(HubDiagnostics::CaptureSession.current).to be_nil
+  end
+
 end
