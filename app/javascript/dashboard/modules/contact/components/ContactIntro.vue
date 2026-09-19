@@ -1,10 +1,10 @@
 <script>
-import Thumbnail from 'dashboard/components/widgets/Thumbnail.vue';
+import ContactAvatarPreview from './ContactAvatarPreview.vue';
 import SocialIcons from 'dashboard/routes/dashboard/conversation/contact/SocialIcons.vue';
 
 export default {
   components: {
-    Thumbnail,
+    ContactAvatarPreview,
     SocialIcons,
   },
   props: {
@@ -44,7 +44,7 @@ export default {
 
 <template>
   <div class="contact--intro">
-    <Thumbnail
+    <ContactAvatarPreview
       :src="contact.thumbnail"
       size="64px"
       :username="contact.name"
