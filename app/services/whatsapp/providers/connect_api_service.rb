@@ -55,14 +55,33 @@ class Whatsapp::Providers::ConnectApiService < Whatsapp::Providers::WhatsappClou
 
   def send_local_template(message, phone_number, template)
     params = message.additional_attributes.to_h['template_params']
+    diagnostic_attributes = HubDiagnostics::Recorder.message_attributes(message).merge(
+      component: 'connectapi_template',
+      template_name: template['name'],
+      template_version: template['version'],
+      parameter_count: params.to_h.fetch('processed_params', {}).to_h.length,
+      instance_name: instance_name,
+      direction: 'outbound'
+    ).compact
+    HubDiagnostics::Recorder.emit('template.send_started', diagnostic_attributes)
+
     local = ConnectApi::LocalTemplateMessage.new(template, params)
     local.validate_content!(message.content)
+    started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
     response = HTTParty.post(
       "#{phone_id_path}/messages",
       headers: api_headers,
       body: { messaging_product: 'whatsapp', to: phone_number, type: 'template', template: local.payload }.to_json,
       timeout: request_timeout,
       follow_redirects: false
+    )
+    HubDiagnostics::Recorder.emit(
+      'template.http_response',
+      diagnostic_attributes.merge(
+        http_status: response.code,
+        success: response.success?,
+        duration_ms: ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - started) * 1000).round(2)
+      )
     )
     unless response.success?
       raise ConnectApi::LocalTemplateMessage::Error,
@@ -85,11 +104,21 @@ class Whatsapp::Providers::ConnectApiService < Whatsapp::Providers::WhatsappClou
         }
       )
     )
+    HubDiagnostics::Recorder.emit('template.send_finished', diagnostic_attributes.merge(source_id: id, success: true))
     id
   rescue ConnectApi::LocalTemplateMessage::Error => e
+    HubDiagnostics::Recorder.emit(
+      'template.validation_failed',
+      (diagnostic_attributes || {}).merge(level: 'warn', reason: 'template_validation_or_delivery_rejected')
+    )
     message.update!(status: :failed, external_error: e.message)
     nil
   rescue StandardError => e
+    HubDiagnostics::Recorder.error(
+      'template.send_failed',
+      e,
+      (diagnostic_attributes || {}).merge(reason: 'unexpected_error')
+    )
     Rails.logger.warn("[HUB Connect|API] template delivery interrupted: #{e.class}")
     message.update!(status: :failed, external_error: 'Envio interrompido. Verifique a entrega antes de reenviar o modelo.')
     nil
