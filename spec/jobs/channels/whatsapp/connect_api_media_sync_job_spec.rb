@@ -77,4 +77,32 @@ describe Channels::Whatsapp::ConnectApiMediaSyncJob do
     expect(message.attachments.first.file_type).to eq('audio')
     expect(message.attachments.first.file.download).to eq('voice-bytes')
   end
+  it 'does not turn the media recovery job into text or status reconciliation' do
+    text_record = {
+      'key' => {
+        'id' => 'TEXT-ONLY-1',
+        'fromMe' => true,
+        'remoteJid' => '557588449231@s.whatsapp.net'
+      },
+      'messageTimestamp' => Time.current.to_i,
+      'messageType' => 'conversation',
+      'message' => {
+        'conversation' => 'texto do smartphone'
+      },
+      'MessageUpdate' => [
+        { 'status' => 'READ' }
+      ]
+    }
+
+    allow(client).to receive(:request).with(
+      :post,
+      '/chat/findMessages/hub-test-instance',
+      body: { page: 1, offset: described_class::MAX_RECORDS }
+    ).and_return('messages' => { 'records' => [text_record] })
+
+    expect do
+      described_class.perform_now(channel.id)
+    end.not_to change(Message, :count)
+  end
+
 end
