@@ -85,4 +85,11 @@ RSpec.describe HubDiagnostics::Recorder do
     expect(record['capture_session_id']).to eq(session['id'])
   end
 
+
+  it 'falls back to session mode when capture mode is invalid' do
+    ENV['HUB_DIAGNOSTICS_CAPTURE_MODE'] = 'invalid'
+
+    expect(described_class.queue_health[:capture_mode]).to eq('session')
+  end
+
 end
