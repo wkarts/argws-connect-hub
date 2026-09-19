@@ -4,7 +4,7 @@ RSpec.describe 'Connect|API template HUB variables' do
   let(:remote_template) do
     {
       'id' => 'lt_contact_name',
-      'name' => 'hello_name',
+      'name' => 'hello',
       'language' => 'pt_BR',
       'source' => 'connectapi_local',
       'execution' => 'rendered_text',
@@ -52,7 +52,7 @@ RSpec.describe 'Connect|API template HUB variables' do
         content: 'Olá! {{contact.name}}',
         message_type: 'outgoing',
         template_params: {
-          name: 'hello_name',
+          name: 'hello',
           language: 'pt_BR',
           connect_api_version: 1,
           processed_params: { '1' => '{{contact.name}}' }
@@ -69,7 +69,7 @@ RSpec.describe 'Connect|API template HUB variables' do
                 body: hash_including(
                   'type' => 'template',
                   'template' => hash_including(
-                    'name' => 'hello_name',
+                    'name' => 'hello',
                     'connect_api_version' => 1,
                     'components' => [{
                       'type' => 'body',
