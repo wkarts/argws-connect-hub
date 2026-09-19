@@ -9,6 +9,14 @@ class Channels::Whatsapp::ConnectApiMediaSyncJob < ApplicationJob
 
   MAX_RECORDS = 80
   LOOKBACK = 48.hours
+  MESSAGE_RECOVERY_LOOKBACK = 6.hours
+  STATUS_RANK = { 'sent' => 1, 'delivered' => 2, 'read' => 3 }.freeze
+  STATUS_MAP = {
+    '2' => 'sent', 'SERVER_ACK' => 'sent',
+    '3' => 'delivered', 'DELIVERY_ACK' => 'delivered',
+    '4' => 'read', '5' => 'read', 'READ' => 'read', 'PLAYED' => 'read',
+    '0' => 'failed', 'ERROR' => 'failed', 'DELETED' => 'deleted'
+  }.freeze
   MEDIA_KEYS = {
     'imageMessage' => 'image',
     'videoMessage' => 'video',
@@ -85,7 +93,11 @@ class Channels::Whatsapp::ConnectApiMediaSyncJob < ApplicationJob
     )
     records = extract_records(response)
     records.select do |record|
-      media_descriptor(record).present? && timestamp_for(record) >= LOOKBACK.ago.to_i
+      stamp = timestamp_for(record)
+      media_recent = media_descriptor(record).present? && stamp >= LOOKBACK.ago.to_i
+      message_recent = (text_body(record).present? || native_status(record).present?) &&
+                       stamp >= MESSAGE_RECOVERY_LOOKBACK.ago.to_i
+      media_recent || message_recent
     end
   end
 
@@ -104,27 +116,99 @@ class Channels::Whatsapp::ConnectApiMediaSyncJob < ApplicationJob
     return if id.blank?
     return if ignored_jid?(key['remoteJid'])
 
+    existing = Message.find_by(account_id: @channel.account_id, inbox_id: @channel.inbox.id, source_id: id)
+    body = text_body(record)
     media_type, media_node = media_descriptor(record)
-    return unless media_type && media_node
 
-    existing = Message.find_by(inbox_id: @channel.inbox.id, source_id: id)
-    if existing
-      recover_existing_attachment(existing, media_type, media_node) if existing.attachments.empty?
+    if existing.blank?
+      if body.present?
+        existing = recover_text_message(record, key, id, body)
+      elsif media_type && media_node
+        existing = recover_media_message(record, key, id, media_type, media_node)
+      end
+    elsif media_type && media_node && existing.attachments.empty?
+      recover_existing_attachment(existing, media_type, media_node)
+    end
+
+    reconcile_native_status(record, existing) if existing
+  end
+
+  def recover_text_message(record, key, id, body)
+    peer_phone = canonical_peer_phone(key)
+    unless peer_phone.present?
+      HubDiagnostics::Recorder.emit(
+        'sync.skipped',
+        diagnostic_context.merge(source_id: id, reason: 'peer_phone_unresolved')
+      )
       return
     end
 
+    from_me = ActiveModel::Type::Boolean.new.cast(key['fromMe'])
+    payload = synthetic_webhook(record, key, id, peer_phone, from_me, 'text', {})
+    payload[:entry].first[:changes].first[:value][:messages].first[:text] = { body: body }
+
+    incoming_service.new(inbox: @channel.inbox, params: payload.with_indifferent_access).perform
+
+    message = Message.find_by(account_id: @channel.account_id, inbox_id: @channel.inbox.id, source_id: id)
+    HubDiagnostics::Recorder.emit(
+      'sync.text_processed',
+      diagnostic_context.merge(source_id: id, from_me: from_me, success: message.present?)
+    )
+    message
+  end
+
+  def recover_media_message(record, key, id, media_type, media_node)
     peer_phone = canonical_peer_phone(key)
-    return if peer_phone.blank?
+    return unless peer_phone.present?
 
     from_me = ActiveModel::Type::Boolean.new.cast(key['fromMe'])
     payload = synthetic_webhook(record, key, id, peer_phone, from_me, media_type, media_node)
-    (ENV['HUB_CONNECT_RELIABILITY_ENABLED'] == 'true' ? Whatsapp::IncomingMessageConnectApiReliableService : Whatsapp::IncomingMessageConnectApiService).new(inbox: @channel.inbox, params: payload.with_indifferent_access).perform
+    incoming_service.new(inbox: @channel.inbox, params: payload.with_indifferent_access).perform
 
-    # The synthetic webhook still tries the normal Graph media path first. If
-    # that path is unavailable, repair the just-created message in the same run
-    # instead of waiting for the next reconciliation cycle.
-    created = Message.find_by(inbox_id: @channel.inbox.id, source_id: id)
-    recover_existing_attachment(created, media_type, media_node) if created && created.attachments.empty?
+    message = Message.find_by(account_id: @channel.account_id, inbox_id: @channel.inbox.id, source_id: id)
+    recover_existing_attachment(message, media_type, media_node) if message && message.attachments.empty?
+    message
+  end
+
+  def reconcile_native_status(record, message)
+    status = native_status(record)
+    return if status.blank?
+
+    decision = HubDiagnostics::StatusPolicy.decision(message.status.to_s, status)
+    return unless decision == :apply
+
+    payload = {
+      object: 'whatsapp_business_account',
+      entry: [{
+        changes: [{
+          field: 'messages',
+          value: {
+            messaging_product: 'whatsapp',
+            metadata: {
+              display_phone_number: @channel.phone_number.to_s.gsub(/\D/, ''),
+              phone_number_id: @channel.provider_config.to_h['phone_number_id'].to_s
+            },
+            statuses: [{
+              id: message.source_id,
+              status: status,
+              timestamp: timestamp_for(record).to_s
+            }]
+          }
+        }]
+      }]
+    }
+
+    incoming_service.new(inbox: @channel.inbox, params: payload.with_indifferent_access).perform
+    HubDiagnostics::Recorder.emit(
+      'sync.status_processed',
+      diagnostic_context.merge(source_id: message.source_id, message_id: message.id, status: status)
+    )
+  end
+
+  def incoming_service
+    ENV['HUB_CONNECT_RELIABILITY_ENABLED'] == 'true' ?
+      Whatsapp::IncomingMessageConnectApiReliableService :
+      Whatsapp::IncomingMessageConnectApiService
   end
 
   def recover_existing_attachment(message, media_type, media_node)
@@ -232,6 +316,33 @@ class Channels::Whatsapp::ConnectApiMediaSyncJob < ApplicationJob
         }]
       }]
     }
+  end
+
+  def text_body(record)
+    message = unwrap_message(record.to_h.deep_stringify_keys['message'])
+    return unless message.is_a?(Hash)
+
+    message['conversation'].to_s.presence ||
+      message.dig('extendedTextMessage', 'text').to_s.presence ||
+      (record.to_h.deep_stringify_keys['messageType'].to_s == 'text' ? message['text'].to_s.presence : nil)
+  end
+
+  def native_status(record)
+    values = Array(
+      record.to_h.deep_stringify_keys['MessageUpdate'] ||
+      record.to_h.deep_stringify_keys['messageUpdate'] ||
+      record.to_h.deep_stringify_keys['messageUpdates']
+    ).filter_map do |update|
+      raw = update.to_h.deep_stringify_keys['status'].to_s.upcase
+      STATUS_MAP[raw]
+    end
+
+    return 'deleted' if values.include?('deleted')
+
+    successes = values.select { |status| STATUS_RANK.key?(status) }
+    return successes.max_by { |status| STATUS_RANK[status] } if successes.any?
+
+    values.include?('failed') ? 'failed' : nil
   end
 
   def media_descriptor(record)
