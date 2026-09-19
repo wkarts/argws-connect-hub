@@ -1,4 +1,4 @@
-require 'rails_helper'
+<sub>require 'rails_helper'
 
 RSpec.describe 'Connect|API template HUB variables' do
   let(:remote_template) do
@@ -91,3 +91,4 @@ RSpec.describe 'Connect|API template HUB variables' do
     expect(message.status).not_to eq('failed')
   end
 end
+</sub>
