@@ -38,6 +38,9 @@ class SuperAdmin::ConnectApiReconciliationsController < SuperAdmin::ApplicationC
 
     redirect_to super_admin_connect_api_reconciliation_path(channel_id: channel.id),
                 notice: 'Importação completa enfileirada. O HUB importará somente o histórico disponível na Connect|API.'
+  rescue ArgumentError => error
+    redirect_to super_admin_connect_api_reconciliation_path(channel_id: params[:channel_id]),
+                alert: error.message
   end
 
   private
