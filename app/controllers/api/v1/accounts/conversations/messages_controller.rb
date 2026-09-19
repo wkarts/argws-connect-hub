@@ -13,13 +13,22 @@ class Api::V1::Accounts::Conversations::MessagesController < Api::V1::Accounts::
 
   def destroy
     return head :bad_request unless message.can_delete_message?
-  
+
+    revoked_for_everyone = revoke_connect_api_message_if_needed!
+
     ActiveRecord::Base.transaction do
-      original_content = message.content
-      new_content = "⛔#{I18n.t('conversations.messages.deleted')}\n#{original_content}"
-      message.update!(content: new_content, content_attributes: { deleted: true })
+      message.update!(
+        content: "⛔#{I18n.t('conversations.messages.deleted')}",
+        content_attributes: {
+          deleted: true,
+          deleted_for_everyone: revoked_for_everyone,
+          deleted_at: Time.current.utc.iso8601
+        }.compact
+      )
       message.attachments.destroy_all
     end
+  rescue Whatsapp::ConnectApiMessageRevokeService::Error => error
+    render json: { error: error.message }, status: :unprocessable_entity
   end
 
   def retry
@@ -60,6 +69,12 @@ class Api::V1::Accounts::Conversations::MessagesController < Api::V1::Accounts::
 
   def message
     @message ||= @conversation.messages.find(permitted_params[:id])
+  end
+
+  def revoke_connect_api_message_if_needed!
+    return false unless Whatsapp::ConnectApiMessageRevokeService.applicable?(message)
+
+    Whatsapp::ConnectApiMessageRevokeService.new(message: message).perform!
   end
 
   def message_finder
