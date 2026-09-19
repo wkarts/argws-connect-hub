@@ -126,8 +126,7 @@ jobs:
           spec/services/whatsapp/connect_api_opening_message_validator_spec.rb
           spec/services/whatsapp/send_on_whatsapp_service_spec.rb
           spec/controllers/api/v1/accounts/connect_api_templates_controller_spec.rb
-          spec/controllers/api/v1/accounts/conversations/messages_controller_spec.rb
-          spec/models/contact_spec.rb
+          spec/requests/connect_api_message_actions_spec.rb
           spec/controllers/super_admin/diagnostics_controller_spec.rb
           spec/services/hub_diagnostics/export_summary_spec.rb
           spec/services/hub_diagnostics/capture_session_spec.rb
