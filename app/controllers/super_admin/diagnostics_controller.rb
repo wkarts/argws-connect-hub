@@ -12,7 +12,7 @@ class SuperAdmin::DiagnosticsController < SuperAdmin::ApplicationController
     HubDiagnostics::Recorder.flush!(timeout: 0.5)
     @health = HubDiagnostics::Recorder.store.health.merge(queue: HubDiagnostics::Recorder.queue_health)
     @capture_session = HubDiagnostics::CaptureSession.current
-    @capture_mode = ENV.fetch('HUB_DIAGNOSTICS_CAPTURE_MODE', 'all').to_s
+    @capture_mode = ENV.fetch('HUB_DIAGNOSTICS_CAPTURE_MODE', 'session').to_s
     @events = []
     HubDiagnostics::Recorder.store.matching(@filters).each do |event|
       @events << event
