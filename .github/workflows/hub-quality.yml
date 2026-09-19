@@ -121,6 +121,8 @@ jobs:
           spec/controllers/super_admin/diagnostics_controller_spec.rb
           spec/services/hub_diagnostics/export_summary_spec.rb
           spec/services/hub_diagnostics/webhook_router_spec.rb
+          spec/services/whatsapp/connect_api_realtime_webhook_service_spec.rb
+          spec/finders/message_finder_spec.rb
       - name: Two-factor authentication regression specs
         run: >-
           bundle exec rspec
