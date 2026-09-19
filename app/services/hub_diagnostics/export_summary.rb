@@ -10,6 +10,7 @@ module HubDiagnostics
       message.persisted message.duplicate message.skipped
       status.received status.applied status.deferred status.orphaned status.ignored status.unknown
       media.downloaded media.unavailable
+      template.send_started template.http_response template.send_finished template.validation_failed template.send_failed
       reconciliation.requested reconciliation.message_imported reconciliation.status_updated
       reconciliation.skipped reconciliation.record_failed reconciliation.completed reconciliation.failed
     ].freeze
