@@ -70,13 +70,18 @@ RSpec.describe Whatsapp::ConnectApiMessageRevokeService do
       },
       timeout: 10
     ).and_return(
-      'records' => [{
-        'key' => {
-          'id' => 'MSG-REMOTE-1',
-          'fromMe' => true,
-          'remoteJid' => '5575999999999@s.whatsapp.net'
-        }
-      }]
+      'messages' => {
+        'total' => 1,
+        'pages' => 1,
+        'currentPage' => 1,
+        'records' => [{
+          'key' => {
+            'id' => 'MSG-REMOTE-1',
+            'fromMe' => true,
+            'remoteJid' => '5575999999999@s.whatsapp.net'
+          }
+        }]
+      }
     )
 
     expect(client).to receive(:request).with(
