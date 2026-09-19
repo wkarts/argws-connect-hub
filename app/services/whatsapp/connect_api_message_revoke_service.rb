@@ -116,7 +116,15 @@ class Whatsapp::ConnectApiMessageRevokeService
     return data.first if data.is_a?(Array)
     return unless data.is_a?(Hash)
 
-    candidates = data['records'] || data['data'] || data['messages'] || data['rows']
+    messages = data['messages']
+    if messages.is_a?(Hash)
+      records = messages['records'] || messages['data'] || messages['rows']
+      return records.first if records.is_a?(Array)
+    elsif messages.is_a?(Array)
+      return messages.first
+    end
+
+    candidates = data['records'] || data['data'] || data['rows']
     candidates.is_a?(Array) ? candidates.first : candidates
   end
 
