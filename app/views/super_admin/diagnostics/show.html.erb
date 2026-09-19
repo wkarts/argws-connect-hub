@@ -6,10 +6,30 @@
 <section class="main-content__body hub-ops">
   <div class="hub-alert">Eventos instrumentados do HUB, com dados sensíveis omitidos. A coleta é assíncrona e de melhor esforço: falha, saturação ou indisponibilidade do armazenamento de diagnóstico não bloqueia mensagens, webhooks ou jobs. Para reunir Rails e Sidekiq, ambos precisam montar o mesmo volume em <code>HUB_DIAGNOSTICS_DIR</code>. Não inclui logs internos da Connect|API nem dos daemons Docker/PostgreSQL.</div>
   <% if ENV['HUB_DIAGNOSTICS_ENABLED'] == 'false' %><div class="hub-alert hub-alert-danger">A gravação de novos eventos está desativada pela configuração.</div><% end %>
+  <div class="hub-card">
+    <h2>Captura temporária</h2>
+    <p>Modo atual: <strong><%= @capture_mode %></strong>. No modo <code>session</code>, fora de uma captura o HUB mantém apenas eventos críticos; a coleta detalhada nunca participa do processamento de mensagens.</p>
+    <% if @capture_session.present? %>
+      <div class="hub-alert"><strong>Captura ativa</strong><br>ID: <code><%= @capture_session['id'] %></code><br>Início: <%= Time.iso8601(@capture_session['started_at']).in_time_zone('America/Bahia').strftime('%d/%m/%Y %H:%M:%S') %><br>Expira: <%= Time.iso8601(@capture_session['expires_at']).in_time_zone('America/Bahia').strftime('%d/%m/%Y %H:%M:%S') %><% if @capture_session['inbox_id'] %><br>Caixa: #<%= @capture_session['inbox_id'] %><% end %></div>
+      <div class="hub-ops-toolbar">
+        <%= link_to 'Baixar esta captura', download_super_admin_diagnostics_path(capture_session_id: @capture_session['id'], since: @capture_session['started_at']), class: 'button hub-primary' %>
+        <form action="<%= stop_capture_super_admin_diagnostics_path %>" method="post"><%= hidden_field_tag :authenticity_token, form_authenticity_token %><button type="submit" data-hub-confirm="Encerrar a captura detalhada agora? Os eventos já gravados permanecerão disponíveis até a rotação.">Encerrar captura</button></form>
+      </div>
+    <% else %>
+      <form action="<%= start_capture_super_admin_diagnostics_path %>" method="post">
+        <%= hidden_field_tag :authenticity_token, form_authenticity_token %>
+        <div class="hub-form-grid">
+          <div><label for="capture_duration">Duração</label><select id="capture_duration" name="duration_minutes"><% HubDiagnostics::CaptureSession::MINUTES.each do |minutes| %><option value="<%= minutes %>" <%= 'selected' if minutes == 30 %>><%= minutes %> minutos</option><% end %></select></div>
+          <div><label for="capture_channel">Caixa Connect|API (opcional, apenas referência)</label><select id="capture_channel" name="channel_id"><option value="">Todas</option><% @channels.each do |channel| %><option value="<%= channel.id %>">#<%= channel.inbox&.id %> · <%= channel.inbox&.name %> · <%= channel.provider_config.to_h['instance_name'] %></option><% end %></select></div>
+        </div>
+        <button type="submit" class="hub-primary">Iniciar captura</button>
+      </form>
+    <% end %>
+  </div>
   <div class="hub-metrics"><div class="hub-metric"><strong><%= (@health[:bytes] / 1_048_576.0).round(2) %> MB</strong><span>Armazenamento atual</span></div><div class="hub-metric"><strong><%= @health[:max_bytes] / 1_048_576 %> MB</strong><span>Limite por volume</span></div><div class="hub-metric"><strong><%= @health[:retention_seconds] / 3600 %> h</strong><span>Janela consultável máxima</span></div><div class="hub-metric"><strong><%= @health[:writable] ? 'Gravação disponível' : 'Sem gravação' %></strong><span>Diretório visto pelo processo web</span></div><div class="hub-metric"><strong><%= @health.dig(:queue, :writer_alive) ? 'Writer ativo' : 'Writer inativo' %></strong><span>Fila: <%= @health.dig(:queue, :queued) %>/<%= @health.dig(:queue, :capacity) %> · descartados: <%= @health.dig(:queue, :dropped) %></span></div></div>
   <form action="<%= super_admin_diagnostics_path %>" method="get" class="hub-card">
     <h2>Filtrar eventos</h2><div class="hub-form-grid">
-    <% { 'since' => 'De (ISO 8601 ou horário da Bahia)', 'until' => 'Até (limite exclusivo)', 'account_id' => 'Conta', 'inbox_id' => 'Caixa de entrada', 'channel_id' => 'Canal', 'conversation_id' => 'Conversa', 'message_id' => 'Mensagem HUB', 'source_id' => 'ID da mensagem na API', 'trace_id' => 'ID de rastreamento', 'operation_id' => 'Operação', 'level' => 'Nível (info/warn/error)', 'event' => 'Evento exato' }.each do |name, label| %>
+    <% { 'since' => 'De (ISO 8601 ou horário da Bahia)', 'until' => 'Até (limite exclusivo)', 'account_id' => 'Conta', 'inbox_id' => 'Caixa de entrada', 'channel_id' => 'Canal', 'conversation_id' => 'Conversa', 'message_id' => 'Mensagem HUB', 'source_id' => 'ID da mensagem na API', 'trace_id' => 'ID de rastreamento', 'operation_id' => 'Operação', 'capture_session_id' => 'Sessão de captura', 'level' => 'Nível (info/warn/error)', 'event' => 'Evento exato' }.each do |name, label| %>
       <div><label for="filter_<%= name %>"><%= label %></label><input id="filter_<%= name %>" name="<%= name %>" value="<%= @filters[name] %>" maxlength="160" /></div>
     <% end %></div><button type="submit" class="hub-primary">Aplicar filtros</button>
   </form>
