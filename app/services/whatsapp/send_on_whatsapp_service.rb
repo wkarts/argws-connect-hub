@@ -15,9 +15,16 @@ class Whatsapp::SendOnWhatsappService < Base::SendOnChannelService
       end
       operation = message.conversation.inbox.channel.provider_config.to_h['hub_binding_operation'].to_h
       raise HubDiagnostics::BindingBusy, 'Binding requires verification' if %w[binding needs_review].include?(operation['state'])
-      HubDiagnostics::Recorder.emit('send.started', HubDiagnostics::Recorder.message_attributes(message))
+      diagnostic = diagnostic_context(current_channel)
+      HubDiagnostics::Recorder.emit(
+        'send.started',
+        HubDiagnostics::Recorder.message_attributes(message).merge(diagnostic)
+      )
       result = super
-      HubDiagnostics::Recorder.emit('send.finished', HubDiagnostics::Recorder.message_attributes(message))
+      HubDiagnostics::Recorder.emit(
+        'send.finished',
+        HubDiagnostics::Recorder.message_attributes(message).merge(diagnostic)
+      )
       result
     end
   rescue StandardError => error
@@ -26,6 +33,17 @@ class Whatsapp::SendOnWhatsappService < Base::SendOnChannelService
   end
 
   private
+
+  def diagnostic_context(current_channel)
+    config = current_channel.provider_config.to_h
+    {
+      direction: 'outbound',
+      content_type: message.content_type,
+      message_type: message.message_type,
+      instance_name: config['instance_name'],
+      provider: config['connect_api_provider']
+    }.compact
+  end
 
   def channel_class
     Channel::Whatsapp
