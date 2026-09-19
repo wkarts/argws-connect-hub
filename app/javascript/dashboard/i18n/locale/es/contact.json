@@ -50,7 +50,8 @@
       "CONTACT_LABELS": "Etiqueta de Contacto",
       "PREVIOUS_CONVERSATIONS": "Conversaciones anteriores",
       "NO_RECORDS_FOUND": "No se encontraron atributos"
-    }
+    },
+    "DATE_OF_BIRTH": "Fecha de nacimiento"
   },
   "EDIT_CONTACT": {
     "BUTTON_LABEL": "Editar Contacto",
@@ -117,7 +118,8 @@
       "SUBMIT": "Enviar",
       "CANCEL": "Cancelar",
       "AVATAR": {
-        "LABEL": "Avatar"
+        "LABEL": "Avatar",
+        "PREVIEW_HELP": "Haz clic en la foto para ampliarla."
       },
       "NAME": {
         "PLACEHOLDER": "Escriba el nombre completo del contacto",
@@ -177,6 +179,10 @@
           "PLACEHOLDER": "Escriba el usuario de Github",
           "LABEL": "Github"
         }
+      },
+      "DATE_OF_BIRTH": {
+        "LABEL": "Fecha de nacimiento",
+        "PLACEHOLDER": "Ingrese la fecha de nacimiento"
       }
     },
     "DELETE_AVATAR": {
@@ -233,8 +239,8 @@
     "FILTER_CONTACTS_DELETE": "Eliminar filtro",
     "FILTER_CONTACTS_EDIT": "Editar segmento",
     "LIST": {
-      "LOADING_MESSAGE": "Cargando contactos...",
       "404": "No hay contactos que coincidan con tu búsqueda 🔍",
+      "LOADING_MESSAGE": "Cargando contactos...",
       "NO_CONTACTS": "No hay contactos disponibles",
       "TABLE_HEADER": {
         "NAME": "Nombre",
