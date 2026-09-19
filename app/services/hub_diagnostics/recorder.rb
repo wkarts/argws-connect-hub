@@ -157,13 +157,14 @@ module HubDiagnostics
       end
 
       def record_for_persistence(record)
-        mode = capture_mode
-        return record if mode == 'all'
-        return critical_event?(record) ? record : nil if mode == 'errors'
-
         session = HubDiagnostics::CaptureSession.current
-        return record.merge(capture_session_id: session['id']) if session
-        return record if critical_event?(record)
+        tagged_record = session ? record.merge(capture_session_id: session['id']) : record
+        mode = capture_mode
+
+        return tagged_record if mode == 'all'
+        return critical_event?(record) ? tagged_record : nil if mode == 'errors'
+        return tagged_record if session
+        return tagged_record if critical_event?(record)
 
         nil
       end
