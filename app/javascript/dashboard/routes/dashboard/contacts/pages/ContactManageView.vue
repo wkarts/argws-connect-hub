@@ -4,7 +4,7 @@ import ContactInfoPanel from '../components/ContactInfoPanel.vue';
 import ContactNotes from 'dashboard/modules/notes/NotesOnContactPage.vue';
 import SettingsHeader from '../../settings/SettingsHeader.vue';
 import Spinner from 'shared/components/Spinner.vue';
-import Thumbnail from 'dashboard/components/widgets/Thumbnail.vue';
+import ContactAvatarPreview from 'dashboard/modules/contact/components/ContactAvatarPreview.vue';
 
 export default {
   components: {
@@ -12,7 +12,7 @@ export default {
     ContactNotes,
     SettingsHeader,
     Spinner,
-    Thumbnail,
+    ContactAvatarPreview,
   },
   props: {
     contactId: {
@@ -75,7 +75,7 @@ export default {
       :back-url="backUrl"
       :show-new-button="false"
     >
-      <Thumbnail
+      <ContactAvatarPreview
         v-if="contact.thumbnail"
         :src="contact.thumbnail"
         :username="contact.name"
