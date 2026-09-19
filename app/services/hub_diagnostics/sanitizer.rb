@@ -8,7 +8,10 @@ module HubDiagnostics
                    duration_ms http_status status previous_status reason exception_class backtrace
                    instance_name operation_id binding_id actor_id count details from_me offset page
                    records_examined records_processed has_more truncated version environment result
-                   provider_timestamp parent_event_id enabled].freeze
+                   provider_timestamp parent_event_id enabled controller action method direction
+                   content_type message_type provider integration endpoint payload_kind entries_count
+                   changes_count messages_count statuses_count source_id_present success bytes
+                   records_found records_created records_updated records_skipped event_count].freeze
     SECRET = /password|passwd|secret|token|api.?key|authorization|cookie|credential|signature|hub_binding_ref/i
     def self.call(value, depth = 0)
       return '[DEPTH_LIMIT]' if depth > 6

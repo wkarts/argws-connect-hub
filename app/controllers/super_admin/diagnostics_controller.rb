@@ -30,6 +30,7 @@ class SuperAdmin::DiagnosticsController < SuperAdmin::ApplicationController
     export_bytes = 0
     truncated = false
     digest = Digest::SHA256.new
+    analysis = HubDiagnostics::ExportSummary.new
     gzip = Zlib::GzipWriter.new(file)
     gzip.write(JSON.generate({ kind: 'manifest', schema: 'hub-diagnostics/1', generated_at: Time.now.utc.iso8601,
                                timezone: 'UTC', display_timezone: 'America/Bahia', filters: filters,
@@ -53,12 +54,21 @@ class SuperAdmin::DiagnosticsController < SuperAdmin::ApplicationController
       end
       export_bytes += line.bytesize
       digest.update(line)
+      analysis.observe(event)
       gzip.write(line)
       count += 1
     end
-    gzip.write(JSON.generate({ kind: 'summary', records: count, truncated: truncated,
-                               sha256_event_lines: digest.hexdigest }) + "
-")
+    gzip.write(
+      JSON.generate(
+        {
+          kind: 'summary',
+          records: count,
+          truncated: truncated,
+          sha256_event_lines: digest.hexdigest
+        }.merge(analysis.to_h)
+      ) + "
+"
+    )
     gzip.finish
     file.flush
     payload = File.binread(file.path)

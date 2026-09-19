@@ -11,8 +11,29 @@ class Webhooks::WhatsappController < ActionController::API
       return head :accepted
     end
 
-    channel = HubDiagnostics::WebhookRouter.channel_for_route(params)
-    return head(HubDiagnostics::WebhookRouter.enqueue(channel, params)) if channel && ENV['HUB_CONNECT_RELIABILITY_ENABLED'] == 'true'
+    if ENV['HUB_CONNECT_RELIABILITY_ENABLED'] == 'true'
+      channel = HubDiagnostics::WebhookRouter.channel_for_route(params)
+      summary = HubDiagnostics::WebhookRouter.payload_summary(params)
+
+      if channel
+        HubDiagnostics::Recorder.emit(
+          'webhook.received',
+          summary.merge(
+            component: 'connectapi_ingestion',
+            account_id: channel.account_id,
+            inbox_id: channel.inbox&.id,
+            channel_id: channel.id,
+            instance_name: channel.provider_config.to_h['instance_name']
+          )
+        )
+        return head(HubDiagnostics::WebhookRouter.enqueue(channel, params))
+      end
+
+      HubDiagnostics::Recorder.emit(
+        'webhook.unrouted',
+        summary.merge(level: 'warn', component: 'connectapi_ingestion', reason: 'channel_not_found')
+      )
+    end
 
     Webhooks::WhatsappEventsJob.perform_later(params.to_unsafe_hash)
     head :ok

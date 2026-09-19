@@ -42,9 +42,20 @@ class Whatsapp::IncomingMessageConnectApiReliableService < Whatsapp::IncomingMes
       end
       super
       if @message&.persisted?
-        HubDiagnostics::Recorder.emit('message.persisted', HubDiagnostics::Recorder.message_attributes(@message).merge(
-          channel_id: inbox.channel.id, from_me: outgoing_message_type?, component: 'connectapi_ingestion'
-        ))
+        config = inbox.channel.provider_config.to_h
+        HubDiagnostics::Recorder.emit(
+          'message.persisted',
+          HubDiagnostics::Recorder.message_attributes(@message).merge(
+            channel_id: inbox.channel.id,
+            from_me: outgoing_message_type?,
+            direction: outgoing_message_type? ? 'outbound_external' : 'inbound',
+            content_type: @message.content_type,
+            message_type: @message.message_type,
+            instance_name: config['instance_name'],
+            provider: config['connect_api_provider'],
+            component: 'connectapi_ingestion'
+          )
+        )
       else
         audit('message.skipped', source_id: source_id, reason: 'message_not_persisted', level: 'warn')
       end

@@ -34,15 +34,43 @@ class Channels::Whatsapp::ConnectApiMediaSyncJob < ApplicationJob
     return if manual_instance_deletion?
     return if instance_name.blank?
 
-    recent_native_messages.sort_by { |record| timestamp_for(record) }.each do |record|
-      sync_record(record)
-    rescue StandardError => e
-      Rails.logger.warn(
-        "[HUB Connect|API] media sync record failed channel=#{@channel.id} " \
-        "message=#{message_id(record)}: #{e.class}: #{e.message}"
-      )
+    context = diagnostic_context
+    records = recent_native_messages.sort_by { |record| timestamp_for(record) }
+    processed = 0
+    skipped = 0
+    HubDiagnostics::Recorder.emit(
+      'sync.background_started',
+      context.merge(records_found: records.length)
+    )
+
+    records.each do |record|
+      begin
+        sync_record(record)
+        processed += 1
+      rescue StandardError => e
+        skipped += 1
+        Rails.logger.warn(
+          "[HUB Connect|API] media sync record failed channel=#{@channel.id} " \
+          "message=#{message_id(record)}: #{e.class}: #{e.message}"
+        )
+        HubDiagnostics::Recorder.error(
+          'sync.record_failed',
+          e,
+          context.merge(source_id: message_id(record))
+        )
+      end
     end
+
+    HubDiagnostics::Recorder.emit(
+      'sync.background_finished',
+      context.merge(records_found: records.length, records_processed: processed, records_skipped: skipped)
+    )
   rescue ConnectApi::Error => e
+    HubDiagnostics::Recorder.error(
+      'sync.background_failed',
+      e,
+      { component: 'connectapi_sync', channel_id: channel_id }
+    )
     Rails.logger.warn("[HUB Connect|API] media sync failed channel=#{channel_id}: #{e.message}")
     raise if e.status.to_i >= 500 || e.status.to_i == 0
   end
@@ -265,6 +293,18 @@ class Channels::Whatsapp::ConnectApiMediaSyncJob < ApplicationJob
   def extension_for(mimetype)
     normalized = mimetype.to_s.downcase
     EXTENSIONS[normalized] || EXTENSIONS[normalized.split(';', 2).first] || '.bin'
+  end
+
+  def diagnostic_context
+    config = @channel.provider_config.to_h
+    {
+      component: 'connectapi_sync',
+      account_id: @channel.account_id,
+      inbox_id: @channel.inbox&.id,
+      channel_id: @channel.id,
+      instance_name: config['instance_name'],
+      provider: config['connect_api_provider']
+    }.compact
   end
 
   def manual_instance_deletion?
