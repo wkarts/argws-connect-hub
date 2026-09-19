@@ -76,7 +76,10 @@ module HubDiagnostics
         return unless File.file?(path)
         return if File.symlink?(path)
 
-        data = JSON.parse(File.read(path, mode: 'r:UTF-8'))
+        data = File.open(path, File::RDONLY | File::NOFOLLOW) do |io|
+          io.set_encoding(Encoding::UTF_8)
+          JSON.parse(io.read)
+        end
         expires_at = Time.iso8601(data.fetch('expires_at'))
         return if expires_at <= Time.now.utc
 
@@ -99,6 +102,8 @@ module HubDiagnostics
 
       def locked
         FileUtils.mkdir_p(directory, mode: 0o700)
+        raise IOError, 'Diagnostics directory cannot be a symlink' if File.symlink?(directory)
+
         File.open(lock_path, File::RDWR | File::CREAT | File::NOFOLLOW, 0o600) do |lock|
           lock.flock(File::LOCK_EX)
           yield
