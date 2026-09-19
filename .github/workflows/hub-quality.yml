@@ -124,6 +124,7 @@ jobs:
           spec/controllers/api/v1/accounts/connect_api_templates_controller_spec.rb
           spec/controllers/super_admin/diagnostics_controller_spec.rb
           spec/services/hub_diagnostics/export_summary_spec.rb
+          spec/services/hub_diagnostics/capture_session_spec.rb
           spec/services/hub_diagnostics/recorder_spec.rb
           spec/services/hub_diagnostics/webhook_router_spec.rb
           spec/services/whatsapp/connect_api_realtime_webhook_service_spec.rb
