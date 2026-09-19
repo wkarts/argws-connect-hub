@@ -9,7 +9,8 @@ class SuperAdmin::DiagnosticsController < SuperAdmin::ApplicationController
   EXPORT_LIMIT = 50_000
   def show
     @filters = validated_filters
-    @health = HubDiagnostics::Recorder.store.health
+    HubDiagnostics::Recorder.flush!(timeout: 0.5)
+    @health = HubDiagnostics::Recorder.store.health.merge(queue: HubDiagnostics::Recorder.queue_health)
     @events = []
     HubDiagnostics::Recorder.store.matching(@filters).each do |event|
       @events << event
@@ -22,6 +23,7 @@ class SuperAdmin::DiagnosticsController < SuperAdmin::ApplicationController
   end
   def download
     filters = validated_filters
+    HubDiagnostics::Recorder.flush!
     file = Tempfile.new(['hub-diagnostics-', '.jsonl.gz'])
     # Gzip writes arbitrary binary bytes (including 0x8B). Keep the tempfile in
     # binary mode so Ruby never attempts an ASCII-8BIT -> UTF-8 conversion.
@@ -39,6 +41,7 @@ class SuperAdmin::DiagnosticsController < SuperAdmin::ApplicationController
                                build_sha: ENV['APP_REVISION'].to_s.first(64),
                                coverage: 'Instrumented HUB events; not raw Docker/Connect API/server logs',
                                retention: HubDiagnostics::Recorder.store.health,
+                               queue: HubDiagnostics::Recorder.queue_health,
                                redacted: true, max_records: EXPORT_LIMIT }) + "
 ")
     HubDiagnostics::Recorder.store.matching(filters).each do |event|
