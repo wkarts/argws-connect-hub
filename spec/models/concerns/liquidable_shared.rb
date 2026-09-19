@@ -24,6 +24,24 @@ shared_examples_for 'liqudable' do
         expect(message.content).to eq 'hey John how are you?'
       end
 
+      it 'processes liquid variables in WhatsApp template parameters together with the message content' do
+        message.content = 'hey {{contact.name}} how are you?'
+        message.additional_attributes = {
+          'template_params' => {
+            'name' => 'hello',
+            'language' => 'pt_BR',
+            'processed_params' => {
+              '1' => '{{contact.name}}'
+            }
+          }
+        }
+
+        message.save!
+
+        expect(message.content).to eq 'hey John how are you?'
+        expect(message.additional_attributes.dig('template_params', 'processed_params', '1')).to eq 'John'
+      end
+
       it 'set replaces liquid custom attributes in message' do
         message.content = 'Are you a {{contact.custom_attribute.customer_type}} customer,
         If yes then the priority is {{conversation.custom_attribute.priority}}'

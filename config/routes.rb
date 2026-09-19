@@ -510,6 +510,8 @@ Rails.application.routes.draw do
 
       resource :diagnostics, only: [:show], controller: 'diagnostics' do
         get :download
+        post :start_capture
+        post :stop_capture
         post :replay_status
       end
       resource :connect_api_binding, only: [:show, :create], controller: 'connect_api_bindings' do

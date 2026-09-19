@@ -12,10 +12,15 @@ import { ref, computed, onMounted } from 'vue';
 import { useVuelidate } from '@vuelidate/core';
 import { requiredIf } from '@vuelidate/validators';
 import { isLocalTemplate, localTemplateText } from './localTemplate';
+import { replaceVariablesInMessage } from '@hub/utils';
 
 export default {
   props: {
     template: {
+      type: Object,
+      default: () => ({}),
+    },
+    variables: {
       type: Object,
       default: () => ({}),
     },
@@ -49,6 +54,16 @@ export default {
         return processedParams.value[variableKey] || `{{${variable}}}`;
       });
     });
+
+    // Preview HUB variables (for example {{contact.name}}) without changing the
+    // positional parameter payload. The backend remains the authority and
+    // resolves the same Liquid variables atomically with message.content.
+    const previewString = computed(() =>
+      replaceVariablesInMessage({
+        message: processedString.value,
+        variables: props.variables,
+      })
+    );
 
     const v$ = useVuelidate(
       {
@@ -100,6 +115,7 @@ export default {
       variables,
       templateString,
       processedString,
+      previewString,
       v$,
       resetTemplate,
       sendMessage,
@@ -111,7 +127,7 @@ export default {
 <template>
   <div class="w-full">
     <textarea
-      v-model="processedString"
+      :value="previewString"
       rows="4"
       readonly
       class="template-input"

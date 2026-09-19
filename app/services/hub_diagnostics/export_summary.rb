@@ -10,6 +10,7 @@ module HubDiagnostics
       message.persisted message.duplicate message.skipped
       status.received status.applied status.deferred status.orphaned status.ignored status.unknown
       media.downloaded media.unavailable
+      template.send_started template.http_response template.send_finished template.validation_failed template.send_failed
       reconciliation.requested reconciliation.message_imported reconciliation.status_updated
       reconciliation.skipped reconciliation.record_failed reconciliation.completed reconciliation.failed
     ].freeze
@@ -22,6 +23,10 @@ module HubDiagnostics
       @level_counts = Hash.new(0)
       @http_status_counts = Hash.new(0)
       @job_class_counts = Hash.new(0)
+      @hub_version_counts = Hash.new(0)
+      @build_counts = Hash.new(0)
+      @boot_counts = Hash.new(0)
+      @process_role_counts = Hash.new(0)
       @flow_counts = Hash.new(0)
       @slowest = []
       @outbound_without_status = {}
@@ -40,6 +45,10 @@ module HubDiagnostics
       @level_counts[record['level'].to_s] += 1 if record['level'].present?
       @http_status_counts[record['http_status'].to_s] += 1 unless record['http_status'].nil?
       @job_class_counts[record['job_class'].to_s] += 1 if record['job_class'].present?
+      @hub_version_counts[record['hub_version'].to_s] += 1 if record['hub_version'].present?
+      @build_counts[record['build_sha'].to_s] += 1 if record['build_sha'].present?
+      @boot_counts[record['boot_id'].to_s] += 1 if record['boot_id'].present?
+      @process_role_counts[record['process_role'].to_s] += 1 if record['process_role'].present?
       @flow_counts[event] += 1 if FLOW_EVENTS.include?(event)
 
       track_delivery(record)
@@ -55,6 +64,10 @@ module HubDiagnostics
         level_counts: sorted(@level_counts),
         http_status_counts: sorted(@http_status_counts),
         job_class_counts: sorted(@job_class_counts),
+        hub_version_counts: sorted(@hub_version_counts),
+        build_counts: sorted(@build_counts),
+        boot_counts: sorted(@boot_counts),
+        process_role_counts: sorted(@process_role_counts),
         message_flow: FLOW_EVENTS.to_h { |event| [event, @flow_counts[event]] },
         outbound_without_status_callback: @outbound_without_status.values.first(PENDING_LIMIT),
         outbound_without_status_callback_count: @outbound_without_status.length,

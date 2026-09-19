@@ -5,11 +5,14 @@ require 'digest'
 class SuperAdmin::DiagnosticsController < SuperAdmin::ApplicationController
   helper HubAdminUiHelper
   before_action :private_response!
-  FILTERS = %w[since until account_id inbox_id channel_id conversation_id message_id source_id trace_id level event operation_id].freeze
+  FILTERS = %w[since until account_id inbox_id channel_id conversation_id message_id source_id trace_id level event operation_id capture_session_id].freeze
   EXPORT_LIMIT = 50_000
   def show
     @filters = validated_filters
-    @health = HubDiagnostics::Recorder.store.health
+    HubDiagnostics::Recorder.flush!(timeout: 0.5)
+    @health = HubDiagnostics::Recorder.store.health.merge(queue: HubDiagnostics::Recorder.queue_health)
+    @capture_session = HubDiagnostics::CaptureSession.current
+    @capture_mode = ENV.fetch('HUB_DIAGNOSTICS_CAPTURE_MODE', 'session').to_s
     @events = []
     HubDiagnostics::Recorder.store.matching(@filters).each do |event|
       @events << event
@@ -22,6 +25,7 @@ class SuperAdmin::DiagnosticsController < SuperAdmin::ApplicationController
   end
   def download
     filters = validated_filters
+    HubDiagnostics::Recorder.flush!
     file = Tempfile.new(['hub-diagnostics-', '.jsonl.gz'])
     # Gzip writes arbitrary binary bytes (including 0x8B). Keep the tempfile in
     # binary mode so Ruby never attempts an ASCII-8BIT -> UTF-8 conversion.
@@ -39,6 +43,7 @@ class SuperAdmin::DiagnosticsController < SuperAdmin::ApplicationController
                                build_sha: ENV['APP_REVISION'].to_s.first(64),
                                coverage: 'Instrumented HUB events; not raw Docker/Connect API/server logs',
                                retention: HubDiagnostics::Recorder.store.health,
+                               queue: HubDiagnostics::Recorder.queue_health,
                                redacted: true, max_records: EXPORT_LIMIT }) + "
 ")
     HubDiagnostics::Recorder.store.matching(filters).each do |event|
@@ -80,6 +85,43 @@ class SuperAdmin::DiagnosticsController < SuperAdmin::ApplicationController
   ensure
     file&.close!
   end
+  def start_capture
+    channel = params[:channel_id].present? ? Channel::Whatsapp.find_by(id: params[:channel_id], provider: 'connectapi') : nil
+    session = HubDiagnostics::CaptureSession.start!(
+      actor_id: current_super_admin.id,
+      duration_minutes: params[:duration_minutes],
+      channel: channel
+    )
+    HubDiagnostics::Recorder.emit(
+      'diagnostics.capture_started',
+      actor_id: current_super_admin.id,
+      capture_session_id: session['id'],
+      channel_id: session['channel_id'],
+      inbox_id: session['inbox_id'],
+      instance_name: session['instance_name']
+    )
+    redirect_to super_admin_diagnostics_path(
+      capture_session_id: session['id'],
+      since: session['started_at']
+    ), notice: 'Captura de diagnóstico iniciada. A aplicação continua operando independentemente da coleta.'
+  rescue ArgumentError
+    redirect_to super_admin_diagnostics_path, alert: 'Duração de captura inválida.'
+  end
+
+  def stop_capture
+    session = HubDiagnostics::CaptureSession.current
+    if session
+      HubDiagnostics::Recorder.emit(
+        'diagnostics.capture_stopped',
+        actor_id: current_super_admin.id,
+        capture_session_id: session['id']
+      )
+      HubDiagnostics::Recorder.flush!
+    end
+    HubDiagnostics::CaptureSession.stop!
+    redirect_to super_admin_diagnostics_path, notice: 'Captura de diagnóstico encerrada.'
+  end
+
   def replay_status
     event = HubDiagnostics::Recorder.store.find(params[:event_id])
     unless event && %w[status.received status.deferred status.orphaned].include?(event['event'])
