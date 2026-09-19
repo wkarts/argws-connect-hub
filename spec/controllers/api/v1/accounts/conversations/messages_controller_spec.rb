@@ -269,6 +269,81 @@ RSpec.describe 'Conversation Messages API', type: :request do
       end
     end
   
+    context 'when deleting a sent Connect API message' do
+      let(:agent) { create(:user, account: account, role: :agent) }
+      let!(:whatsapp_channel) do
+        create(
+          :channel_whatsapp,
+          account: account,
+          provider: 'connectapi',
+          sync_templates: false,
+          validate_provider_config: false,
+          provider_config: {
+            'instance_name' => 'revoke-controller',
+            'api_key' => 'instance-token'
+          }
+        )
+      end
+      let(:conversation) { create(:conversation, inbox: whatsapp_channel.inbox, account: account) }
+      let(:message) do
+        create(
+          :message,
+          account: account,
+          inbox: whatsapp_channel.inbox,
+          conversation: conversation,
+          message_type: :outgoing,
+          source_id: 'REMOTE-DELETE-1',
+          content: 'Mensagem para apagar'
+        )
+      end
+      let(:revoke_service) do
+        instance_double(Whatsapp::ConnectApiMessageRevokeService, perform!: true)
+      end
+
+      before do
+        create(:inbox_member, inbox: whatsapp_channel.inbox, user: agent)
+        whatsapp_channel.inbox.update!(allow_agent_to_delete_message: true)
+        allow(Whatsapp::ConnectApiMessageRevokeService)
+          .to receive(:new)
+          .with(message: message)
+          .and_return(revoke_service)
+      end
+
+      it 'revokes remotely before marking the HUB message as deleted' do
+        delete "/api/v1/accounts/#{account.id}/conversations/#{conversation.display_id}/messages/#{message.id}",
+               headers: agent.create_new_auth_token,
+               as: :json
+
+        expect(response).to have_http_status(:ok)
+        expect(revoke_service).to have_received(:perform!).once
+
+        message.reload
+        expect(message.deleted).to be(true)
+        expect(message.content).to eq('⛔This message was deleted')
+        expect(message.content_attributes['deleted_for_everyone']).to be(true)
+        expect(message.content_attributes['deleted_at']).to be_present
+      end
+
+      it 'keeps the local message untouched when remote revoke fails' do
+        allow(revoke_service).to receive(:perform!)
+          .and_raise(
+            Whatsapp::ConnectApiMessageRevokeService::Error,
+            'O WhatsApp recusou a exclusão para todos. A mensagem foi mantida no HUB.'
+          )
+
+        delete "/api/v1/accounts/#{account.id}/conversations/#{conversation.display_id}/messages/#{message.id}",
+               headers: agent.create_new_auth_token,
+               as: :json
+
+        expect(response).to have_http_status(:unprocessable_entity)
+        expect(response.parsed_body['error']).to include('mantida no HUB')
+
+        message.reload
+        expect(message.deleted).not_to be(true)
+        expect(message.content).to eq('Mensagem para apagar')
+      end
+    end
+
     context 'when the message id is invalid' do
       let(:agent) { create(:user, account: account, role: :agent) }
 
