@@ -175,7 +175,7 @@ module HubDiagnostics
 
       def capture_mode
         mode = ENV.fetch('HUB_DIAGNOSTICS_CAPTURE_MODE', 'session').to_s.strip.downcase
-        %w[all session errors].include?(mode) ? mode : 'all'
+        %w[all session errors].include?(mode) ? mode : 'session'
       end
 
       def queue_size
