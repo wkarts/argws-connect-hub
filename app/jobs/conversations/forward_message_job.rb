@@ -7,6 +7,7 @@ class Conversations::ForwardMessageJob < ApplicationJob
     @account = Account.find(payload[:account_id])
     @message = Message.find_by!(id: payload[:message_id], account_id: @account.id)
     @contacts = Array(payload[:contacts]).map(&:to_i).uniq
+    @operation_id = payload[:operation_id].to_s.presence || SecureRandom.uuid
 
     return [] if @contacts.empty?
 
@@ -34,7 +35,8 @@ class Conversations::ForwardMessageJob < ApplicationJob
       contact_id: contact.id,
       conversation_id: conversation.display_id,
       conversation_db_id: conversation.id,
-      message_id: forwarded_message.id
+      message_id: forwarded_message.id,
+      operation_id: @operation_id
     }
   end
 
@@ -43,10 +45,12 @@ class Conversations::ForwardMessageJob < ApplicationJob
       account_id: @account.id,
       inbox_id: @message.inbox_id,
       content: @message.content,
+      content_type: @message.content_type,
       message_type: :outgoing,
       sender: @user,
       additional_attributes: {
         'forwarded' => true,
+        'forward_operation_id' => @operation_id,
         'forwarded_from_message_id' => @message.id,
         'forwarded_to_contact_id' => contact.id,
         'forwarded_by_user_id' => @user.id
@@ -89,6 +93,7 @@ class Conversations::ForwardMessageJob < ApplicationJob
 
   def existing_forwarded_message(contact)
     marker = {
+      forward_operation_id: @operation_id,
       forwarded_from_message_id: @message.id,
       forwarded_to_contact_id: contact.id,
       forwarded_by_user_id: @user.id
