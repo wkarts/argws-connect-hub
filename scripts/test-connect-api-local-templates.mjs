@@ -4,6 +4,8 @@ import test from 'node:test';
 const dir = 'app/javascript/dashboard/components/widgets/conversation/WhatsappTemplates/';
 const source = fs.readFileSync(`${dir}localTemplate.js`, 'utf8');
 const { isLocalTemplate, localTemplateAvailable, localTemplateText } = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
+const hubUtilsSource = fs.readFileSync('packages/hub-utils/src/index.js', 'utf8');
+const { resolveTemplateVariables } = await import(`data:text/javascript;base64,${Buffer.from(hubUtilsSource).toString('base64')}`);
 const local = { source: 'connectapi_local', execution: 'rendered_text', approved: true, enabled: true, available: true, status: 'APPROVED', category: 'OPENING', version: 1,
   components: [{ type: 'BODY', text: 'Olá {{1}}' }, { type: 'FOOTER', text: 'Equipe' }, { type: 'HEADER', text: 'Suporte' }] };
 test('Connect API catalog requires approved status, availability and revision', () => {
@@ -29,4 +31,45 @@ test('reconcile notification describes empty catalog instead of claiming templat
   const config = fs.readFileSync('app/javascript/dashboard/routes/dashboard/settings/inbox/settingsPage/ConnectApiConfiguration.vue', 'utf8');
   assert.match(config, /Nenhum template foi retornado/);
   assert.doesNotMatch(config, /Caixa e templates reconciliados com/);
+});
+
+test('HUB variables resolve atomically in template preview payload and positional parameters', () => {
+  const resolved = resolveTemplateVariables({
+    message: 'Olá! {{contact.name}}',
+    templateParams: {
+      name: 'hello',
+      language: 'pt_BR',
+      processed_params: { '1': '{{contact.name}}', '2': 'ID {{conversation.id}}' },
+    },
+    variables: {
+      'contact.name': 'Maria da Silva',
+      'conversation.id': 42,
+    },
+  });
+  assert.equal(resolved.message, 'Olá! Maria da Silva');
+  assert.deepEqual(resolved.templateParams.processed_params, {
+    '1': 'Maria da Silva',
+    '2': 'ID 42',
+  });
+  assert.deepEqual(resolved.unresolvedVariables, []);
+});
+
+test('HUB template variables fail closed in UI when a required value is unavailable', () => {
+  const resolved = resolveTemplateVariables({
+    message: 'Olá! {{contact.email}}',
+    templateParams: {
+      processed_params: { '1': '{{contact.email}}' },
+    },
+    variables: { 'contact.email': '' },
+  });
+  assert.equal(resolved.message, 'Olá! {{contact.email}}');
+  assert.equal(resolved.templateParams.processed_params['1'], '{{contact.email}}');
+  assert.deepEqual(resolved.unresolvedVariables, ['contact.email']);
+
+  const replyBox = fs.readFileSync('app/javascript/dashboard/components/widgets/conversation/ReplyBox.vue', 'utf8');
+  const conversationForm = fs.readFileSync('app/javascript/dashboard/routes/dashboard/conversation/contact/ConversationForm.vue', 'utf8');
+  assert.match(replyBox, /resolveTemplateVariables\(/);
+  assert.match(conversationForm, /resolveTemplateVariables\(/);
+  assert.match(replyBox, /unresolvedVariables\.length/);
+  assert.match(conversationForm, /unresolvedVariables\.length/);
 });
