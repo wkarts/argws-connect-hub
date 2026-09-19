@@ -1,64 +1,107 @@
 <template>
-  <hub-modal
-      modal-type="right-aligned"
-      show
-      :on-close="onClose"
-  >
-      <div class="forward">
-          <div class="forward__title">
-              <h1 class="forward__title-primary">Compartilhar mensagem</h1>
-              <p>Compartilhe a mensagem com seus contatos do Converx</p>
-          </div>
-          <div class="forward__contacts">
-              <div class="forward__contacts-search">
-                  <label for="Procurar um contato">Procurar um contato</label>
-                  <div>
-                      <input
-                          type="search"
-                          name="contact"
-                          id="contact"
-                          v-model="searchQuery"
-                          @keyup.enter="onSearchSubmit"
-                          @input="onInputSearch"
-                          @search="resetSearch"
-                      >
-                  </div>
-              </div>
-              <form class="form-contact" action="#" method="post" @submit.prevent="onSubmit">
-                  <div class="forward__contacts-list">
-                      <div class="contact contact-columns">
-                          <div class="contact-id">&nbsp;</div>
-                          <div class="contact-name">Contato</div>
-                          <div class="contact-phone">Telefone</div>
-                          <div class="contact-date">Última Atividade</div>
-                      </div>
-                      <div class="contacts">
-                        <div class="contact" v-for="contact in contacts" :key="contact.id">
-                              <div class="contact-id">
-                                  <label><input type="checkbox" name="contactIds[]" :value="contact.id"></label>
-                              </div>
-                              <div class="contact-name">
-                                  <div class="contact-thumbnail">
-                                      <img v-if="contact.thumbnail" :src="contact.thumbnail" :alt="contact.name">
-                                  </div>
-                                  <div>{{contact.name}}</div>
-                              </div>
-                              <div class="contact-phone">{{contact.phone_number}}</div>
-                              <div class="contact-date">
-                                  <time-ago
-                                      :last-activity-timestamp="contact.last_activity_at"
-                                      :created-at-timestamp="contact.created_at"
-                                  />
-                              </div>
-                          </div>
-                      </div>
-                  </div>
-                  <div class="forward__contacts-footer">
-                      <hub-button :disabled="showEmptySearchResult">Encaminhar</hub-button>
-                  </div>
-              </form>
-          </div>
+  <hub-modal modal-type="right-aligned" show :on-close="onClose">
+    <section class="forward-panel" aria-label="Encaminhar mensagem">
+      <header class="forward-panel__header">
+        <div>
+          <h1>Encaminhar mensagem</h1>
+          <p>
+            Selecione um ou mais contatos. Ao escolher somente um destino, o HUB
+            abrirá a conversa encaminhada assim que a mensagem for criada.
+          </p>
+        </div>
+        <span v-if="selectedCount" class="forward-panel__counter">
+          {{ selectedCount }} selecionado<span v-if="selectedCount > 1">s</span>
+        </span>
+      </header>
+
+      <div class="forward-panel__search">
+        <fluent-icon icon="search" size="18" />
+        <input
+          v-model="searchQuery"
+          type="search"
+          name="contact"
+          autocomplete="off"
+          placeholder="Buscar por nome ou telefone"
+          aria-label="Buscar contato"
+          @input="scheduleSearch"
+          @keyup.enter="fetchContacts"
+          @search="scheduleSearch"
+        />
       </div>
+
+      <div class="forward-panel__list" role="list">
+        <button
+          v-for="contact in contacts"
+          :key="contact.id"
+          type="button"
+          class="forward-contact"
+          :class="{ 'is-selected': isSelected(contact.id) }"
+          role="listitem"
+          @click="toggleContact(contact.id)"
+        >
+          <span class="forward-contact__check" aria-hidden="true">
+            <fluent-icon
+              v-if="isSelected(contact.id)"
+              icon="checkmark-circle"
+              size="20"
+            />
+            <span v-else class="forward-contact__check-ring" />
+          </span>
+          <Thumbnail
+            :src="contact.thumbnail"
+            :username="contact.name"
+            size="42px"
+          />
+          <span class="forward-contact__identity">
+            <strong>{{ contact.name || 'Contato sem nome' }}</strong>
+            <small>{{ contact.phone_number || contact.email || 'Sem telefone' }}</small>
+          </span>
+          <span class="forward-contact__activity">
+            <time-ago
+              :last-activity-timestamp="contact.last_activity_at"
+              :created-at-timestamp="contact.created_at"
+            />
+          </span>
+        </button>
+
+        <div v-if="!contacts.length && !isLoadingContacts" class="forward-panel__empty">
+          <fluent-icon icon="people" size="28" />
+          <strong>Nenhum contato encontrado</strong>
+          <span>Revise a busca e tente novamente.</span>
+        </div>
+      </div>
+
+      <footer class="forward-panel__footer">
+        <span class="forward-panel__hint">
+          <template v-if="selectedCount === 1">
+            A conversa de destino será aberta após o encaminhamento.
+          </template>
+          <template v-else-if="selectedCount > 1">
+            As mensagens serão encaminhadas em segundo plano.
+          </template>
+          <template v-else>
+            Selecione pelo menos um destinatário.
+          </template>
+        </span>
+        <div class="forward-panel__actions">
+          <hub-button
+            variant="clear"
+            color-scheme="secondary"
+            :disabled="isSubmitting"
+            @click="onClose"
+          >
+            Cancelar
+          </hub-button>
+          <hub-button
+            :disabled="!selectedCount || isSubmitting"
+            :is-loading="isSubmitting"
+            @click="onSubmit"
+          >
+            Encaminhar
+          </hub-button>
+        </div>
+      </footer>
+    </section>
   </hub-modal>
 </template>
 
@@ -66,195 +109,254 @@
 import { mapGetters } from 'vuex';
 import { useAlert } from 'dashboard/composables';
 import TimeAgo from 'dashboard/components/ui/TimeAgo';
+import Thumbnail from 'dashboard/components/widgets/Thumbnail.vue';
+import { conversationUrl, frontendURL } from 'dashboard/helper/URLHelper';
+
 const DEFAULT_PAGE = 1;
+const SEARCH_DELAY = 250;
+
 export default {
   components: {
-      TimeAgo,
+    TimeAgo,
+    Thumbnail,
   },
   props: {
-      message: {
-          type: Object
-      }
+    message: {
+      type: Object,
+      required: true,
+    },
   },
   data() {
-      return {
-          searchQuery: '',
-      }
+    return {
+      searchQuery: '',
+      selectedContactIds: [],
+      isSubmitting: false,
+      searchTimer: null,
+    };
   },
   computed: {
-      ...mapGetters({
-          contacts: 'contacts/getContacts',
-      }),
-      showEmptySearchResult() {
-          return !!this.searchQuery && this.contacts.length === 0;
-      },
+    ...mapGetters({
+      contacts: 'contacts/getContacts',
+      currentAccountId: 'getCurrentAccountId',
+      contactsUIFlags: 'contacts/getUIFlags',
+    }),
+    selectedCount() {
+      return this.selectedContactIds.length;
+    },
+    isLoadingContacts() {
+      return !!this.contactsUIFlags?.isFetching;
+    },
   },
   mounted() {
-      this.fetchContacts(DEFAULT_PAGE);
+    this.fetchContacts();
+  },
+  beforeDestroy() {
+    if (this.searchTimer) clearTimeout(this.searchTimer);
   },
   methods: {
-      onClose() {
-          this.$emit('close');
-      },
-      updatePageParam(page) {
-          window.history.pushState({}, null, `${this.$route.path}?page=${page}`);
-      },
-      fetchContacts(page) {
-          this.updatePageParam(page);
-          let value = this.searchQuery;
-          if (this.searchQuery.charAt(0) === '+') {
-              value = this.searchQuery.substring(1);
-          }
-          const requestParams = {
-              page,
-              sortAttr: '-last_activity_at',
-          };
-          if (!value) {
-              this.$store.dispatch('contacts/get', requestParams);
-          } else {
-              this.$store.dispatch('contacts/search', {
-                  search: encodeURIComponent(value),
-                  ...requestParams,
-              });
-          }
-      },
-      onSearchSubmit() {
-          if (!this.searchQuery) return;
-          this.fetchContacts(DEFAULT_PAGE);
-      },
-      onInputSearch(event) {
-          const newQuery = event.target.value;
-          const refetchAllContacts = !!this.searchQuery && newQuery === '';
-          this.searchQuery = newQuery;
-          if (refetchAllContacts) {
-              this.fetchContacts(DEFAULT_PAGE);
-          }
-      },
-      resetSearch(event) {
-          const newQuery = event.target.value;
-          if (!newQuery) {
-              this.searchQuery = newQuery;
-              this.fetchContacts(DEFAULT_PAGE);
-          }
-      },
-      onSubmit(event) {
-          const formData = new FormData(event.target);
-          const contactIds = formData.getAll('contactIds[]')
-          this.$store.dispatch('forwardMessage', {
-              conversationId: this.message.conversation_id,
-              messageId: this.message.id,
-              contacts: contactIds
-          });
-          useAlert("Encaminhando mensagem...");
-          this.onClose();
+    onClose() {
+      if (!this.isSubmitting) this.$emit('close');
+    },
+    normalizedSearch() {
+      return this.searchQuery.trim().replace(/^\+/, '');
+    },
+    fetchContacts() {
+      const requestParams = {
+        page: DEFAULT_PAGE,
+        sortAttr: '-last_activity_at',
+      };
+      const value = this.normalizedSearch();
+
+      if (!value) {
+        return this.$store.dispatch('contacts/get', requestParams);
       }
-  }
-}
+
+      return this.$store.dispatch('contacts/search', {
+        search: encodeURIComponent(value),
+        ...requestParams,
+      });
+    },
+    scheduleSearch() {
+      if (this.searchTimer) clearTimeout(this.searchTimer);
+      this.searchTimer = setTimeout(() => this.fetchContacts(), SEARCH_DELAY);
+    },
+    isSelected(contactId) {
+      return this.selectedContactIds.includes(Number(contactId));
+    },
+    toggleContact(contactId) {
+      const id = Number(contactId);
+      this.selectedContactIds = this.isSelected(id)
+        ? this.selectedContactIds.filter(item => item !== id)
+        : [...this.selectedContactIds, id];
+    },
+    async onSubmit() {
+      if (!this.selectedCount || this.isSubmitting) return;
+
+      this.isSubmitting = true;
+      try {
+        const response = await this.$store.dispatch('forwardMessage', {
+          conversationId: this.message.conversation_id,
+          messageId: this.message.id,
+          contacts: this.selectedContactIds,
+        });
+
+        const destination = response?.destination;
+        if (this.selectedCount === 1 && destination?.conversation_id) {
+          useAlert('Mensagem encaminhada com sucesso.');
+          await this.$store.dispatch(
+            'getConversation',
+            destination.conversation_id
+          );
+          const destinationUrl = frontendURL(
+            conversationUrl({
+              accountId: this.currentAccountId,
+              id: destination.conversation_id,
+            })
+          );
+          this.$emit('close');
+          await this.$router.push(destinationUrl).catch(() => {});
+          return;
+        }
+
+        useAlert(
+          `Mensagem encaminhada para ${response?.destination_count || this.selectedCount} destinatários.`
+        );
+        this.$emit('close');
+      } catch (error) {
+        const message =
+          error?.response?.data?.error ||
+          'Não foi possível encaminhar a mensagem. Tente novamente.';
+        useAlert(message);
+      } finally {
+        this.isSubmitting = false;
+      }
+    },
+  },
+};
 </script>
 
-<style lang="scss">
-.modal-mask .modal--close {
-  z-index: 1;
+<style lang="scss" scoped>
+::v-deep .modal--close {
+  z-index: 3;
 }
-.forward {
-  padding: 10px;
-  position: relative;
-  height: 100%;
-  min-width: 430px;
-  &__title {
-      text-align: left;
-      &-primary {
-          font-size: 1.5rem;
-      }
+
+.forward-panel {
+  @apply flex flex-col h-full min-w-[28rem] max-w-[36rem] bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100;
+}
+
+.forward-panel__header {
+  @apply flex items-start justify-between gap-4 px-6 pt-6 pb-4 border-b border-slate-100 dark:border-slate-800;
+
+  h1 {
+    @apply m-0 text-xl font-semibold;
   }
-  &__contacts {
-      &-search {
-          label {
-              font-size: 1rem;
-              margin-top: 15px;
-          }
-      }
-      .form-contact {
-          padding: 0;
-      }
-      &-list {
-          > .contacts {
-              overflow-y: auto;
-              overflow-x: hidden;
-              position: absolute;
-              left: 10px;
-              right: 10px;
-              bottom: 60px;
-              top: 160px;
-              &::-webkit-scrollbar {
-                width: 6px;
-              }
-              &::-webkit-scrollbar-thumb {
-                  border-radius: 3px;
-                  background: #3c4858;
-              }
-          }
-          .contact {
-              display: flex;
-              border-bottom: 1px solid;
-              &:last-child {
-                  border-bottom: 0;
-              }
-              &-columns {
-                  border-bottom: 0;
-                  min-height: 25px;
-                  margin-top: -12px;
-              }
-              &-id {
-                  width: 30px;
-                  display: flex;
-                  align-items: center;
-                  justify-content: center;
-                  label {
-                      margin-top: 10px;
-                  }
-              }
-              &-name {
-                  display: flex;
-                  margin: 0 10px;
-                  align-items: center;
-                  flex-grow: 1;
-              }
-              &-thumbnail {
-                  width: 32px;
-                  height: 32px;
-                  margin-right: 10px;
-                  margin-bottom: 10px;
-                  margin-top: 10px;
-                  img {
-                      border-radius: 50%;
-                  }
-              }
-              &-phone {
-                  min-width: 110px;
-                  display: flex;
-                  align-items: center;
-              }
-              &-date {
-                  min-width: 90px;
-                  display: flex;
-                  align-items: center;
-                  > .time-ago {
-                      margin: auto;
-                  }
-              }
-          }
-      }
-      &-footer {
-          position: absolute;
-          bottom: 0;
-          left: 0;
-          right: 0;
-          padding: 10px;
-          display: flex;
-          justify-content: flex-end;
-          max-height: 60px;
-      }
+
+  p {
+    @apply mt-1 mb-0 text-sm leading-5 text-slate-500 dark:text-slate-400;
+  }
+}
+
+.forward-panel__counter {
+  @apply shrink-0 px-2.5 py-1 text-xs font-medium rounded-full bg-hub-50 text-hub-700 dark:bg-hub-900/40 dark:text-hub-200;
+}
+
+.forward-panel__search {
+  @apply flex items-center gap-2 mx-6 my-4 px-3 h-11 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-slate-500;
+
+  input {
+    @apply flex-1 min-w-0 h-full m-0 p-0 border-0 bg-transparent shadow-none text-sm text-slate-800 dark:text-slate-100;
+
+    &:focus {
+      @apply outline-none ring-0;
+    }
+  }
+}
+
+.forward-panel__list {
+  @apply flex-1 overflow-y-auto px-3 pb-3;
+  scrollbar-width: thin;
+}
+
+.forward-contact {
+  @apply w-full flex items-center gap-3 px-3 py-2.5 mb-1 rounded-xl border border-transparent text-left bg-transparent transition-colors;
+
+  &:hover {
+    @apply bg-slate-50 dark:bg-slate-800/70;
+  }
+
+  &.is-selected {
+    @apply bg-hub-50/80 border-hub-200 dark:bg-hub-900/30 dark:border-hub-700;
+  }
+}
+
+.forward-contact__check {
+  @apply flex items-center justify-center w-6 text-slate-400;
+
+  .is-selected & {
+    @apply text-hub-600 dark:text-hub-300;
+  }
+}
+
+.forward-contact__check-ring {
+  @apply block w-5 h-5 rounded-full border-2 border-slate-300 dark:border-slate-600;
+}
+
+.forward-contact__identity {
+  @apply flex flex-col flex-1 min-w-0;
+
+  strong {
+    @apply truncate text-sm font-medium text-slate-800 dark:text-slate-100;
+  }
+
+  small {
+    @apply truncate text-xs text-slate-500 dark:text-slate-400;
+  }
+}
+
+.forward-contact__activity {
+  @apply shrink-0 text-xs text-slate-400 dark:text-slate-500;
+}
+
+.forward-panel__empty {
+  @apply flex flex-col items-center justify-center gap-1 min-h-[16rem] text-center text-slate-400;
+
+  strong {
+    @apply mt-2 text-sm text-slate-600 dark:text-slate-300;
+  }
+
+  span {
+    @apply text-xs;
+  }
+}
+
+.forward-panel__footer {
+  @apply flex items-center justify-between gap-4 px-6 py-4 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900;
+}
+
+.forward-panel__hint {
+  @apply text-xs leading-4 text-slate-500 dark:text-slate-400;
+}
+
+.forward-panel__actions {
+  @apply flex items-center gap-2 shrink-0;
+}
+
+@media (max-width: 640px) {
+  .forward-panel {
+    min-width: 100%;
+    width: 100%;
+  }
+
+  .forward-panel__footer {
+    @apply flex-col items-stretch;
+  }
+
+  .forward-panel__actions {
+    @apply justify-end;
+  }
+
+  .forward-contact__activity {
+    @apply hidden;
   }
 }
 </style>

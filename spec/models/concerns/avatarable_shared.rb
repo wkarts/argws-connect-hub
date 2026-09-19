@@ -5,8 +5,9 @@ shared_examples_for 'avatarable' do
 
   it { is_expected.to have_one_attached(:avatar) }
 
-  it 'add avatar_url method' do
+  it 'adds thumbnail and high-resolution avatar URL methods' do
     expect(avatarable.respond_to?(:avatar_url)).to be true
+    expect(avatarable.respond_to?(:avatar_full_url)).to be true
   end
 
   context 'when avatarable has an email attribute' do
