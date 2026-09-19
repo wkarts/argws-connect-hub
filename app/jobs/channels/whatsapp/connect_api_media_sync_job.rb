@@ -58,7 +58,7 @@ class Channels::Whatsapp::ConnectApiMediaSyncJob < ApplicationJob
       rescue StandardError => e
         skipped += 1
         Rails.logger.warn(
-          "[HUB Connect|API] media sync record failed channel=#{@channel.id} " \
+          "[HUB Connect|API] reliability sync record failed channel=#{@channel.id} " \
           "message=#{message_id(record)}: #{e.class}: #{e.message}"
         )
         HubDiagnostics::Recorder.error(
@@ -79,7 +79,7 @@ class Channels::Whatsapp::ConnectApiMediaSyncJob < ApplicationJob
       e,
       { component: 'connectapi_sync', channel_id: channel_id }
     )
-    Rails.logger.warn("[HUB Connect|API] media sync failed channel=#{channel_id}: #{e.message}")
+    Rails.logger.warn("[HUB Connect|API] reliability sync failed channel=#{channel_id}: #{e.message}")
     raise if e.status.to_i >= 500 || e.status.to_i == 0
   end
 
@@ -171,6 +171,8 @@ class Channels::Whatsapp::ConnectApiMediaSyncJob < ApplicationJob
   end
 
   def reconcile_native_status(record, message)
+    return unless message.outgoing?
+
     status = native_status(record)
     return if status.blank?
 
