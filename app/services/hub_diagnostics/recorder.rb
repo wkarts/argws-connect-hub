@@ -174,7 +174,7 @@ module HubDiagnostics
       end
 
       def capture_mode
-        mode = ENV.fetch('HUB_DIAGNOSTICS_CAPTURE_MODE', 'all').to_s.strip.downcase
+        mode = ENV.fetch('HUB_DIAGNOSTICS_CAPTURE_MODE', 'session').to_s.strip.downcase
         %w[all session errors].include?(mode) ? mode : 'all'
       end
 
