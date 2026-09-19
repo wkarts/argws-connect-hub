@@ -23,6 +23,7 @@ import {
   appendSignature,
   removeSignature,
 } from 'dashboard/helper/editorHelper';
+import { getMessageVariables } from '@hub/utils';
 
 export default {
   components: {
@@ -172,6 +173,17 @@ export default {
     },
     hasWhatsappTemplates() {
       return this.selectedInbox.inbox?.provider === 'connectapi' || !!this.selectedInbox.inbox?.message_templates;
+    },
+    messageVariables() {
+      return getMessageVariables({
+        contact: this.contact,
+        conversation: {
+          meta: {
+            sender: this.contact,
+            assignee: this.currentUser,
+          },
+        },
+      });
     },
     hasAttachments() {
       return this.attachedFiles.length;
@@ -470,6 +482,7 @@ export default {
           <WhatsappTemplates
             v-else-if="hasWhatsappTemplates"
             :inbox-id="selectedInbox.inbox.id"
+            :variables="messageVariables"
             @on-select-template="toggleWaTemplate"
             @onSend="onSendWhatsAppReply"
           />
