@@ -1,6 +1,5 @@
 class SendReplyJob < ApplicationJob
   queue_as :high
-  retry_on HubDiagnostics::BindingBusy, wait: 5.seconds, attempts: 24
   retry_on ActiveRecord::RecordNotFound, wait: 30.seconds, attempts: 5
 
   def perform(message_id)
