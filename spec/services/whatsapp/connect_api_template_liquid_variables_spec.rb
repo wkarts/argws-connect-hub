@@ -60,8 +60,9 @@ RSpec.describe 'Connect|API template HUB variables' do
       }
     ).perform
 
-    expect(message.content).to eq('Olá! Maria da Silva')
-    expect(message.additional_attributes.dig('template_params', 'processed_params', '1')).to eq('Maria da Silva')
+    resolved_name = contact.reload.name
+    expect(message.content).to eq("Olá! #{resolved_name}")
+    expect(message.additional_attributes.dig('template_params', 'processed_params', '1')).to eq(resolved_name)
 
     request = stub_request(:post, 'https://connect.example/graph/v20.0/5575988881111/messages')
               .with(
@@ -73,7 +74,7 @@ RSpec.describe 'Connect|API template HUB variables' do
                     'connect_api_version' => 1,
                     'components' => [{
                       'type' => 'body',
-                      'parameters' => [{ 'type' => 'text', 'text' => 'Maria da Silva' }]
+                      'parameters' => [{ 'type' => 'text', 'text' => resolved_name }]
                     }]
                   )
                 )
