@@ -11,7 +11,7 @@ module HubDiagnostics
       media.downloaded media.unavailable
       sync.background_started sync.background_finished sync.background_failed
       sync.text_processed sync.status_processed sync.record_failed sync.skipped
-      receipt.watch_started receipt.watch_applied receipt.watch_failed
+      receipt.watch_started receipt.watch_applied receipt.watch_completed receipt.watch_failed
       reconciliation.requested reconciliation.message_imported reconciliation.status_updated
       reconciliation.skipped reconciliation.record_failed reconciliation.completed reconciliation.failed
     ].freeze
