@@ -12,6 +12,8 @@ services:
         RAILS_SERVE_STATIC_FILES: 'true'
     image: hub:latest
     env_file: .env ## Change this file for customized env variables
+    volumes:
+      - ${HUB_DIAGNOSTICS_DATA_PATH:-./volumes/test/diagnostics}:${HUB_DIAGNOSTICS_DIR:-/app/log/hub_diagnostics}
 
   rails:
     <<: *base
@@ -25,6 +27,9 @@ services:
     environment:
       - NODE_ENV=production
       - RAILS_ENV=production
+      - HUB_DIAGNOSTICS_ENABLED=${HUB_DIAGNOSTICS_ENABLED:-true}
+      - HUB_CONNECT_RELIABILITY_ENABLED=${HUB_CONNECT_RELIABILITY_ENABLED:-true}
+      - HUB_EXISTING_INSTANCE_BINDING_ENABLED=${HUB_EXISTING_INSTANCE_BINDING_ENABLED:-true}
     entrypoint: docker/entrypoints/rails.sh
     command: ['bundle', 'exec', 'rails', 's', '-p', '3000', '-b', '0.0.0.0']
 
@@ -38,6 +43,9 @@ services:
     environment:
       - NODE_ENV=production
       - RAILS_ENV=production
+      - HUB_DIAGNOSTICS_ENABLED=${HUB_DIAGNOSTICS_ENABLED:-true}
+      - HUB_CONNECT_RELIABILITY_ENABLED=${HUB_CONNECT_RELIABILITY_ENABLED:-true}
+      - HUB_EXISTING_INSTANCE_BINDING_ENABLED=${HUB_EXISTING_INSTANCE_BINDING_ENABLED:-true}
     command: ['bundle', 'exec', 'sidekiq', '-C', 'config/sidekiq.yml']
 
   postgres:
