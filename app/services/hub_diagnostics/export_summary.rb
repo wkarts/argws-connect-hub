@@ -10,6 +10,7 @@ module HubDiagnostics
       status.received status.applied status.deferred status.orphaned status.ignored status.unknown
       media.downloaded media.unavailable
       sync.background_started sync.background_finished sync.background_failed
+      sync.text_processed sync.status_processed sync.record_failed sync.skipped
     ].freeze
     SLOW_LIMIT = 20
     PENDING_LIMIT = 100
