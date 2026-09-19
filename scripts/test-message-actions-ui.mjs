@@ -11,6 +11,7 @@ test('forward UI returns the backend result and opens a single destination conve
   assert.match(actions, /return response\.data/);
   assert.doesNotMatch(actions, /ignore error/);
   assert.match(modal, /selectedContactIds/);
+  assert.match(modal, /dispatch\(\s*'getConversation'/);
   assert.match(modal, /frontendURL\(/);
   assert.match(modal, /conversationUrl\(/);
   assert.match(modal, /this\.\$router\.push/);
