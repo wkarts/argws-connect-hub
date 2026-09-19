@@ -1,7 +1,7 @@
 <% content_for(:title) { 'Vincular instância existente' } %>
 <header class="main-content__header hub-ops hub-ops-header"><div><h1 class="hub-ops-title">Vincular instância existente</h1><p class="hub-ops-subtitle">Troque a instância associada à caixa sem recriar a caixa, apagar conversas ou excluir a sessão anterior.</p></div><%= link_to 'Voltar à Connect|API', super_admin_connect_api_path, class: 'button' %></header>
 <section class="main-content__body hub-ops">
-  <% unless ENV['HUB_EXISTING_INSTANCE_BINDING_ENABLED'] == 'true' && ENV['HUB_CONNECT_RELIABILITY_ENABLED'] == 'true' %><div class="hub-alert hub-alert-warning">Vinculação desabilitada até a homologação. Ative as duas opções documentadas no pacote para liberar a operação.</div><% end %>
+  <% unless ENV['HUB_EXISTING_INSTANCE_BINDING_ENABLED'] == 'true' %><div class="hub-alert hub-alert-warning">Vinculação desabilitada até a homologação. Ative <code>HUB_EXISTING_INSTANCE_BINDING_ENABLED=true</code> para liberar a operação.</div><% end %>
   <% if @error.present? %><div class="hub-alert hub-alert-danger"><%= @error %></div><% end %>
   <div class="hub-alert hub-alert-warning">A instância deve usar o mesmo número WhatsApp da caixa. Mensagens em processamento bloqueiam a troca. Se o webhook atual atender outro ambiente, substituí-lo interromperá a entrega de novos eventos naquele destino.</div>
   <% if @channels.empty? %><div class="hub-card">Não há caixa Connect|API disponível para vinculação.</div><% else %>
