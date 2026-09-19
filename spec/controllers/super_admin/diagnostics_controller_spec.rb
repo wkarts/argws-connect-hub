@@ -45,6 +45,11 @@ RSpec.describe 'Super Admin diagnostics download', type: :request do
     expect(records.any? { |row| row['event'] == 'spec.download' }).to be(true)
     expect(records.last['kind']).to eq('summary')
     expect(records.last['records']).to be >= 1
+    expect(records.last['event_counts']['spec.download']).to eq(1)
+    expect(records.last['data_first_event_at']).to be_present
+    expect(records.last['data_last_event_at']).to be_present
+    expect(records.last['message_flow']).to include('send.finished', 'status.received')
+    expect(records.last['outbound_without_status_callback_count']).to be_a(Integer)
   ensure
     reader&.close
   end
