@@ -9,65 +9,59 @@ class Channels::Whatsapp::ConnectApiHistoricalReconciliationJob < ApplicationJob
   PAGE_SIZE = 100
   DEFAULT_MAX_PAGES = 10_000
 
-  def perform(channel_id, mode:, operation_id:, actor_id:, from_at: nil, to_at: nil)
+  retry_on ConnectApi::Error, wait: 15.seconds, attempts: 8
+  retry_on HubDiagnostics::BindingBusy, wait: 10.seconds, attempts: 12
+
+  def perform(channel_id, mode:, operation_id:, actor_id:, from_at: nil, to_at: nil, page: 1)
     @operation_id = operation_id.to_s
     channel = Channel::Whatsapp.find_by(id: channel_id, provider: 'connectapi')
     return unless channel&.inbox
 
     HubDiagnostics::InstanceLock.with("historical-reconciliation:#{channel.id}") do
-      update_state(channel, state: 'running', started_at: Time.current.utc.iso8601, page: 0,
-                            records_examined: 0, records_created: 0, records_updated: 0, records_skipped: 0)
+      operation = current_operation(channel)
+      return unless operation['operation_id'].to_s == @operation_id
+
+      page = page.to_i.clamp(1, max_pages)
+      if operation['page'].to_i >= page
+        enqueue_next_if_needed(channel, operation, mode, actor_id, from_at, to_at)
+        return
+      end
+
+      mark_started(channel, operation) if page == 1 && operation['state'] == 'queued'
+      response = fetch_page(channel, page, mode, from_at, to_at)
+      records = extract_records(response)
+      counters = counters_from(current_operation(channel))
 
       service = Whatsapp::ConnectApiHistoricalReconciliationService.new(
         channel: channel,
         client: client_for(channel),
-        operation_id: operation_id
+        operation_id: @operation_id
       )
 
-      counters = { examined: 0, created: 0, updated: 0, skipped: 0 }
-      page = 1
-      max_pages = ENV.fetch('HUB_CONNECT_IMPORT_MAX_PAGES', DEFAULT_MAX_PAGES).to_i.clamp(1, 100_000)
-
-      loop do
-        response = fetch_page(channel, page, mode, from_at, to_at)
-        records = extract_records(response)
-        break if records.empty?
-
-        records.sort_by { |record| timestamp_value(record) }.each do |record|
-          counters[:examined] += 1
-          result = service.process(record)
-          case result.result
-          when 'created' then counters[:created] += 1
-          when 'existing' then counters[:updated] += 1
-          else counters[:skipped] += 1
-          end
-        rescue StandardError
-          counters[:skipped] += 1
+      records.sort_by { |record| timestamp_value(record) }.each do |record|
+        counters[:examined] += 1
+        result = service.process(record)
+        case result.result
+        when 'created' then counters[:created] += 1
+        when 'existing' then counters[:updated] += 1
+        else counters[:skipped] += 1
         end
-
-        update_state(
-          channel,
-          state: 'running',
-          page: page,
-          records_examined: counters[:examined],
-          records_created: counters[:created],
-          records_updated: counters[:updated],
-          records_skipped: counters[:skipped]
-        )
-
-        break if records.length < PAGE_SIZE
-        break if page >= response_pages(response)
-        break if page >= max_pages
-
-        page += 1
+      rescue StandardError
+        counters[:skipped] += 1
       end
 
-      truncated = page >= max_pages
+      has_more = records.length == PAGE_SIZE &&
+                 page < response_pages(response) &&
+                 page < max_pages
+      truncated = records.length == PAGE_SIZE && page >= max_pages
+
       update_state(
         channel,
-        state: truncated ? 'completed_with_limit' : 'completed',
-        finished_at: Time.current.utc.iso8601,
+        state: has_more ? 'running' : (truncated ? 'completed_with_limit' : 'completed'),
+        started_at: current_operation(channel)['started_at'] || Time.current.utc.iso8601,
+        finished_at: has_more ? nil : Time.current.utc.iso8601,
         page: page,
+        next_page: has_more ? page + 1 : nil,
         records_examined: counters[:examined],
         records_created: counters[:created],
         records_updated: counters[:updated],
@@ -76,18 +70,46 @@ class Channels::Whatsapp::ConnectApiHistoricalReconciliationJob < ApplicationJob
       )
 
       HubDiagnostics::Recorder.emit(
-        'reconciliation.completed',
+        'reconciliation.page_completed',
         component: 'connectapi_reconciliation',
-        operation_id: operation_id,
+        operation_id: @operation_id,
         actor_id: actor_id,
         channel_id: channel.id,
         inbox_id: channel.inbox.id,
-        count: counters[:examined],
+        page: page,
+        count: records.length,
+        records_examined: counters[:examined],
         records_created: counters[:created],
         records_updated: counters[:updated],
         records_skipped: counters[:skipped],
-        truncated: truncated
+        has_more: has_more
       )
+
+      if has_more
+        self.class.perform_later(
+          channel.id,
+          mode: mode,
+          operation_id: @operation_id,
+          actor_id: actor_id,
+          from_at: from_at,
+          to_at: to_at,
+          page: page + 1
+        )
+      else
+        HubDiagnostics::Recorder.emit(
+          'reconciliation.completed',
+          component: 'connectapi_reconciliation',
+          operation_id: @operation_id,
+          actor_id: actor_id,
+          channel_id: channel.id,
+          inbox_id: channel.inbox.id,
+          count: counters[:examined],
+          records_created: counters[:created],
+          records_updated: counters[:updated],
+          records_skipped: counters[:skipped],
+          truncated: truncated
+        )
+      end
     end
   rescue StandardError => error
     update_state(
@@ -101,7 +123,7 @@ class Channels::Whatsapp::ConnectApiHistoricalReconciliationJob < ApplicationJob
       'reconciliation.failed',
       error,
       component: 'connectapi_reconciliation',
-      operation_id: operation_id,
+      operation_id: @operation_id,
       actor_id: actor_id,
       channel_id: channel_id
     )
@@ -148,14 +170,57 @@ class Channels::Whatsapp::ConnectApiHistoricalReconciliationJob < ApplicationJob
     numeric
   end
 
+  def current_operation(channel)
+    channel.reload.provider_config.to_h['hub_reconciliation_operation'].to_h
+  end
+
+  def mark_started(channel, operation)
+    update_state(
+      channel,
+      operation.merge(
+        'state' => 'running',
+        'started_at' => Time.current.utc.iso8601
+      )
+    )
+  end
+
+  def counters_from(operation)
+    {
+      examined: operation['records_examined'].to_i,
+      created: operation['records_created'].to_i,
+      updated: operation['records_updated'].to_i,
+      skipped: operation['records_skipped'].to_i
+    }
+  end
+
   def update_state(channel, attributes)
     channel.reload
     config = channel.provider_config.to_h.deep_dup
     operation = config['hub_reconciliation_operation'].to_h
-    return if operation['operation_id'].present? && operation['operation_id'] != @operation_id
+    return if operation['operation_id'].present? && operation['operation_id'].to_s != @operation_id
 
-    config['hub_reconciliation_operation'] = operation.merge(attributes.stringify_keys)
+    config['hub_reconciliation_operation'] = operation.merge(attributes.stringify_keys).compact
     channel.update_columns(provider_config: config, updated_at: channel.updated_at)
+  end
+
+  def enqueue_next_if_needed(channel, operation, mode, actor_id, from_at, to_at)
+    return unless operation['state'] == 'running'
+    next_page = operation['next_page'].to_i
+    return unless next_page.positive?
+
+    self.class.perform_later(
+      channel.id,
+      mode: mode,
+      operation_id: @operation_id,
+      actor_id: actor_id,
+      from_at: from_at,
+      to_at: to_at,
+      page: next_page
+    )
+  end
+
+  def max_pages
+    ENV.fetch('HUB_CONNECT_IMPORT_MAX_PAGES', DEFAULT_MAX_PAGES).to_i.clamp(1, 100_000)
   end
 
   def client_for(channel)
