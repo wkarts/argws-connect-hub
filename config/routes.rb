@@ -525,6 +525,7 @@ Rails.application.routes.draw do
         post :instance_action
         post :migrate_provider
         post :update_voip_limit
+        post :verify_realtime
       end
 
       resource :settings, only: [:show] do
