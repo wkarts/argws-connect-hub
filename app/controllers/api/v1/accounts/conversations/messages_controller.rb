@@ -61,6 +61,7 @@ class Api::V1::Accounts::Conversations::MessagesController < Api::V1::Accounts::
   def forward
     contacts = forward_contact_ids
     return render json: { error: 'Selecione pelo menos um destinatário.' }, status: :unprocessable_entity if contacts.empty?
+    return render json: { error: 'Um dos destinatários não pertence a esta conta.' }, status: :unprocessable_entity unless valid_forward_contacts?(contacts)
 
     payload = forward_message_params.merge(contacts: contacts)
 
@@ -112,6 +113,10 @@ class Api::V1::Accounts::Conversations::MessagesController < Api::V1::Accounts::
 
   def forward_contact_ids
     Array(params[:contacts]).map(&:to_i).select(&:positive?).uniq
+  end
+
+  def valid_forward_contacts?(contact_ids)
+    Current.account.contacts.where(id: contact_ids).count == contact_ids.length
   end
 
   def forward_message_params
