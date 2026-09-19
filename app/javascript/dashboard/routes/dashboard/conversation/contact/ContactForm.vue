@@ -9,8 +9,10 @@ import { required, email } from '@vuelidate/validators';
 import countries from 'shared/constants/countries.js';
 import { isPhoneNumberValid } from 'shared/helpers/Validators';
 import parsePhoneNumber from 'libphonenumber-js';
+import ContactAvatarPreview from 'dashboard/modules/contact/components/ContactAvatarPreview.vue';
 
 export default {
+  components: { ContactAvatarPreview },
   props: {
     contact: {
       type: Object,
@@ -33,6 +35,7 @@ export default {
       countries: countries,
       companyName: '',
       description: '',
+      dateOfBirth: '',
       email: '',
       name: '',
       phoneNumber: '',
@@ -71,6 +74,7 @@ export default {
       required,
     },
     description: {},
+    dateOfBirth: {},
     email: {
       email,
     },
@@ -154,6 +158,7 @@ export default {
       this.name = name || '';
       this.email = emailAddress || '';
       this.phoneNumber = phoneNumber || '';
+      this.dateOfBirth = this.contact.date_of_birth || '';
       this.companyName = additionalAttributes.company_name || '';
       this.country = {
         id: additionalAttributes.country_code || '',
@@ -191,6 +196,7 @@ export default {
         name: this.name,
         email: this.email,
         phone_number: this.setPhoneNumber,
+        date_of_birth: this.dateOfBirth || null,
         additional_attributes: {
           ...this.contact.additional_attributes,
           description: this.description,
@@ -285,6 +291,14 @@ export default {
   >
     <div>
       <div class="w-full">
+        <div v-if="avatarUrl" class="mb-4">
+          <ContactAvatarPreview
+            :src="avatarUrl"
+            :username="name"
+            size="80px"
+          />
+          <small>{{ $t('CONTACT_FORM.FORM.AVATAR.PREVIEW_HELP') }}</small>
+        </div>
         <hub-avatar-uploader
           :label="$t('CONTACT_FORM.FORM.AVATAR.LABEL')"
           :src="avatarUrl"
@@ -321,6 +335,16 @@ export default {
           </span>
         </label>
       </div>
+    </div>
+    <div class="w-full">
+      <label>
+        {{ $t('CONTACT_FORM.FORM.DATE_OF_BIRTH.LABEL') }}
+        <input
+          v-model="dateOfBirth"
+          type="date"
+          :placeholder="$t('CONTACT_FORM.FORM.DATE_OF_BIRTH.PLACEHOLDER')"
+        />
+      </label>
     </div>
     <div class="w-full">
       <label :class="{ error: v$.description.$error }">
