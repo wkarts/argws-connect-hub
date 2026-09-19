@@ -14,6 +14,7 @@ x-hub-base: &hub-base
   restart: unless-stopped
   volumes:
     - ${HUB_STORAGE_DATA_PATH:-./volumes/storage}:/app/storage
+    - ${HUB_DIAGNOSTICS_DATA_PATH:-./volumes/diagnostics}:${HUB_DIAGNOSTICS_DIR:-/app/log/hub_diagnostics}
   networks:
     - network-connec-hub
   logging: *default-logging
@@ -31,6 +32,9 @@ services:
       NODE_ENV: production
       RAILS_ENV: production
       INSTALLATION_ENV: docker
+      HUB_DIAGNOSTICS_ENABLED: ${HUB_DIAGNOSTICS_ENABLED:-true}
+      HUB_CONNECT_RELIABILITY_ENABLED: ${HUB_CONNECT_RELIABILITY_ENABLED:-true}
+      HUB_EXISTING_INSTANCE_BINDING_ENABLED: ${HUB_EXISTING_INSTANCE_BINDING_ENABLED:-true}
     entrypoint: docker/entrypoints/rails.sh
     command:
       - sh
@@ -59,6 +63,9 @@ services:
       NODE_ENV: production
       RAILS_ENV: production
       INSTALLATION_ENV: docker
+      HUB_DIAGNOSTICS_ENABLED: ${HUB_DIAGNOSTICS_ENABLED:-true}
+      HUB_CONNECT_RELIABILITY_ENABLED: ${HUB_CONNECT_RELIABILITY_ENABLED:-true}
+      HUB_EXISTING_INSTANCE_BINDING_ENABLED: ${HUB_EXISTING_INSTANCE_BINDING_ENABLED:-true}
     entrypoint: docker/entrypoints/rails.sh
     command: ['bundle', 'exec', 'rails', 's', '-p', '3000', '-b', '0.0.0.0']
 
@@ -72,6 +79,9 @@ services:
       NODE_ENV: production
       RAILS_ENV: production
       INSTALLATION_ENV: docker
+      HUB_DIAGNOSTICS_ENABLED: ${HUB_DIAGNOSTICS_ENABLED:-true}
+      HUB_CONNECT_RELIABILITY_ENABLED: ${HUB_CONNECT_RELIABILITY_ENABLED:-true}
+      HUB_EXISTING_INSTANCE_BINDING_ENABLED: ${HUB_EXISTING_INSTANCE_BINDING_ENABLED:-true}
     command: ['bundle', 'exec', 'sidekiq', '-C', 'config/sidekiq.yml']
 
   postgres-connec-hub:
