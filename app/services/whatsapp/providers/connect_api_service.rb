@@ -55,7 +55,7 @@ class Whatsapp::Providers::ConnectApiService < Whatsapp::Providers::WhatsappClou
 
   def send_local_template(message, phone_number, template)
     params = message.additional_attributes.to_h['template_params']
-    diagnostic_attributes = HubDiagnostics::Recorder.message_attributes(message).merge(
+    diagnostic_attributes = diagnostic_message_attributes(message).merge(
       component: 'connectapi_template',
       template_name: template['name'],
       template_version: template['version'],
@@ -63,7 +63,7 @@ class Whatsapp::Providers::ConnectApiService < Whatsapp::Providers::WhatsappClou
       instance_name: instance_name,
       direction: 'outbound'
     ).compact
-    HubDiagnostics::Recorder.emit('template.send_started', diagnostic_attributes)
+    emit_diagnostic('template.send_started', diagnostic_attributes)
 
     local = ConnectApi::LocalTemplateMessage.new(template, params)
     local.validate_content!(message.content)
@@ -75,7 +75,7 @@ class Whatsapp::Providers::ConnectApiService < Whatsapp::Providers::WhatsappClou
       timeout: request_timeout,
       follow_redirects: false
     )
-    HubDiagnostics::Recorder.emit(
+    emit_diagnostic(
       'template.http_response',
       diagnostic_attributes.merge(
         http_status: response.code,
@@ -104,17 +104,17 @@ class Whatsapp::Providers::ConnectApiService < Whatsapp::Providers::WhatsappClou
         }
       )
     )
-    HubDiagnostics::Recorder.emit('template.send_finished', diagnostic_attributes.merge(source_id: id, success: true))
+    emit_diagnostic('template.send_finished', diagnostic_attributes.merge(source_id: id, success: true))
     id
   rescue ConnectApi::LocalTemplateMessage::Error => e
-    HubDiagnostics::Recorder.emit(
+    emit_diagnostic(
       'template.validation_failed',
       (diagnostic_attributes || {}).merge(level: 'warn', reason: 'template_validation_or_delivery_rejected')
     )
     message.update!(status: :failed, external_error: e.message)
     nil
   rescue StandardError => e
-    HubDiagnostics::Recorder.error(
+    emit_diagnostic_error(
       'template.send_failed',
       e,
       (diagnostic_attributes || {}).merge(reason: 'unexpected_error')
@@ -199,7 +199,7 @@ class Whatsapp::Providers::ConnectApiService < Whatsapp::Providers::WhatsappClou
   def process_native_response(message, response, endpoint:, started:)
     http_status = response.code if response.respond_to?(:code)
     message_id = response.success? ? extract_message_id(response.parsed_response) : nil
-    attributes = HubDiagnostics::Recorder.message_attributes(message).merge(
+    attributes = diagnostic_message_attributes(message).merge(
       http_status: http_status,
       endpoint: endpoint,
       instance_name: instance_name,
@@ -210,12 +210,12 @@ class Whatsapp::Providers::ConnectApiService < Whatsapp::Providers::WhatsappClou
       duration_ms: ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - started) * 1000).round(2)
     ).compact
 
-    HubDiagnostics::Recorder.emit('send.http_response', attributes)
+    emit_diagnostic('send.http_response', attributes)
 
     if response.success?
       return message_id if message_id.present?
 
-      HubDiagnostics::Recorder.emit(
+      emit_diagnostic(
         'send.response_without_id',
         attributes.merge(level: 'warn', reason: 'provider_message_id_missing')
       )
@@ -224,17 +224,17 @@ class Whatsapp::Providers::ConnectApiService < Whatsapp::Providers::WhatsappClou
     end
 
     error = response_error(response)
-    HubDiagnostics::Recorder.emit('send.failed', attributes.merge(level: 'error', reason: 'http_error'))
+    emit_diagnostic('send.failed', attributes.merge(level: 'error', reason: 'http_error'))
     Rails.logger.error("[HUB Connect|API] send failed: #{error}")
     message.update!(status: :failed, external_error: error)
     nil
   end
 
   def process_native_exception(message, error, endpoint: nil)
-    HubDiagnostics::Recorder.error(
+    emit_diagnostic_error(
       'send.transport_failed',
       error,
-      HubDiagnostics::Recorder.message_attributes(message).merge(
+      diagnostic_message_attributes(message).merge(
         endpoint: endpoint,
         instance_name: instance_name,
         provider: whatsapp_channel.provider_config.to_h['connect_api_provider'],
@@ -245,6 +245,30 @@ class Whatsapp::Providers::ConnectApiService < Whatsapp::Providers::WhatsappClou
     Rails.logger.error("[HUB Connect|API] send exception: #{safe_error}")
     message.update!(status: :failed, external_error: safe_error)
     nil
+  rescue StandardError
+    nil
+  end
+
+  def diagnostic_message_attributes(message)
+    return {} unless defined?(::HubDiagnostics::Recorder)
+
+    ::HubDiagnostics::Recorder.message_attributes(message)
+  rescue StandardError
+    {}
+  end
+
+  def emit_diagnostic(event, attributes = {})
+    return unless defined?(::HubDiagnostics::Recorder)
+
+    ::HubDiagnostics::Recorder.emit(event, attributes)
+  rescue StandardError
+    nil
+  end
+
+  def emit_diagnostic_error(event, error, attributes = {})
+    return unless defined?(::HubDiagnostics::Recorder)
+
+    ::HubDiagnostics::Recorder.error(event, error, attributes)
   rescue StandardError
     nil
   end
