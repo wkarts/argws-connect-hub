@@ -203,6 +203,10 @@ export default {
         const destination = response?.destination;
         if (this.selectedCount === 1 && destination?.conversation_id) {
           useAlert('Mensagem encaminhada com sucesso.');
+          await this.$store.dispatch(
+            'getConversation',
+            destination.conversation_id
+          );
           const destinationUrl = frontendURL(
             conversationUrl({
               accountId: this.currentAccountId,
@@ -210,7 +214,7 @@ export default {
             })
           );
           this.$emit('close');
-          this.$router.push(destinationUrl).catch(() => {});
+          await this.$router.push(destinationUrl).catch(() => {});
           return;
         }
 
