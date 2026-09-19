@@ -50,4 +50,39 @@ RSpec.describe HubDiagnostics::Recorder do
     expect { described_class.emit('spec.storage.failure') }.not_to raise_error
     expect { described_class.flush! }.not_to raise_error
   end
+
+  it 'keeps detailed events only during an active session in session mode' do
+    ENV['HUB_DIAGNOSTICS_CAPTURE_MODE'] = 'session'
+
+    described_class.emit('spec.before.capture', account_id: 1)
+    described_class.emit('send.failed', level: 'error', account_id: 1)
+    expect(described_class.flush!).to be(true)
+
+    session = HubDiagnostics::CaptureSession.start!(actor_id: 7, duration_minutes: 15)
+    described_class.emit('spec.during.capture', account_id: 1)
+    expect(described_class.flush!).to be(true)
+
+    HubDiagnostics::CaptureSession.stop!
+    described_class.emit('spec.after.capture', account_id: 1)
+    expect(described_class.flush!).to be(true)
+
+    records = described_class.store.each_record.to_a
+    expect(records.map { |row| row['event'] }).not_to include('spec.before.capture', 'spec.after.capture')
+    expect(records.map { |row| row['event'] }).to include('send.failed', 'spec.during.capture')
+
+    captured = records.find { |row| row['event'] == 'spec.during.capture' }
+    expect(captured['capture_session_id']).to eq(session['id'])
+  end
+
+  it 'tags active capture events even when the global mode persists all events' do
+    ENV['HUB_DIAGNOSTICS_CAPTURE_MODE'] = 'all'
+    session = HubDiagnostics::CaptureSession.start!(actor_id: 7, duration_minutes: 15)
+
+    described_class.emit('spec.all.mode.capture')
+    expect(described_class.flush!).to be(true)
+
+    record = described_class.store.each_record.find { |row| row['event'] == 'spec.all.mode.capture' }
+    expect(record['capture_session_id']).to eq(session['id'])
+  end
+
 end
