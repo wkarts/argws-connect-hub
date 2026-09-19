@@ -50,7 +50,8 @@
       "CONTACT_LABELS": "Contact Labels",
       "PREVIOUS_CONVERSATIONS": "Previous Conversations",
       "NO_RECORDS_FOUND": "No attributes found"
-    }
+    },
+    "DATE_OF_BIRTH": "Date of birth"
   },
   "EDIT_CONTACT": {
     "BUTTON_LABEL": "Edit Contact",
@@ -117,7 +118,8 @@
       "SUBMIT": "Submit",
       "CANCEL": "Cancel",
       "AVATAR": {
-        "LABEL": "Contact Avatar"
+        "LABEL": "Contact Avatar",
+        "PREVIEW_HELP": "Click the photo to enlarge."
       },
       "NAME": {
         "PLACEHOLDER": "Enter the full name of the contact",
@@ -177,6 +179,10 @@
           "PLACEHOLDER": "Enter the Github username",
           "LABEL": "Github"
         }
+      },
+      "DATE_OF_BIRTH": {
+        "LABEL": "Date of birth",
+        "PLACEHOLDER": "Enter the date of birth"
       }
     },
     "DELETE_AVATAR": {
@@ -233,8 +239,8 @@
     "FILTER_CONTACTS_DELETE": "Delete filter",
     "FILTER_CONTACTS_EDIT": "Edit segment",
     "LIST": {
-      "LOADING_MESSAGE": "Loading contacts...",
       "404": "No contacts matches your search 🔍",
+      "LOADING_MESSAGE": "Loading contacts...",
       "NO_CONTACTS": "There are no available contacts",
       "TABLE_HEADER": {
         "NAME": "Name",
