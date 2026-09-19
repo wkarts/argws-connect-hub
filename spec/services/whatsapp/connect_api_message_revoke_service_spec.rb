@@ -117,6 +117,38 @@ RSpec.describe Whatsapp::ConnectApiMessageRevokeService do
     expect(described_class.new(message: message, client: client).perform!).to be(true)
   end
 
+  it 'does not revoke a provider message that is not owned by this account' do
+    allow(client).to receive(:request)
+      .with(
+        :post,
+        '/chat/findMessages/revoke-instance',
+        body: anything,
+        timeout: 10
+      )
+      .and_return(
+        'records' => [{
+          'key' => {
+            'id' => 'MSG-REMOTE-1',
+            'fromMe' => false,
+            'remoteJid' => '5575999999999@s.whatsapp.net'
+          }
+        }]
+      )
+
+    expect(client).not_to receive(:request).with(
+      :delete,
+      '/chat/deleteMessageForEveryone/revoke-instance',
+      anything
+    )
+
+    expect do
+      described_class.new(message: message, client: client).perform!
+    end.to raise_error(
+      described_class::Error,
+      /não foi enviada por esta conta/
+    )
+  end
+
   it 'fails closed when Connect API rejects the revoke' do
     allow(client).to receive(:request)
       .with(
