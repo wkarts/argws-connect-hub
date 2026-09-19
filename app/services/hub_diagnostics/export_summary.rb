@@ -6,6 +6,7 @@ module HubDiagnostics
       send.started send.http_response send.finished send.failed send.transport_failed
       webhook.received webhook.unrouted webhook.enqueued webhook.rejected
       webhook.processing_started webhook.processing_completed webhook.processing_failed
+      webhook.health_ok webhook.health_repaired webhook.health_failed
       message.persisted message.duplicate message.skipped
       status.received status.applied status.deferred status.orphaned status.ignored status.unknown
       media.downloaded media.unavailable
