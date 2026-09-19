@@ -11,6 +11,7 @@ test('forward UI returns the backend result and opens a single destination conve
   assert.match(actions, /return response\.data/);
   assert.doesNotMatch(actions, /ignore error/);
   assert.match(modal, /selectedContactIds/);
+  assert.match(modal, /frontendURL\(/);
   assert.match(modal, /conversationUrl\(/);
   assert.match(modal, /this\.\$router\.push/);
   assert.doesNotMatch(modal, /window\.history\.pushState/);
@@ -34,5 +35,5 @@ test('contact avatar preview uses a dedicated high-resolution source and profess
   assert.match(preview, /largeImageSrc/);
   assert.match(contactInfo, /:preview-src="contact\.avatar_url \|\| contact\.thumbnail"/);
   assert.match(serializer, /json\.avatar_url resource\.avatar_full_url/);
-  assert.match(avatarable, /resize_to_limit: \[1200, 1200\]/);
+  assert.match(avatarable, /return url_for\(avatar\) if avatar\.attached\?/);
 });
