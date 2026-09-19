@@ -4,7 +4,7 @@ import { useAlert } from 'dashboard/composables';
 import { dynamicTime } from 'shared/helpers/timeHelper';
 import { useAdmin } from 'dashboard/composables/useAdmin';
 import ContactInfoRow from './ContactInfoRow.vue';
-import Thumbnail from 'dashboard/components/widgets/Thumbnail.vue';
+import ContactAvatarPreview from 'dashboard/modules/contact/components/ContactAvatarPreview.vue';
 import SocialIcons from './SocialIcons.vue';
 import EditContact from './EditContact.vue';
 import NewConversation from './NewConversation.vue';
@@ -21,7 +21,7 @@ export default {
   components: {
     ContactInfoRow,
     EditContact,
-    Thumbnail,
+    ContactAvatarPreview,
     SocialIcons,
     NewConversation,
     ContactMergeModal,
@@ -90,6 +90,12 @@ export default {
         phone: this.contact.phone_number,
         ...(socialProfiles || {}),
       };
+    },
+    formattedDateOfBirth() {
+      const value = this.contact.date_of_birth;
+      if (!value) return '';
+      const [year, month, day] = value.split('-');
+      return year && month && day ? `${day}/${month}/${year}` : value;
     },
     // Delete Modal
     confirmDeleteMessage() {
@@ -172,7 +178,7 @@ export default {
   <div class="relative items-center w-full p-4 bg-white dark:bg-slate-900">
     <div class="flex flex-col w-full gap-2 text-left rtl:text-right">
       <div class="flex flex-row justify-between">
-        <Thumbnail
+        <ContactAvatarPreview
           v-if="showAvatar"
           :src="contact.thumbnail"
           size="56px"
@@ -248,6 +254,13 @@ export default {
             icon="contact-identify"
             emoji="🪪"
             :title="$t('CONTACT_PANEL.IDENTIFIER')"
+          />
+          <ContactInfoRow
+            v-if="formattedDateOfBirth"
+            :value="formattedDateOfBirth"
+            icon="calendar"
+            emoji="🎂"
+            :title="$t('CONTACT_PANEL.DATE_OF_BIRTH')"
           />
           <ContactInfoRow
             :value="additionalAttributes.company_name"

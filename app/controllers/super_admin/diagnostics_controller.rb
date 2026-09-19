@@ -88,19 +88,6 @@ class SuperAdmin::DiagnosticsController < SuperAdmin::ApplicationController
     HubDiagnostics::ReplayStatusJob.perform_later(event['event_id'], current_super_admin.id)
     redirect_to super_admin_diagnostics_path, notice: 'Reprocessamento do status enfileirado. Nenhuma mensagem será reenviada.'
   end
-  def sync_messages
-    unless ENV['HUB_CONNECT_RELIABILITY_ENABLED'] == 'true'
-      return render plain: 'Habilite HUB_CONNECT_RELIABILITY_ENABLED após homologação.', status: :forbidden
-    end
-    channel = Channel::Whatsapp.find_by!(id: params[:channel_id], provider: 'connectapi')
-    minutes = Integer(params[:minutes].to_s, 10)
-    raise ArgumentError unless (1..120).cover?(minutes)
-    operation_id = SecureRandom.uuid
-    Channels::Whatsapp::ConnectApiDiagnosticSyncJob.perform_later(channel.id, minutes, operation_id, current_super_admin.id)
-    redirect_to super_admin_diagnostics_path(operation_id: operation_id), notice: 'Reconciliação enfileirada. Ela importa registros existentes, sem enviar mensagens.'
-  rescue ArgumentError
-    render plain: 'Informe entre 1 e 120 minutos.', status: :unprocessable_entity
-  end
   private
   def private_response!
     response.headers['Cache-Control'] = 'no-store, private'

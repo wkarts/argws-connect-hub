@@ -511,11 +511,14 @@ Rails.application.routes.draw do
       resource :diagnostics, only: [:show], controller: 'diagnostics' do
         get :download
         post :replay_status
-        post :sync_messages
       end
       resource :connect_api_binding, only: [:show, :create], controller: 'connect_api_bindings' do
         post :preview
         post :recover
+      end
+
+      resource :connect_api_reconciliation, only: [:show, :create], controller: 'connect_api_reconciliations' do
+        post :import_all
       end
 
       resource :connect_api, only: [:show], controller: 'connect_api' do
