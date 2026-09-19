@@ -1,49 +1,5 @@
 class Whatsapp::SendOnWhatsappService < Base::SendOnChannelService
-
-  def perform
-    current_channel = message.conversation.inbox.channel
-    return super unless current_channel.is_a?(Channel::Whatsapp) && current_channel.provider == 'connectapi'
-
-    HubDiagnostics::ChannelLock.with(current_channel.id) do
-      message.reload
-      snapshot = HubDiagnostics::Context.binding_snapshot
-      active_config = message.conversation.inbox.channel.provider_config.to_h
-      active_binding = active_config['hub_binding_id'].presence || active_config['instance_name']
-      if snapshot && active_binding.to_s != snapshot['binding_id'].to_s
-        HubDiagnostics::Recorder.emit('send.stale_job_blocked', HubDiagnostics::Recorder.message_attributes(message).merge(reason: 'binding_changed'))
-        return
-      end
-      operation = message.conversation.inbox.channel.provider_config.to_h['hub_binding_operation'].to_h
-      raise HubDiagnostics::BindingBusy, 'Binding requires verification' if %w[binding needs_review].include?(operation['state'])
-      diagnostic = diagnostic_context(current_channel)
-      HubDiagnostics::Recorder.emit(
-        'send.started',
-        HubDiagnostics::Recorder.message_attributes(message).merge(diagnostic)
-      )
-      result = super
-      HubDiagnostics::Recorder.emit(
-        'send.finished',
-        HubDiagnostics::Recorder.message_attributes(message).merge(diagnostic)
-      )
-      result
-    end
-  rescue StandardError => error
-    HubDiagnostics::Recorder.error('send.interrupted', error, HubDiagnostics::Recorder.message_attributes(message))
-    raise
-  end
-
   private
-
-  def diagnostic_context(current_channel)
-    config = current_channel.provider_config.to_h
-    {
-      direction: 'outbound',
-      content_type: message.content_type,
-      message_type: message.message_type,
-      instance_name: config['instance_name'],
-      provider: config['connect_api_provider']
-    }.compact
-  end
 
   def channel_class
     Channel::Whatsapp
