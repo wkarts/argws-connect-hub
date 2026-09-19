@@ -1196,6 +1196,7 @@ export default {
     <WhatsappTemplates
       :inbox-id="inbox.id"
       :show="showWhatsAppTemplatesModal"
+      :variables="messageVariables"
       @close="hideWhatsappTemplatesModal"
       @onSend="onSendWhatsAppReply"
       @cancel="hideWhatsappTemplatesModal"
