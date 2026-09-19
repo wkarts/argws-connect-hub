@@ -101,6 +101,8 @@ jobs:
       - name: Connect API WhatsApp regression specs
         run: >-
           bundle exec rspec
+          spec/controllers/webhooks/whatsapp_controller_spec.rb
+          spec/jobs/webhooks/whatsapp_events_job_spec.rb
           spec/services/whatsapp/incoming_message_connect_api_service_spec.rb
           spec/services/whatsapp/incoming_message_connect_api_status_aware_service_spec.rb
           spec/services/whatsapp/incoming_connect_api_call_service_spec.rb
