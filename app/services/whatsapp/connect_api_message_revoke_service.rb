@@ -31,6 +31,9 @@ class Whatsapp::ConnectApiMessageRevokeService
     diagnostic = diagnostic_attributes(key)
     HubDiagnostics::Recorder.emit('message.revoke_started', diagnostic)
 
+    from_me = key.key?('fromMe') ? ActiveModel::Type::Boolean.new.cast(key['fromMe']) : true
+    raise Error, 'O WhatsApp informou que esta mensagem não foi enviada por esta conta.' unless from_me
+
     client.request(
       :delete,
       "/chat/deleteMessageForEveryone/#{CGI.escape(instance_name)}",
@@ -95,6 +98,7 @@ class Whatsapp::ConnectApiMessageRevokeService
     {
       'id' => key['id'].to_s.presence || @message.source_id.to_s,
       'remoteJid' => key['remoteJid'].to_s.presence,
+      'fromMe' => key.key?('fromMe') ? ActiveModel::Type::Boolean.new.cast(key['fromMe']) : nil,
       'participant' => key['participant'].to_s.presence
     }.compact
   rescue ConnectApi::Error => error
@@ -119,6 +123,7 @@ class Whatsapp::ConnectApiMessageRevokeService
   def fallback_message_key
     {
       'id' => @message.source_id.to_s,
+      'fromMe' => true,
       'remoteJid' => fallback_remote_jid
     }.compact
   end
