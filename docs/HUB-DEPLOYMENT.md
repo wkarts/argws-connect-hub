@@ -56,6 +56,7 @@ HUB_DIAGNOSTICS_DIR=/app/log/hub_diagnostics
 HUB_DIAGNOSTICS_FILE_BYTES=8388608
 HUB_DIAGNOSTICS_FILE_COUNT=8
 HUB_DIAGNOSTICS_RETENTION_SECONDS=259200
+HUB_DIAGNOSTICS_QUEUE_SIZE=2048
 HUB_DIAGNOSTICS_DATA_PATH=./volumes/diagnostics
 HUB_CONNECT_RELIABILITY_ENABLED=true
 HUB_EXISTING_INSTANCE_BINDING_ENABLED=true
@@ -63,4 +64,4 @@ HUB_EXISTING_INSTANCE_BINDING_ENABLED=true
 
 O painel **HUB Admin → Diagnóstico e logs** lê esse diretório compartilhado. O conteúdo é rotacionado e sanitizado; não substitui os logs brutos do Docker, PostgreSQL, Redis ou da Connect|API.
 
-`HUB_CONNECT_RELIABILITY_ENABLED=true` ativa o processamento individual de eventos Connect|API, retenção de status antecipado e as proteções de concorrência. `HUB_EXISTING_INSTANCE_BINDING_ENABLED=true` libera o fluxo administrativo para associar uma caixa a uma instância Connect|API já existente sem criar ou parear uma nova sessão.
+`HUB_DIAGNOSTICS_QUEUE_SIZE` limita a fila assíncrona local de cada processo. Quando ela satura, o HUB descarta apenas o evento de diagnóstico, preservando o fluxo funcional. `HUB_CONNECT_RELIABILITY_ENABLED` é mantida por compatibilidade e não altera mais o caminho realtime de mensagens/webhooks. `HUB_EXISTING_INSTANCE_BINDING_ENABLED=true` libera, de forma independente, o fluxo administrativo para associar uma caixa a uma instância Connect|API já existente sem criar ou parear uma nova sessão.
