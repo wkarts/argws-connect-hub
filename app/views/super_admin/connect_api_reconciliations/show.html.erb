@@ -1,0 +1,106 @@
+<% content_for(:title) { 'Reconciliação Connect|API' } %>
+
+<header class="main-content__header hub-ops hub-ops-header">
+  <div>
+    <h1 class="hub-ops-title">Reconciliação Connect|API</h1>
+    <p class="hub-ops-subtitle">
+      Corrige o histórico do WhatsApp sem reabrir conversas resolvidas, sem reenviar mensagens
+      e preservando os horários originais das mensagens.
+    </p>
+  </div>
+  <div class="hub-ops-toolbar">
+    <%= link_to 'Voltar à Connect|API', super_admin_connect_api_path, class: 'button' %>
+  </div>
+</header>
+
+<section class="main-content__body hub-ops">
+  <% if @channels.empty? %>
+    <div class="hub-alert hub-alert-warning">Nenhuma caixa Connect|API está disponível para reconciliação.</div>
+  <% else %>
+    <div class="hub-card">
+      <h2>Caixa / instância</h2>
+      <form method="get" action="<%= super_admin_connect_api_reconciliation_path %>">
+        <div class="hub-form-grid">
+          <div>
+            <label for="reconciliation_channel_id">Caixa</label>
+            <select id="reconciliation_channel_id" name="channel_id" onchange="this.form.submit()">
+              <% @channels.each do |channel| %>
+                <option value="<%= channel.id %>" <%= 'selected' if @channel&.id == channel.id %>>
+                  #<%= channel.inbox&.id %> · <%= channel.inbox&.name %> ·
+                  <%= channel.provider_config.to_h['instance_name'] %> · <%= channel.account&.name %>
+                </option>
+              <% end %>
+            </select>
+          </div>
+        </div>
+      </form>
+    </div>
+
+    <% if @channel %>
+      <div class="hub-card">
+        <h2>Reconciliação por período</h2>
+        <p class="hub-ops-subtitle">
+          Informe o período que deseja conferir. O HUB consulta somente esse intervalo na Connect|API,
+          deduplica por ID da mensagem e insere os registros ausentes com o timestamp original.
+        </p>
+
+        <%= form_with url: super_admin_connect_api_reconciliation_path, method: :post, local: true do |form| %>
+          <%= hidden_field_tag :channel_id, @channel.id %>
+          <div class="hub-form-grid">
+            <div>
+              <%= form.label :from_at, 'De' %>
+              <%= form.datetime_local_field :from_at, value: @default_from, required: true %>
+            </div>
+            <div>
+              <%= form.label :to_at, 'Até' %>
+              <%= form.datetime_local_field :to_at, value: @default_to, required: true %>
+            </div>
+          </div>
+          <div class="hub-ops-toolbar">
+            <%= form.submit 'Reconciliar período', class: 'button hub-primary',
+                            data: { hub_confirm: 'Reconciliar este período? Nenhuma mensagem será reenviada e conversas resolvidas não serão reabertas.' } %>
+          </div>
+        <% end %>
+      </div>
+
+      <div class="hub-card">
+        <h2>Importar todas as conversas disponíveis</h2>
+        <p class="hub-ops-subtitle">
+          Percorre todo o histórico que a Connect|API ainda possui para esta instância.
+          Não significa o histórico desde a criação da conta WhatsApp: o limite é o que estiver persistido na Connect|API.
+        </p>
+        <%= button_to 'Importar todas as conversas',
+                      import_all_super_admin_connect_api_reconciliation_path,
+                      method: :post,
+                      params: { channel_id: @channel.id },
+                      class: 'button hub-warning',
+                      data: {
+                        hub_confirm: 'Importar todo o histórico disponível desta instância? A operação roda em background e não reabre conversas resolvidas.'
+                      } %>
+      </div>
+
+      <div class="hub-card">
+        <h2>Estado da operação</h2>
+        <% if @operation.present? %>
+          <dl class="hub-summary">
+            <dt>Operação</dt><dd><%= @operation['operation_id'] %></dd>
+            <dt>Modo</dt><dd><%= @operation['mode'] == 'all' ? 'Importação completa' : 'Período informado' %></dd>
+            <dt>Estado</dt><dd><%= @operation['state'] %></dd>
+            <% if @operation['from_at'].present? %><dt>De</dt><dd><%= @operation['from_at'] %></dd><% end %>
+            <% if @operation['to_at'].present? %><dt>Até</dt><dd><%= @operation['to_at'] %></dd><% end %>
+            <dt>Página</dt><dd><%= @operation['page'] || 0 %></dd>
+            <dt>Examinados</dt><dd><%= @operation['records_examined'] || 0 %></dd>
+            <dt>Importados</dt><dd><%= @operation['records_created'] || 0 %></dd>
+            <dt>Já existentes/atualizados</dt><dd><%= @operation['records_updated'] || 0 %></dd>
+            <dt>Ignorados</dt><dd><%= @operation['records_skipped'] || 0 %></dd>
+          </dl>
+          <p class="hub-ops-subtitle">
+            Atualize esta página para acompanhar o progresso. O estado da conversa existente não é alterado.
+          </p>
+        <% else %>
+          <div class="hub-empty">Nenhuma reconciliação foi executada nesta caixa.</div>
+        <% end %>
+      </div>
+    <% end %>
+  <% end %>
+</section>
