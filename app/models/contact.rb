@@ -50,6 +50,7 @@ class Contact < ApplicationRecord
   validates :phone_number,
             allow_blank: true, uniqueness: { scope: [:account_id] },
             format: { with: /\+[1-9]\d{1,14}\z/, message: I18n.t('errors.contacts.phone_number.invalid') }
+  validate :date_of_birth_cannot_be_in_future
 
   belongs_to :account
   has_many :conversations, dependent: :destroy_async
@@ -141,6 +142,7 @@ class Contact < ApplicationRecord
       identifier: identifier,
       name: name,
       phone_number: phone_number,
+      date_of_birth: date_of_birth,
       thumbnail: avatar_url,
       type: 'contact'
     }
@@ -157,6 +159,7 @@ class Contact < ApplicationRecord
       identifier: identifier,
       name: name,
       phone_number: phone_number,
+      date_of_birth: date_of_birth,
       thumbnail: avatar_url
     }
   end
@@ -175,6 +178,12 @@ class Contact < ApplicationRecord
   end
 
   private
+
+  def date_of_birth_cannot_be_in_future
+    return if date_of_birth.blank? || date_of_birth <= Date.current
+
+    errors.add(:date_of_birth, 'não pode estar no futuro')
+  end
 
   def ip_lookup
     return unless account.feature_enabled?('ip_lookup')
