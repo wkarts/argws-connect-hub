@@ -25,6 +25,7 @@ RSpec.describe 'Super Admin diagnostics download', type: :request do
 
   it 'downloads a valid gzip diagnostic package without encoding conversion errors' do
     sign_in(super_admin, scope: :super_admin)
+    ENV['HUB_DIAGNOSTICS_CAPTURE_MODE'] = 'all'
 
     HubDiagnostics::Recorder.emit(
       'spec.download',
