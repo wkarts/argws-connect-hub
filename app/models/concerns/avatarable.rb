@@ -17,7 +17,10 @@ module Avatarable
   end
 
   def avatar_full_url
-    return url_for(avatar.representation(resize_to_limit: [1200, 1200])) if avatar.attached? && avatar.representable?
+    # Fullscreen preview must use the original file downloaded from the provider.
+    # A second ActiveStorage representation would re-encode the image and can
+    # visibly reduce WhatsApp profile-picture quality.
+    return url_for(avatar) if avatar.attached?
 
     ''
   end
