@@ -1,4 +1,4 @@
-require 'rails_helper'
+<sub>require 'rails_helper'
 require 'tmpdir'
 
 RSpec.describe HubDiagnostics::Recorder do
@@ -7,6 +7,7 @@ RSpec.describe HubDiagnostics::Recorder do
       'HUB_DIAGNOSTICS_DIR' => ENV['HUB_DIAGNOSTICS_DIR'],
       'HUB_DIAGNOSTICS_ENABLED' => ENV['HUB_DIAGNOSTICS_ENABLED'],
       'HUB_DIAGNOSTICS_QUEUE_SIZE' => ENV['HUB_DIAGNOSTICS_QUEUE_SIZE'],
+      'HUB_DIAGNOSTICS_CAPTURE_MODE' => ENV['HUB_DIAGNOSTICS_CAPTURE_MODE'],
       'APP_REVISION' => ENV['APP_REVISION']
     }
 
@@ -16,9 +17,12 @@ RSpec.describe HubDiagnostics::Recorder do
       ENV['HUB_DIAGNOSTICS_DIR'] = directory
       ENV['HUB_DIAGNOSTICS_ENABLED'] = 'true'
       ENV['HUB_DIAGNOSTICS_QUEUE_SIZE'] = '64'
+      ENV['HUB_DIAGNOSTICS_CAPTURE_MODE'] = 'all'
       ENV['APP_REVISION'] = 'spec-build-sha'
+      HubDiagnostics::CaptureSession.stop!
       example.run
       described_class.flush!
+      HubDiagnostics::CaptureSession.stop!
     end
   ensure
     previous.each { |key, value| value.nil? ? ENV.delete(key) : ENV[key] = value }
@@ -47,3 +51,4 @@ RSpec.describe HubDiagnostics::Recorder do
     expect { described_class.flush! }.not_to raise_error
   end
 end
+</sub>
