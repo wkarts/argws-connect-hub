@@ -23,7 +23,7 @@ class Whatsapp::ConnectApiRealtimeWebhookService
     client.request(
       :put,
       compatibility_path,
-      body: { enabled: true, webhookUrl: expected_webhook_url },
+      body: { enabled: true, webhookUrl: expected_webhook_url(remote['phoneNumberId']) },
       timeout: 10
     )
 
@@ -64,28 +64,31 @@ class Whatsapp::ConnectApiRealtimeWebhookService
 
   def validate_identity!(remote)
     local_phone = @channel.phone_number.to_s.gsub(/\D/, '')
-    remote_phone = remote['displayPhoneNumber'].to_s.gsub(/\D/, '')
-    raise ConnectApi::Error, 'Connect|API instance phone does not match this HUB channel' if remote_phone.present? && remote_phone != local_phone
-
     local_phone_id = @config['phone_number_id'].to_s
+    remote_phone = remote['displayPhoneNumber'].to_s.gsub(/\D/, '')
     remote_phone_id = remote['phoneNumberId'].to_s
-    return if local_phone_id.blank? || remote_phone_id.blank? || local_phone_id == remote_phone_id
 
-    raise ConnectApi::Error, 'Connect|API phoneNumberId does not match this HUB channel'
+    phone_matches = remote_phone.present? && remote_phone == local_phone
+    phone_id_matches = local_phone_id.present? && remote_phone_id.present? && local_phone_id == remote_phone_id
+    return if phone_matches || phone_id_matches
+
+    raise ConnectApi::Error, 'Connect|API instance identity does not match this HUB channel'
   end
 
   def webhook_matches?(remote)
-    normalize_url(remote['webhookUrl']) == normalize_url(expected_webhook_url)
+    normalize_url(remote['webhookUrl']) == normalize_url(expected_webhook_url(remote['phoneNumberId']))
   end
 
-  def expected_webhook_url
+  def expected_webhook_url(remote_phone_id = nil)
     frontend = ENV.fetch('FRONTEND_URL', '').to_s.sub(%r{/+$}, '')
     uri = URI.parse(frontend)
     unless uri.is_a?(URI::HTTP) && uri.host.present? && uri.userinfo.nil? && uri.query.nil? && uri.fragment.nil?
       raise ConnectApi::Error, 'FRONTEND_URL is invalid for Connect|API realtime webhook'
     end
 
-    phone_id = @config['phone_number_id'].to_s.presence || @channel.phone_number.to_s.gsub(/\D/, '')
+    phone_id = remote_phone_id.to_s.presence ||
+               @config['phone_number_id'].to_s.presence ||
+               @channel.phone_number.to_s.gsub(/\D/, '')
     base = "#{frontend}/webhooks/whatsapp/#{phone_id}"
     binding_ref = @config['hub_binding_ref'].to_s
     binding_ref.present? ? "#{base}?hub_binding_ref=#{CGI.escape(binding_ref)}" : base
@@ -116,7 +119,7 @@ class Whatsapp::ConnectApiRealtimeWebhookService
   def persist_verified_metadata(remote)
     @channel.reload
     config = @channel.provider_config.to_h.deep_dup
-    config['meta_webhook_url'] = expected_webhook_url
+    config['meta_webhook_url'] = expected_webhook_url(remote['phoneNumberId'])
     config['meta_compatible'] = true
     config['meta_compatible_verified'] = true
     config['meta_compatible_verified_at'] = Time.current.utc.iso8601
