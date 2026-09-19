@@ -76,6 +76,29 @@ RSpec.describe SendReplyJob do
       described_class.perform_now(message.id)
     end
 
+    it 'does not let diagnostics suppress Connect API delivery when binding metadata changes' do
+      whatsapp_channel = create(
+        :channel_whatsapp,
+        provider: 'connectapi',
+        sync_templates: false,
+        validate_provider_config: false,
+        provider_config: {
+          'instance_name' => 'diagnostic-passive-instance',
+          'hub_binding_id' => 'binding-before'
+        }
+      )
+      message = create(:message, conversation: create(:conversation, inbox: whatsapp_channel.inbox))
+
+      allow(Whatsapp::SendOnWhatsappService).to receive(:new).with(message: message).and_return(process_service)
+
+      whatsapp_channel.update_columns(
+        provider_config: whatsapp_channel.provider_config.to_h.merge('hub_binding_id' => 'binding-after')
+      )
+
+      expect(process_service).to receive(:perform)
+      described_class.perform_now(message.id)
+    end
+
     it 'calls ::Sms::SendOnSmsService when its sms message' do
       sms_channel = create(:channel_sms)
       message = create(:message, conversation: create(:conversation, inbox: sms_channel.inbox))
