@@ -405,4 +405,93 @@ RSpec.describe 'Conversation Messages API', type: :request do
       end
     end
   end
+
+  describe 'POST /api/v1/accounts/{account.id}/conversations/:conversation_id/messages/:id/forward' do
+    let(:agent) { create(:user, account: account, role: :agent) }
+    let!(:channel) do
+      create(
+        :channel_whatsapp,
+        account: account,
+        provider: 'connectapi',
+        sync_templates: false,
+        validate_provider_config: false,
+        provider_config: {
+          'instance_name' => 'forward-controller',
+          'api_key' => 'instance-token'
+        }
+      )
+    end
+    let(:source_contact) { create(:contact, account: account, phone_number: '+5575988111111') }
+    let(:source_contact_inbox) do
+      create(:contact_inbox, contact: source_contact, inbox: channel.inbox, source_id: '5575988111111')
+    end
+    let(:conversation) do
+      create(
+        :conversation,
+        account: account,
+        inbox: channel.inbox,
+        contact: source_contact,
+        contact_inbox: source_contact_inbox
+      )
+    end
+    let(:message) do
+      create(
+        :message,
+        account: account,
+        inbox: channel.inbox,
+        conversation: conversation,
+        message_type: :incoming,
+        content: 'Encaminhar'
+      )
+    end
+
+    before do
+      create(:inbox_member, inbox: channel.inbox, user: agent)
+    end
+
+    it 'returns the destination conversation immediately for a single contact' do
+      target = create(:contact, account: account, phone_number: '+5575988222222')
+
+      post "/api/v1/accounts/#{account.id}/conversations/#{conversation.display_id}/messages/#{message.id}/forward",
+           params: { contacts: [target.id] },
+           headers: agent.create_new_auth_token,
+           as: :json
+
+      expect(response).to have_http_status(:ok)
+      expect(response.parsed_body['status']).to eq('forwarded')
+      expect(response.parsed_body['destination_count']).to eq(1)
+      expect(response.parsed_body.dig('destination', 'conversation_id')).to be_present
+      expect(response.parsed_body.dig('destination', 'message_id')).to be_present
+    end
+
+    it 'queues multiple destinations without forcing navigation to one conversation' do
+      targets = [
+        create(:contact, account: account, phone_number: '+5575988333333'),
+        create(:contact, account: account, phone_number: '+5575988444444')
+      ]
+
+      expect do
+        post "/api/v1/accounts/#{account.id}/conversations/#{conversation.display_id}/messages/#{message.id}/forward",
+             params: { contacts: targets.map(&:id) },
+             headers: agent.create_new_auth_token,
+             as: :json
+      end.to have_enqueued_job(Conversations::ForwardMessageJob)
+
+      expect(response).to have_http_status(:accepted)
+      expect(response.parsed_body['status']).to eq('queued')
+      expect(response.parsed_body['destination_count']).to eq(2)
+      expect(response.parsed_body['destination']).to be_nil
+    end
+
+    it 'rejects an empty destination list' do
+      post "/api/v1/accounts/#{account.id}/conversations/#{conversation.display_id}/messages/#{message.id}/forward",
+           params: { contacts: [] },
+           headers: agent.create_new_auth_token,
+           as: :json
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(response.parsed_body['error']).to include('destinatário')
+    end
+  end
+
 end
