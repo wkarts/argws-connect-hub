@@ -6,6 +6,12 @@ module HubDiagnostics
   class Recorder
     DEFAULT_QUEUE_SIZE = 2048
     DEFAULT_FLUSH_TIMEOUT = 2.0
+    CRITICAL_EVENTS = %w[
+      send.failed send.transport_failed send.response_without_id
+      template.validation_failed template.send_failed
+      webhook.processing_failed webhook.rejected
+      job.failed sidekiq.error database.error
+    ].freeze
 
     class << self
       def store
@@ -77,11 +83,22 @@ module HubDiagnostics
       end
 
       def queue_health
+        session = HubDiagnostics::CaptureSession.current
         {
           queued: @queue&.length.to_i,
           capacity: queue_size,
           writer_alive: @writer_pid == Process.pid && @writer&.alive? == true,
-          dropped: @dropped_events.to_i
+          dropped: @dropped_events.to_i,
+          capture_mode: capture_mode,
+          capture_session_id: session&.dig('id')
+        }.compact
+      rescue StandardError
+        {
+          queued: @queue&.length.to_i,
+          capacity: queue_size,
+          writer_alive: @writer_pid == Process.pid && @writer&.alive? == true,
+          dropped: @dropped_events.to_i,
+          capture_mode: capture_mode
         }
       end
 
@@ -129,13 +146,35 @@ module HubDiagnostics
         loop do
           record, acknowledgement = queue.pop
           begin
-            store.append(record) if record
+            persisted_record = record && record_for_persistence(record)
+            store.append(persisted_record) if persisted_record
           rescue StandardError => error
             report_failure(error)
           ensure
             acknowledgement << true if acknowledgement
           end
         end
+      end
+
+      def record_for_persistence(record)
+        mode = capture_mode
+        return record if mode == 'all'
+        return critical_event?(record) ? record : nil if mode == 'errors'
+
+        session = HubDiagnostics::CaptureSession.current
+        return record.merge(capture_session_id: session['id']) if session
+        return record if critical_event?(record)
+
+        nil
+      end
+
+      def critical_event?(record)
+        record[:level].to_s == 'error' || CRITICAL_EVENTS.include?(record[:event].to_s)
+      end
+
+      def capture_mode
+        mode = ENV.fetch('HUB_DIAGNOSTICS_CAPTURE_MODE', 'all').to_s.strip.downcase
+        %w[all session errors].include?(mode) ? mode : 'all'
       end
 
       def queue_size
