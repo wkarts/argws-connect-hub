@@ -12,7 +12,8 @@ module HubDiagnostics
                    content_type message_type provider integration endpoint payload_kind entries_count
                    changes_count messages_count statuses_count source_id_present success bytes
                    records_found records_created records_updated records_skipped event_count hub_version build_sha
-                   boot_id process_role process_id template_name template_version parameter_count unresolved_count].freeze
+                   boot_id process_role process_id template_name template_version parameter_count unresolved_count
+                   capture_session_id capture_mode].freeze
     SECRET = /password|passwd|secret|token|api.?key|authorization|cookie|credential|signature|hub_binding_ref/i
     def self.call(value, depth = 0)
       return '[DEPTH_LIMIT]' if depth > 6
