@@ -71,6 +71,9 @@ describe Whatsapp::ConnectApiHistoricalReconciliationService do
       source_id: 'HISTORY-EXISTING-1',
       message_type: :incoming
     )
+    # The normal Message callback reopens resolved conversations. Put the fixture
+    # back in the state that the historical reconciler must preserve.
+    conversation.update!(status: :resolved)
     record = {
       'key' => {
         'id' => 'HISTORY-EXISTING-1',
