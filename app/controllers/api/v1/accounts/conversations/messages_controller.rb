@@ -59,10 +59,31 @@ class Api::V1::Accounts::Conversations::MessagesController < Api::V1::Accounts::
   end
 
   def forward
-    ::Conversations::ForwardMessageJob.perform_later(forward_message_params)
-    head :ok
-    rescue StandardError => e
-      render e
+    contacts = forward_contact_ids
+    return render json: { error: 'Selecione pelo menos um destinatário.' }, status: :unprocessable_entity if contacts.empty?
+
+    payload = forward_message_params.merge(contacts: contacts)
+
+    if contacts.one?
+      result = ::Conversations::ForwardMessageJob.perform_now(payload).first
+      return render json: {
+        status: 'forwarded',
+        destination_count: 1,
+        destination: result
+      }
+    end
+
+    job = ::Conversations::ForwardMessageJob.perform_later(payload)
+    render json: {
+      status: 'queued',
+      destination_count: contacts.length,
+      job_id: job.job_id
+    }, status: :accepted
+  rescue ActiveRecord::RecordNotFound
+    render json: { error: 'Um dos destinatários não pertence a esta conta.' }, status: :unprocessable_entity
+  rescue StandardError => error
+    Rails.logger.error("[HUB forward] #{error.class}: #{error.message}")
+    render json: { error: 'Não foi possível encaminhar a mensagem. Tente novamente.' }, status: :unprocessable_entity
   end
 
   private
@@ -89,12 +110,15 @@ class Api::V1::Accounts::Conversations::MessagesController < Api::V1::Accounts::
     message.translations.present? && message.translations[permitted_params[:target_language]].present?
   end
 
+  def forward_contact_ids
+    Array(params[:contacts]).map(&:to_i).select(&:positive?).uniq
+  end
+
   def forward_message_params
     {
       user_id: Current.user.id,
       account_id: Current.account.id,
-      message_id: message.id,
-      contacts: params[:contacts]
+      message_id: message.id
     }
   end
 end
