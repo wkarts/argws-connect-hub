@@ -47,11 +47,11 @@ module HubDiagnostics::JobTrace
   # yield is executed exactly once regardless of diagnostic availability.
   def with_hub_diagnostic_trace
     context = (@hub_diagnostic_context || {}).symbolize_keys
-    context[:trace_id] ||= SecureRandom.uuid
+    context[:trace_id] ||= safe_trace_id
     previous_context = diagnostic_context_snapshot
     apply_diagnostic_context(context)
 
-    started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+    started = monotonic_now
     attributes = {
       job_id: job_id,
       job_class: self.class.name,
@@ -66,7 +66,7 @@ module HubDiagnostics::JobTrace
       HubDiagnostics::Recorder.emit(
         'job.completed',
         attributes.merge(
-          duration_ms: ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - started) * 1000).round(2)
+          duration_ms: elapsed_ms(started)
         )
       )
     rescue StandardError => error
@@ -75,6 +75,26 @@ module HubDiagnostics::JobTrace
     ensure
       apply_diagnostic_context(previous_context)
     end
+  end
+
+  def safe_trace_id
+    SecureRandom.uuid
+  rescue StandardError
+    nil
+  end
+
+  def monotonic_now
+    Process.clock_gettime(Process::CLOCK_MONOTONIC)
+  rescue StandardError
+    nil
+  end
+
+  def elapsed_ms(started)
+    return unless started
+
+    ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - started) * 1000).round(2)
+  rescue StandardError
+    nil
   end
 
   def diagnostic_context_snapshot
