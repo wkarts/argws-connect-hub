@@ -23,6 +23,9 @@ class SuperAdmin::DiagnosticsController < SuperAdmin::ApplicationController
   def download
     filters = validated_filters
     file = Tempfile.new(['hub-diagnostics-', '.jsonl.gz'])
+    # Gzip writes arbitrary binary bytes (including 0x8B). Keep the tempfile in
+    # binary mode so Ruby never attempts an ASCII-8BIT -> UTF-8 conversion.
+    file.binmode
     count = 0
     export_bytes = 0
     truncated = false
@@ -57,9 +60,10 @@ class SuperAdmin::DiagnosticsController < SuperAdmin::ApplicationController
                                sha256_event_lines: digest.hexdigest }) + "
 ")
     gzip.finish
-    file.rewind
+    file.flush
+    payload = File.binread(file.path)
     HubDiagnostics::Recorder.emit('diagnostics.exported', actor_id: current_super_admin.id, count: count, truncated: truncated)
-    send_data file.read, filename: "hub-diagnostico-#{Time.now.utc.strftime('%Y%m%dT%H%M%SZ')}.jsonl.gz",
+    send_data payload, filename: "hub-diagnostico-#{Time.now.utc.strftime('%Y%m%dT%H%M%SZ')}.jsonl.gz",
                         type: 'application/gzip', disposition: 'attachment'
   rescue ArgumentError
     render plain: 'Período ou filtros inválidos.', status: :unprocessable_entity
@@ -97,7 +101,7 @@ class SuperAdmin::DiagnosticsController < SuperAdmin::ApplicationController
     filters.each do |key, value|
       raise ArgumentError if value.to_s.length > 160
       if %w[since until].include?(key)
-        parsed = value.match?(/(?:Z|[+-]dd:dd)z/) ? Time.iso8601(value) : ActiveSupport::TimeZone['America/Bahia'].parse(value)
+        parsed = value.match?(/(?:Z|[+-]\d{2}:\d{2})\z/) ? Time.iso8601(value) : ActiveSupport::TimeZone['America/Bahia'].parse(value)
         raise ArgumentError unless parsed
         filters[key] = parsed.utc.iso8601
       end
