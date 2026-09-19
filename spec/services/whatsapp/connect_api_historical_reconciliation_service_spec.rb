@@ -50,6 +50,7 @@ describe Whatsapp::ConnectApiHistoricalReconciliationService do
       'MessageUpdate' => []
     }
 
+    original_last_activity_at = conversation.last_activity_at
     result = service.process(record)
 
     imported = result.message.reload
@@ -58,7 +59,7 @@ describe Whatsapp::ConnectApiHistoricalReconciliationService do
     expect(imported.created_at.to_i).to eq(timestamp.to_i)
     expect(imported.conversation_id).to eq(conversation.id)
     expect(conversation.reload).to be_resolved
-    expect(conversation.last_activity_at.to_i).to eq(1.day.ago.to_i).or be_within(2).of(1.day.ago.to_i)
+    expect(conversation.last_activity_at.to_i).to eq(original_last_activity_at.to_i)
   end
 
   it 'is idempotent by inbox and source id' do
