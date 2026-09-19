@@ -1,4 +1,4 @@
-<sub>require 'rails_helper'
+require 'rails_helper'
 require 'tmpdir'
 
 RSpec.describe HubDiagnostics::Recorder do
@@ -51,4 +51,3 @@ RSpec.describe HubDiagnostics::Recorder do
     expect { described_class.flush! }.not_to raise_error
   end
 end
-</sub>
