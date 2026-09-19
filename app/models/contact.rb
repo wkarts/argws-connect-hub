@@ -144,6 +144,7 @@ class Contact < ApplicationRecord
       phone_number: phone_number,
       date_of_birth: date_of_birth,
       thumbnail: avatar_url,
+      avatar_url: avatar_full_url,
       type: 'contact'
     }
   end
@@ -153,6 +154,7 @@ class Contact < ApplicationRecord
       account: account.webhook_data,
       additional_attributes: additional_attributes,
       avatar: avatar_url,
+      avatar_url: avatar_full_url,
       custom_attributes: custom_attributes,
       email: email,
       id: id,
