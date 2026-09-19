@@ -127,6 +127,7 @@ jobs:
           spec/services/hub_diagnostics/export_summary_spec.rb
           spec/services/hub_diagnostics/capture_session_spec.rb
           spec/services/hub_diagnostics/recorder_spec.rb
+          spec/lib/hub_diagnostics/request_trace_spec.rb
           spec/services/hub_diagnostics/webhook_router_spec.rb
           spec/services/whatsapp/connect_api_realtime_webhook_service_spec.rb
           spec/finders/message_finder_spec.rb
