@@ -29,18 +29,17 @@ module HubDiagnostics::JobTrace
 
   def deserialize(job_data)
     super
-    @hub_diagnostic_context = job_data['hub_diagnostic_context'].to_h.slice('trace_id', 'request_id')
-  rescue StandardError => error
-    # ActiveJob deserialization errors must keep their native behavior. Only
-    # failures while restoring optional diagnostic context are ignored.
-    raise unless defined?(@arguments)
 
-    HubDiagnostics::Recorder.error(
-      'diagnostics.job_context_deserialize_failed',
-      error,
-      job_class: self.class.name
-    )
-    @hub_diagnostic_context = {}
+    @hub_diagnostic_context = begin
+      job_data['hub_diagnostic_context'].to_h.slice('trace_id', 'request_id')
+    rescue StandardError => error
+      HubDiagnostics::Recorder.error(
+        'diagnostics.job_context_deserialize_failed',
+        error,
+        job_class: self.class.name
+      )
+      {}
+    end
   end
 
   private
