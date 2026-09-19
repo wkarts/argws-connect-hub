@@ -9,7 +9,6 @@ class Channels::Whatsapp::ConnectApiHistoricalReconciliationJob < ApplicationJob
   PAGE_SIZE = 100
   DEFAULT_MAX_PAGES = 10_000
 
-  retry_on ConnectApi::Error, wait: 15.seconds, attempts: 8
   retry_on HubDiagnostics::BindingBusy, wait: 10.seconds, attempts: 12
 
   def perform(channel_id, mode:, operation_id:, actor_id:, from_at: nil, to_at: nil, page: 1)
