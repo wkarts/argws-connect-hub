@@ -147,6 +147,46 @@ export const getUndefinedVariablesInMessage = ({ message = '', variables = {} } 
   return [...missing];
 };
 
+export const resolveTemplateVariables = ({
+  message = '',
+  templateParams = {},
+  variables = {},
+} = {}) => {
+  const unresolved = new Set();
+
+  const resolveValue = value => {
+    if (typeof value !== 'string') return value;
+
+    getUndefinedVariablesInMessage({ message: value, variables }).forEach(
+      variable => unresolved.add(variable)
+    );
+
+    return replaceVariablesInMessage({ message: value, variables });
+  };
+
+  const processedParams = templateParams?.processed_params;
+  const resolvedProcessedParams =
+    processedParams && typeof processedParams === 'object'
+      ? Object.fromEntries(
+          Object.entries(processedParams).map(([key, value]) => [
+            key,
+            resolveValue(value),
+          ])
+        )
+      : processedParams;
+
+  return {
+    message: resolveValue(message),
+    templateParams: {
+      ...templateParams,
+      ...(processedParams && typeof processedParams === 'object'
+        ? { processed_params: resolvedProcessedParams }
+        : {}),
+    },
+    unresolvedVariables: [...unresolved],
+  };
+};
+
 export const createTypingIndicator = (onStartTyping, onStopTyping, idleTime = 4000) => {
   let timer = null;
   let active = false;
