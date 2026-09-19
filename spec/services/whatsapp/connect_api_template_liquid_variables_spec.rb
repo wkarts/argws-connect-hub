@@ -60,7 +60,7 @@ RSpec.describe 'Connect|API template HUB variables' do
       }
     ).perform
 
-    resolved_name = contact.reload.name
+    resolved_name = ContactDrop.new(contact.reload).name
     expect(message.content).to eq("Olá! #{resolved_name}")
     expect(message.additional_attributes.dig('template_params', 'processed_params', '1')).to eq(resolved_name)
 
