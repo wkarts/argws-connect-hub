@@ -159,7 +159,9 @@ describe Whatsapp::SendOnWhatsappService do
         expect_any_instance_of(Channel::Whatsapp).to receive(:send_message)
           .with('5575988881111', message).and_return('freeform-message-id')
 
-        described_class.new(message: message).perform
+        expect do
+          described_class.new(message: message).perform
+        end.to have_enqueued_job(Channels::Whatsapp::ConnectApiReceiptWatchJob).with(message.id, 0)
 
         expect(message.reload.source_id).to eq('freeform-message-id')
       end
