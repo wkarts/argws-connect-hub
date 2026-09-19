@@ -63,13 +63,18 @@ class Api::V1::Accounts::Conversations::MessagesController < Api::V1::Accounts::
     return render json: { error: 'Selecione pelo menos um destinatário.' }, status: :unprocessable_entity if contacts.empty?
     return render json: { error: 'Um dos destinatários não pertence a esta conta.' }, status: :unprocessable_entity unless valid_forward_contacts?(contacts)
 
-    payload = forward_message_params.merge(contacts: contacts)
+    operation_id = SecureRandom.uuid
+    payload = forward_message_params.merge(
+      contacts: contacts,
+      operation_id: operation_id
+    )
 
     if contacts.one?
       result = ::Conversations::ForwardMessageJob.perform_now(payload).first
       return render json: {
         status: 'forwarded',
         destination_count: 1,
+        operation_id: operation_id,
         destination: result
       }
     end
@@ -78,6 +83,7 @@ class Api::V1::Accounts::Conversations::MessagesController < Api::V1::Accounts::
     render json: {
       status: 'queued',
       destination_count: contacts.length,
+      operation_id: operation_id,
       job_id: job.job_id
     }, status: :accepted
   rescue ActiveRecord::RecordNotFound
