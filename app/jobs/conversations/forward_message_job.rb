@@ -19,10 +19,12 @@ class Conversations::ForwardMessageJob < ApplicationJob
 
   def forward_to_contact(contact_id)
     contact = @account.contacts.find(contact_id)
-    conversation = forward_conversation(contact)
-    forwarded_message = existing_forwarded_message(conversation, contact)
+    forwarded_message = existing_forwarded_message(contact)
 
-    unless forwarded_message
+    if forwarded_message
+      conversation = forwarded_message.conversation
+    else
+      conversation = forward_conversation(contact)
       forwarded_message = conversation.messages.build(message_params(contact))
       process_attachments(forwarded_message)
       forwarded_message.save!
@@ -82,18 +84,19 @@ class Conversations::ForwardMessageJob < ApplicationJob
     ::Conversation.create!(conversation_params(contact, contact_inbox))
   end
 
-  def existing_forwarded_message(conversation, contact)
+  def existing_forwarded_message(contact)
     marker = {
       forwarded_from_message_id: @message.id,
       forwarded_to_contact_id: contact.id,
       forwarded_by_user_id: @user.id
     }
 
-    conversation.messages
-                .where(message_type: :outgoing)
-                .where('additional_attributes @> ?', marker.to_json)
-                .order(id: :desc)
-                .first
+    Message.joins(:conversation)
+           .where(account_id: @account.id, inbox_id: @message.inbox_id, message_type: :outgoing)
+           .where(conversations: { contact_id: contact.id })
+           .where('messages.additional_attributes @> ?', marker.to_json)
+           .order('messages.id DESC')
+           .first
   end
 
   def process_attachments(message)
