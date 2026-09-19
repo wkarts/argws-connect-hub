@@ -60,6 +60,9 @@ RSpec.describe Conversations::ForwardMessageJob do
   end
 
   it 'creates a forwarded outgoing message, queues delivery and returns the destination display id' do
+    source_message
+    clear_enqueued_jobs
+
     result = nil
     expect do
       result = described_class.perform_now(payload).first
