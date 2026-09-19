@@ -55,6 +55,9 @@ class Conversations::ForwardMessageJob < ApplicationJob
   end
 
   def create_contact_inbox(contact)
+    existing = contact.contact_inboxes.find_by(inbox_id: @message.inbox_id)
+    return existing if existing
+
     ::ContactInboxBuilder.new(
       contact: contact,
       inbox: @message.inbox,
