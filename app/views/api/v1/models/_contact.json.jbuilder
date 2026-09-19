@@ -4,6 +4,7 @@ json.email resource.email
 json.id resource.id
 json.name resource.name
 json.phone_number resource.phone_number
+json.date_of_birth resource.date_of_birth&.iso8601
 json.identifier resource.identifier
 json.thumbnail resource.avatar_url
 json.custom_attributes resource.custom_attributes
