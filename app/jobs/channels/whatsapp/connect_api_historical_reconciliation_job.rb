@@ -10,6 +10,7 @@ class Channels::Whatsapp::ConnectApiHistoricalReconciliationJob < ApplicationJob
   DEFAULT_MAX_PAGES = 10_000
 
   def perform(channel_id, mode:, operation_id:, actor_id:, from_at: nil, to_at: nil)
+    @operation_id = operation_id.to_s
     channel = Channel::Whatsapp.find_by(id: channel_id, provider: 'connectapi')
     return unless channel&.inbox
 
@@ -151,7 +152,7 @@ class Channels::Whatsapp::ConnectApiHistoricalReconciliationJob < ApplicationJob
     channel.reload
     config = channel.provider_config.to_h.deep_dup
     operation = config['hub_reconciliation_operation'].to_h
-    return if operation['operation_id'].present? && operation['operation_id'] != arguments[1][:operation_id].to_s
+    return if operation['operation_id'].present? && operation['operation_id'] != @operation_id
 
     config['hub_reconciliation_operation'] = operation.merge(attributes.stringify_keys)
     channel.update_columns(provider_config: config, updated_at: channel.updated_at)
