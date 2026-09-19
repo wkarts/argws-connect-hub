@@ -11,7 +11,13 @@ module Avatarable
   end
 
   def avatar_url
-    return url_for(avatar.representation(resize_to_fill: [250, nil])) if avatar.attached? && avatar.representable?
+    return url_for(avatar.representation(resize_to_fill: [250, 250])) if avatar.attached? && avatar.representable?
+
+    ''
+  end
+
+  def avatar_full_url
+    return url_for(avatar.representation(resize_to_limit: [1200, 1200])) if avatar.attached? && avatar.representable?
 
     ''
   end
