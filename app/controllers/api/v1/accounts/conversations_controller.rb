@@ -53,8 +53,13 @@ class Api::V1::Accounts::ConversationsController < Api::V1::Accounts::BaseContro
   end
 
   def mute
-    @conversation.mute!
-    head :ok
+    @conversation.mute!(duration_seconds: params[:duration_seconds])
+    render json: {
+      muted: true,
+      muted_until: @conversation.mute_expires_at&.utc&.iso8601
+    }
+  rescue ArgumentError => e
+    render json: { error: e.message }, status: :unprocessable_entity
   end
 
   def unmute
