@@ -310,13 +310,38 @@ class Channels::Whatsapp::ConnectApiMediaSyncJob < ApplicationJob
                 remote_jid_alt: key['remoteJidAlt'],
                 participant: key['participant'],
                 participant_alt: key['participantAlt'],
-                source: record['source']
-              }.compact
+                source: record['source'],
+                recovered: true
+              }.compact,
+              context: native_reply_context(record)
             }]
           }
         }]
       }]
     }
+  end
+
+  def native_reply_context(record)
+    context = find_native_context_info(record.to_h.deep_stringify_keys['message'])
+    stanza_id = context.to_h.deep_stringify_keys['stanzaId'].to_s.presence ||
+                context.to_h.deep_stringify_keys['stanza_id'].to_s.presence
+    stanza_id ? { id: stanza_id } : nil
+  end
+
+  def find_native_context_info(value)
+    return {} unless value.is_a?(Hash)
+
+    hash = value.deep_stringify_keys
+    return hash['contextInfo'] if hash['contextInfo'].is_a?(Hash)
+
+    hash.each_value do |child|
+      next unless child.is_a?(Hash)
+
+      found = find_native_context_info(child)
+      return found if found.present?
+    end
+
+    {}
   end
 
   def text_body(record)
