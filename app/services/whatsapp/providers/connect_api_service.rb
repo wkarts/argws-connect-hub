@@ -126,14 +126,18 @@ class Whatsapp::Providers::ConnectApiService < Whatsapp::Providers::WhatsappClou
 
   def send_native_text_message(phone_number, message)
     endpoint = 'sendText'
+    body = {
+      number: normalize_phone(phone_number),
+      text: format_content(message)
+    }
+    quoted = native_quoted_message(message)
+    body[:quoted] = quoted if quoted.present?
+
     started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
     response = HTTParty.post(
       native_endpoint(endpoint),
       headers: native_headers,
-      body: {
-        number: normalize_phone(phone_number),
-        text: format_content(message)
-      }.to_json,
+      body: body.to_json,
       timeout: request_timeout
     )
 
@@ -165,6 +169,8 @@ class Whatsapp::Providers::ConnectApiService < Whatsapp::Providers::WhatsappClou
   def native_attachment_payload(phone_number, message, attachment)
     download_url = attachment.download_url
     body = { number: normalize_phone(phone_number) }
+    quoted = native_quoted_message(message)
+    body[:quoted] = quoted if quoted.present?
 
     if attachment.file_type == 'audio'
       body[:audio] = download_url
@@ -181,6 +187,55 @@ class Whatsapp::Providers::ConnectApiService < Whatsapp::Providers::WhatsappClou
     end
 
     [body, 'sendMedia', :media]
+  end
+
+  def native_quoted_message(message)
+    source_id = message.in_reply_to_external_id.to_s.presence
+    if source_id.blank? && message.in_reply_to.to_s.present?
+      referenced = message.conversation.messages.find_by(id: message.in_reply_to)
+      source_id = referenced&.source_id.to_s.presence
+    end
+    return if source_id.blank?
+
+    native = native_message_by_source_id(source_id)
+    return unless native.is_a?(Hash)
+
+    native = native.deep_stringify_keys
+    key = native['key'].to_h.deep_stringify_keys
+    content = native['message'].to_h.deep_stringify_keys
+    return if key['id'].to_s.blank? || content.blank?
+
+    { key: key, message: content }
+  rescue StandardError => e
+    Rails.logger.warn(
+      "[HUB Connect|API] reply quote lookup skipped source_id=#{source_id}: #{e.class}: #{e.message}"
+    )
+    nil
+  end
+
+  def native_message_by_source_id(source_id)
+    response = HTTParty.post(
+      "#{connect_api_base_url}/chat/findMessages/#{CGI.escape(instance_name)}",
+      headers: native_headers,
+      body: {
+        where: { key: { id: source_id.to_s } },
+        page: 1,
+        offset: 1
+      }.to_json,
+      timeout: [request_timeout, 15].min
+    )
+    return unless response.success?
+
+    data = response.parsed_response
+    data = data.deep_stringify_keys if data.respond_to?(:deep_stringify_keys)
+    records = if data.is_a?(Array)
+                data
+              elsif data.is_a?(Hash)
+                data.dig('messages', 'records') || data['records'] || data['data'] || []
+              else
+                []
+              end
+    Array(records).first
   end
 
   def post_native_attachment(endpoint, body)
