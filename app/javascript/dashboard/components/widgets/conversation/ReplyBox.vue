@@ -148,7 +148,10 @@ export default {
       return this.isAWhatsAppChannel && !this.isPrivate && !this.hasAttachments;
     },
     showLinkPreview() {
-      return this.canPreviewLinks && (this.linkPreviewLoading || !!this.linkPreview);
+      return (
+        this.canPreviewLinks &&
+        (this.linkPreviewLoading || !!this.linkPreview)
+      );
     },
     showRichContentEditor() {
       if (this.isOnPrivateNote || this.isRichEditorEnabled) {
