@@ -63,6 +63,12 @@ class Api::V1::Accounts::Conversations::MessagesController < Api::V1::Accounts::
     return render json: { error: 'Selecione pelo menos um destinatário.' }, status: :unprocessable_entity if contacts.empty?
     return render json: { error: 'Um dos destinatários não pertence a esta conta.' }, status: :unprocessable_entity unless valid_forward_contacts?(contacts)
 
+    if muted_forward_contacts(contacts).any?
+      return render json: {
+        error: 'Contatos silenciados não podem receber encaminhamentos. Remova o silenciamento antes de encaminhar.'
+      }, status: :unprocessable_entity
+    end
+
     operation_id = SecureRandom.uuid
     payload = forward_message_params.merge(
       contacts: contacts,
@@ -123,6 +129,20 @@ class Api::V1::Accounts::Conversations::MessagesController < Api::V1::Accounts::
 
   def valid_forward_contacts?(contact_ids)
     Current.account.contacts.where(id: contact_ids).count == contact_ids.length
+  end
+
+  def muted_forward_contacts(contact_ids)
+    Current.account.contacts.where(id: contact_ids).select do |contact|
+      mute = contact.additional_attributes.to_h.deep_stringify_keys['hub_mute'].to_h
+      next true if mute.blank? && contact.blocked?
+      next false if mute.blank?
+      next false unless ActiveModel::Type::Boolean.new.cast(mute.fetch('muted', true))
+
+      muted_until = mute['muted_until'].to_s.presence
+      muted_until.blank? || Time.iso8601(muted_until).future?
+    rescue ArgumentError
+      false
+    end
   end
 
   def forward_message_params
