@@ -961,6 +961,7 @@ export default {
 
       if (url === this.linkPreviewDismissedUrl) {
         this.linkPreview = null;
+        this.linkPreviewToken = '';
         this.linkPreviewLoading = false;
         return;
       }
