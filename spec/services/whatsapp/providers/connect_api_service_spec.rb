@@ -56,6 +56,29 @@ describe Whatsapp::Providers::ConnectApiService do
     expect(service.send_message('+55 (75) 9623-6940', message)).to eq('MSG-1')
   end
 
+  it 'requests native WhatsApp link preview for messages containing an HTTP URL' do
+    message = double(
+      attachments: [],
+      content: 'Veja https://example.com/oferta',
+      sender_name: nil,
+      content_type: 'text'
+    )
+    allow(message).to receive(:update!)
+
+    response = double(success?: true, parsed_response: { 'key' => { 'id' => 'LINK-1' } })
+    expect(HTTParty).to receive(:post) do |url, options|
+      expect(url).to eq('https://connect.example/message/sendText/hub-test-instance')
+      expect(JSON.parse(options[:body])).to include(
+        'number' => '557596236940',
+        'text' => 'Veja https://example.com/oferta',
+        'linkPreview' => true
+      )
+      response
+    end
+
+    expect(service.send_message('557596236940', message)).to eq('LINK-1')
+  end
+
   it 'sends a real native quoted reply when the HUB message references another WhatsApp message' do
     conversation = create(:conversation, inbox: whatsapp_channel.inbox)
     original = create(
