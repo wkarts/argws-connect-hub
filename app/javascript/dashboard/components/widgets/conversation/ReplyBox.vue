@@ -113,6 +113,7 @@ export default {
       newConversationModalActive: false,
       showArticleSearchPopover: false,
       linkPreview: null,
+      linkPreviewToken: '',
       linkPreviewLoading: false,
       linkPreviewUrl: '',
       linkPreviewDismissedUrl: '',
@@ -968,6 +969,7 @@ export default {
 
       this.linkPreviewUrl = url;
       this.linkPreview = null;
+      this.linkPreviewToken = '';
       this.linkPreviewLoading = false;
       const requestId = ++this.linkPreviewRequestId;
 
@@ -987,10 +989,12 @@ export default {
           url === this.linkPreviewUrl
         ) {
           this.linkPreview = response?.data?.preview || null;
+          this.linkPreviewToken = response?.data?.preview_token || '';
         }
       } catch (error) {
         if (requestId === this.linkPreviewRequestId) {
           this.linkPreview = null;
+          this.linkPreviewToken = '';
         }
       } finally {
         if (requestId === this.linkPreviewRequestId) {
@@ -1001,6 +1005,7 @@ export default {
     dismissLinkPreview() {
       this.linkPreviewDismissedUrl = this.linkPreviewUrl;
       this.linkPreview = null;
+      this.linkPreviewToken = '';
       this.linkPreviewLoading = false;
       this.linkPreviewRequestId += 1;
     },
@@ -1008,19 +1013,26 @@ export default {
       if (this.linkPreviewTimer) clearTimeout(this.linkPreviewTimer);
       this.linkPreviewTimer = null;
       this.linkPreview = null;
+      this.linkPreviewToken = '';
       this.linkPreviewLoading = false;
       this.linkPreviewUrl = '';
       this.linkPreviewDismissedUrl = '';
       this.linkPreviewRequestId += 1;
     },
     setLinkPreviewInPayload(payload) {
-      if (!this.canPreviewLinks || !this.linkPreview?.url) return payload;
+      if (
+        !this.canPreviewLinks ||
+        !this.linkPreview?.url ||
+        !this.linkPreviewToken
+      ) {
+        return payload;
+      }
 
       return {
         ...payload,
         contentAttributes: {
           ...payload.contentAttributes,
-          link_preview: this.linkPreview,
+          link_preview_token: this.linkPreviewToken,
         },
       };
     },
