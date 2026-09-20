@@ -217,7 +217,7 @@ describe Whatsapp::IncomingMessageConnectApiService do
 
     reply = conversation.reload.messages.find_by(source_id: 'CLIENT-REPLY-1')
     expect(reply).to be_present
-    expect(reply.content_attributes['in_reply_to']).to eq(original.id)
+    expect(reply.content_attributes['in_reply_to'].to_i).to eq(original.id)
   end
 
   it 'marks Connect API generated external replies as bot-originated' do
