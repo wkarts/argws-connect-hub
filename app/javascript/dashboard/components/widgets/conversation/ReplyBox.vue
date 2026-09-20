@@ -1034,6 +1034,10 @@ export default {
           ...payload.contentAttributes,
           link_preview_token: this.linkPreviewToken,
         },
+        content_attributes: {
+          ...(payload.content_attributes || {}),
+          link_preview: this.linkPreview,
+        },
       };
     },
     setReplyToInPayload(payload) {
