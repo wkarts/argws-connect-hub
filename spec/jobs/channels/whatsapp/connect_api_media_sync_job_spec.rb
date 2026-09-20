@@ -97,7 +97,14 @@ describe Channels::Whatsapp::ConnectApiMediaSyncJob do
     allow(client).to receive(:request).with(
       :post,
       '/chat/findMessages/hub-test-instance',
-      body: { page: 1, offset: described_class::MAX_RECORDS }
+      body: hash_including(
+        page: 1,
+        offset: described_class::MAX_RECORDS,
+        where: hash_including(
+          messageTimestamp: hash_including(:gte, :lte)
+        )
+      ),
+      timeout: described_class::DEFAULT_HTTP_TIMEOUT_SECONDS
     ).and_return('messages' => { 'records' => [text_record] })
 
     expect do

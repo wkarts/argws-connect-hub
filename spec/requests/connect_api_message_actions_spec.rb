@@ -199,4 +199,38 @@ RSpec.describe 'Connect|API message actions', type: :request do
       expect(response.parsed_body['error']).to include('não pertence')
     end
   end
+  describe 'GET link preview' do
+    it 'returns preview metadata with a signed transport token' do
+      preview = {
+        url: 'https://example.com/',
+        title: 'Example',
+        description: 'Preview',
+        host: 'example.com'
+      }
+      fetcher = instance_double(LinkPreviews::Fetcher, perform: preview)
+      allow(LinkPreviews::Fetcher).to receive(:new)
+        .with('https://example.com/')
+        .and_return(fetcher)
+
+      get "/api/v1/accounts/#{account.id}/link_preview",
+          params: { url: 'https://example.com/' },
+          headers: agent.create_new_auth_token,
+          as: :json
+
+      expect(response).to have_http_status(:ok)
+      expect(response.parsed_body.dig('preview', 'title')).to eq('Example')
+      expect(response.parsed_body['preview_token']).to be_present
+    end
+
+    it 'silently refuses private network URLs' do
+      get "/api/v1/accounts/#{account.id}/link_preview",
+          params: { url: 'http://127.0.0.1/internal' },
+          headers: agent.create_new_auth_token,
+          as: :json
+
+      expect(response).to have_http_status(:ok)
+      expect(response.parsed_body['preview']).to be_nil
+    end
+  end
+
 end

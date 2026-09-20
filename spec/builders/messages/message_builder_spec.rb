@@ -51,6 +51,47 @@ describe Messages::MessageBuilder do
       end
     end
 
+    context 'when content_attributes contains a signed link preview' do
+      let(:preview) do
+        {
+          'url' => 'https://example.com/',
+          'title' => 'Example',
+          'description' => 'Preview',
+          'host' => 'example.com'
+        }
+      end
+      let(:params) do
+        ActionController::Parameters.new(
+          content: 'https://example.com/',
+          content_attributes: {
+            link_preview_token: LinkPreviews::Token.issue(preview)
+          }
+        )
+      end
+
+      it 'stores the verified preview and not the transport token' do
+        message = described_class.new(user, conversation, params).perform
+
+        expect(message.content_attributes['link_preview']).to eq(preview)
+        expect(message.content_attributes).not_to have_key('link_preview_token')
+      end
+    end
+
+    context 'when the link preview token is invalid' do
+      let(:params) do
+        ActionController::Parameters.new(
+          content: 'https://example.com/',
+          content_attributes: { link_preview_token: 'invalid-token' }
+        )
+      end
+
+      it 'ignores the preview metadata' do
+        message = described_class.new(user, conversation, params).perform
+
+        expect(message.content_attributes['link_preview']).to be_nil
+      end
+    end
+
     context 'when content_attributes is absent' do
       let(:params) do
         ActionController::Parameters.new({ content: 'test' })

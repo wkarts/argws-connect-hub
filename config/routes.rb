@@ -121,6 +121,8 @@ Rails.application.routes.draw do
             end
           end
 
+          resource :link_preview, only: [:show]
+
           resources :search, only: [:index] do
             collection do
               get :conversations

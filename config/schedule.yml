@@ -24,13 +24,13 @@ trigger_imap_email_inboxes_job:
 # Validate and repair the Meta-compatible realtime webhook automatically.
 # The service is idempotent: it only writes when the remote webhook diverges.
 connect_api_realtime_repair_scheduler_job:
-  cron: '*/2 * * * *'
+  cron: '*/5 * * * *'
   class: 'Channels::Whatsapp::ConnectApiRealtimeRepairSchedulerJob'
   queue: low
 
-# Connect|API reliability recovery runs every minute. Besides the pre-existing
-# media recovery, it now also catches recent text/status events persisted while
-# HUB was temporarily unavailable. source_id deduplication prevents re-sends.
+# The scheduler wakes every minute, but each inbox is throttled by
+# HUB_CONNECT_RECOVERY_MIN_INTERVAL_SECONDS (180s by default). The work stays
+# on the low queue and never replaces the realtime webhook path.
 connect_api_media_sync_scheduler_job:
   cron: '*/1 * * * *'
   class: 'Channels::Whatsapp::ConnectApiMediaSyncSchedulerJob'

@@ -7,9 +7,12 @@ require 'tempfile'
 class Channels::Whatsapp::ConnectApiMediaSyncJob < ApplicationJob
   queue_as :low
 
-  MAX_RECORDS = 80
+  DEFAULT_MAX_RECORDS = 80
+  MAX_RECORDS = DEFAULT_MAX_RECORDS
+  DEFAULT_MESSAGE_RECOVERY_LOOKBACK_SECONDS = 6.hours.to_i
+  DEFAULT_HTTP_TIMEOUT_SECONDS = 15
+  DEFAULT_MAX_RUNTIME_SECONDS = 25
   LOOKBACK = 48.hours
-  MESSAGE_RECOVERY_LOOKBACK = 6.hours
   STATUS_RANK = { 'sent' => 1, 'delivered' => 2, 'read' => 3 }.freeze
   STATUS_MAP = {
     '2' => 'sent', 'SERVER_ACK' => 'sent',
@@ -51,7 +54,11 @@ class Channels::Whatsapp::ConnectApiMediaSyncJob < ApplicationJob
       context.merge(records_found: records.length)
     )
 
+    deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + max_runtime_seconds
+
     records.each do |record|
+      break if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
+
       begin
         sync_record(record)
         processed += 1
@@ -86,19 +93,58 @@ class Channels::Whatsapp::ConnectApiMediaSyncJob < ApplicationJob
   private
 
   def recent_native_messages
+    window_end = Time.current.utc
+    window_start = LOOKBACK.ago.utc
     response = client.request(
       :post,
       "/chat/findMessages/#{CGI.escape(instance_name)}",
-      body: { page: 1, offset: MAX_RECORDS }
+      body: {
+        where: {
+          messageTimestamp: {
+            gte: window_start.iso8601,
+            lte: window_end.iso8601
+          }
+        },
+        page: 1,
+        offset: max_records
+      },
+      timeout: recovery_http_timeout
     )
     records = extract_records(response)
     records.select do |record|
       stamp = timestamp_for(record)
       media_recent = media_descriptor(record).present? && stamp >= LOOKBACK.ago.to_i
       message_recent = (text_body(record).present? || native_status(record).present?) &&
-                       stamp >= MESSAGE_RECOVERY_LOOKBACK.ago.to_i
+                       stamp >= message_recovery_lookback.ago.to_i
       media_recent || message_recent
     end
+  end
+
+  def max_records
+    ENV.fetch('HUB_CONNECT_RECOVERY_MAX_RECORDS', DEFAULT_MAX_RECORDS).to_i.clamp(20, 200)
+  end
+
+  def message_recovery_lookback
+    seconds = ENV.fetch(
+      'HUB_CONNECT_RECOVERY_LOOKBACK_SECONDS',
+      DEFAULT_MESSAGE_RECOVERY_LOOKBACK_SECONDS
+    ).to_i.clamp(300, 86_400)
+
+    seconds.seconds
+  end
+
+  def recovery_http_timeout
+    ENV.fetch(
+      'HUB_CONNECT_RECOVERY_HTTP_TIMEOUT_SECONDS',
+      DEFAULT_HTTP_TIMEOUT_SECONDS
+    ).to_i.clamp(3, 30)
+  end
+
+  def max_runtime_seconds
+    ENV.fetch(
+      'HUB_CONNECT_RECOVERY_MAX_RUNTIME_SECONDS',
+      DEFAULT_MAX_RUNTIME_SECONDS
+    ).to_i.clamp(5, 60)
   end
 
   def extract_records(value)

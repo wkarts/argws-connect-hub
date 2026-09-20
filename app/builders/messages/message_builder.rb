@@ -10,6 +10,7 @@ class Messages::MessageBuilder
     @message_type = params[:message_type] || 'outgoing'
     @attachments = params[:attachments]
     @automation_rule = content_attributes&.dig(:automation_rule_id)
+    @link_preview = LinkPreviews::Token.verify(content_attributes&.dig(:link_preview_token))
     return unless params.instance_of?(ActionController::Parameters)
 
     @in_reply_to = content_attributes&.dig(:in_reply_to)
@@ -128,8 +129,12 @@ class Messages::MessageBuilder
     @params[:external_created_at].present? ? { external_created_at: @params[:external_created_at] } : {}
   end
 
-  def automation_rule_id
-    @automation_rule.present? ? { content_attributes: { automation_rule_id: @automation_rule } } : {}
+  def content_attributes_param
+    attributes = {}
+    attributes[:automation_rule_id] = @automation_rule if @automation_rule.present?
+    attributes[:link_preview] = @link_preview if @link_preview.present?
+
+    attributes.present? ? { content_attributes: attributes } : {}
   end
 
   def campaign_id
@@ -169,7 +174,7 @@ class Messages::MessageBuilder
       echo_id: @params[:echo_id],
       source_id: @params[:source_id]
     }.merge(external_created_at)
-      .merge(automation_rule_id)
+      .merge(content_attributes_param)
       .merge(campaign_id)
       .merge(template_params)
       .merge(status_param)
