@@ -214,45 +214,75 @@ class Whatsapp::IncomingMessageConnectApiService < Whatsapp::IncomingMessageWhat
     return if message.blank? || message[:id].blank?
 
     existing_context = message[:connect_api].to_h.deep_stringify_keys
-    if existing_context.key?('from_me')
-      apply_existing_context!(payload, message, existing_context)
-      return
-    end
+    apply_existing_context!(payload, message, existing_context) if existing_context.key?('from_me')
 
+    # Mesmo quando o webhook Meta-compatible já traz direção/JID, consultamos
+    # o registro nativo para recuperar o contexto de quoted/reply, que não faz
+    # parte do envelope compatível atual da Connect|API.
     native = native_message_by_source_id(message[:id])
+    return if native.blank?
 
-    if native.present?
-      native = native.deep_stringify_keys
-      key = native['key'].to_h.deep_stringify_keys
-      from_me = key.key?('fromMe') ? ActiveModel::Type::Boolean.new.cast(key['fromMe']) : nil
-      source = native['source'].to_s.strip.presence
-      peer = canonical_peer_phone(key)
+    native = native.deep_stringify_keys
+    key = native['key'].to_h.deep_stringify_keys
+    from_me = if existing_context.key?('from_me')
+                ActiveModel::Type::Boolean.new.cast(existing_context['from_me'])
+              elsif key.key?('fromMe')
+                ActiveModel::Type::Boolean.new.cast(key['fromMe'])
+              end
+    source = native['source'].to_s.strip.presence
+    peer = canonical_peer_phone(key)
 
-      message[:connect_api] = existing_context.merge(
-        'from_me' => from_me,
-        'remote_jid' => key['remoteJid'],
-        'remote_jid_alt' => key['remoteJidAlt'],
-        'participant' => key['participant'],
-        'participant_alt' => key['participantAlt'],
-        'source' => source
-      ).compact
+    message[:connect_api] = existing_context.merge(
+      'from_me' => from_me,
+      'remote_jid' => existing_context['remote_jid'].presence || key['remoteJid'],
+      'remote_jid_alt' => existing_context['remote_jid_alt'].presence || key['remoteJidAlt'],
+      'participant' => existing_context['participant'].presence || key['participant'],
+      'participant_alt' => existing_context['participant_alt'].presence || key['participantAlt'],
+      'source' => existing_context['source'].presence || source
+    ).compact
 
-      if peer.present?
-        contact = payload[:contacts]&.first
-        contact[:wa_id] = peer if contact.present?
-
-        if contact.present? && meaningful_profile_name?(native['pushName'].to_s)
-          contact[:profile] ||= {}
-          current_name = contact.dig(:profile, :name).to_s
-          contact[:profile][:name] = native['pushName'].to_s if current_name.blank? || generic_name_value?(current_name)
-        end
-      end
-
-      message[:from] = from_me ? own_phone_number(payload) : peer if !from_me.nil? && (from_me || peer.present?)
-      return
+    reply_source_id = native_reply_source_id(native)
+    if reply_source_id.present?
+      message[:context] = message[:context].to_h.merge(id: reply_source_id)
     end
+
+    if peer.present?
+      contact = payload[:contacts]&.first
+      contact[:wa_id] = peer if contact.present?
+
+      if contact.present? && meaningful_profile_name?(native['pushName'].to_s)
+        contact[:profile] ||= {}
+        current_name = contact.dig(:profile, :name).to_s
+        contact[:profile][:name] = native['pushName'].to_s if current_name.blank? || generic_name_value?(current_name)
+      end
+    end
+
+    message[:from] = from_me ? own_phone_number(payload) : peer if !from_me.nil? && (from_me || peer.present?)
   rescue StandardError => e
     Rails.logger.warn("[HUB Connect|API] native message reconciliation skipped: #{e.class}: #{e.message}")
+  end
+
+  def native_reply_source_id(native)
+    context = find_native_context_info(native.to_h.deep_stringify_keys['message'])
+    context.to_h.deep_stringify_keys['stanzaId'].to_s.presence ||
+      context.to_h.deep_stringify_keys['stanza_id'].to_s.presence
+  end
+
+  def find_native_context_info(value)
+    return {} unless value.is_a?(Hash)
+
+    hash = value.deep_stringify_keys
+    context = hash['contextInfo']
+    return context if context.is_a?(Hash)
+
+    hash.each_value do |child|
+      next unless child.is_a?(Hash)
+
+      found = find_native_context_info(child)
+      return found if found.present?
+    end
+
+    {}
   end
 
   def apply_existing_context!(payload, message, context)
