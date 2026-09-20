@@ -116,6 +116,7 @@ export default {
       linkPreviewToken: '',
       linkPreviewLoading: false,
       linkPreviewUrl: '',
+      linkPreviewAttemptedUrl: '',
       linkPreviewDismissedUrl: '',
       linkPreviewTimer: null,
       linkPreviewRequestId: 0,
@@ -966,8 +967,16 @@ export default {
         return;
       }
 
-      if (url === this.linkPreviewUrl && this.linkPreview) return;
+      if (
+        url === this.linkPreviewUrl &&
+        (this.linkPreview || this.linkPreviewLoading || this.linkPreviewAttemptedUrl === url)
+      ) {
+        return;
+      }
 
+      if (url !== this.linkPreviewUrl) {
+        this.linkPreviewAttemptedUrl = '';
+      }
       this.linkPreviewUrl = url;
       this.linkPreview = null;
       this.linkPreviewToken = '';
@@ -982,6 +991,7 @@ export default {
     async loadLinkPreview(url, requestId) {
       if (requestId !== this.linkPreviewRequestId) return;
 
+      this.linkPreviewAttemptedUrl = url;
       this.linkPreviewLoading = true;
       try {
         const response = await LinkPreviewAPI.get(url);
@@ -1017,6 +1027,7 @@ export default {
       this.linkPreviewToken = '';
       this.linkPreviewLoading = false;
       this.linkPreviewUrl = '';
+      this.linkPreviewAttemptedUrl = '';
       this.linkPreviewDismissedUrl = '';
       this.linkPreviewRequestId += 1;
     },
