@@ -93,10 +93,21 @@ class Channels::Whatsapp::ConnectApiMediaSyncJob < ApplicationJob
   private
 
   def recent_native_messages
+    window_end = Time.current.utc
+    window_start = LOOKBACK.ago.utc
     response = client.request(
       :post,
       "/chat/findMessages/#{CGI.escape(instance_name)}",
-      body: { page: 1, offset: max_records },
+      body: {
+        where: {
+          messageTimestamp: {
+            gte: window_start.iso8601,
+            lte: window_end.iso8601
+          }
+        },
+        page: 1,
+        offset: max_records
+      },
       timeout: recovery_http_timeout
     )
     records = extract_records(response)
