@@ -6,6 +6,8 @@ import keyboardEventListenerMixins from 'shared/mixins/keyboardEventListenerMixi
 
 import CannedResponse from './CannedResponse.vue';
 import ReplyToMessage from './ReplyToMessage.vue';
+import LinkPreviewCard from './LinkPreviewCard.vue';
+import LinkPreviewAPI from 'dashboard/api/linkPreview';
 import ResizableTextArea from 'shared/components/ResizableTextArea.vue';
 import AttachmentPreview from 'dashboard/components/widgets/AttachmentsPreview.vue';
 import ReplyTopPanel from 'dashboard/components/widgets/HubWriter/ReplyTopPanel.vue';
@@ -48,6 +50,7 @@ export default {
     EmojiInput,
     CannedResponse,
     ReplyToMessage,
+    LinkPreviewCard,
     ResizableTextArea,
     AttachmentPreview,
     ReplyTopPanel,
@@ -109,6 +112,12 @@ export default {
       showVariablesMenu: false,
       newConversationModalActive: false,
       showArticleSearchPopover: false,
+      linkPreview: null,
+      linkPreviewLoading: false,
+      linkPreviewUrl: '',
+      linkPreviewDismissedUrl: '',
+      linkPreviewTimer: null,
+      linkPreviewRequestId: 0,
     };
   },
   computed: {
@@ -132,6 +141,12 @@ export default {
         this.inboxHasFeature(INBOX_FEATURES.REPLY_TO) &&
         !this.is360DialogWhatsAppChannel
       );
+    },
+    canPreviewLinks() {
+      return this.isAWhatsAppChannel && !this.isPrivate && !this.hasAttachments;
+    },
+    showLinkPreview() {
+      return this.canPreviewLinks && (this.linkPreviewLoading || !!this.linkPreview);
     },
     showRichContentEditor() {
       if (this.isOnPrivateNote || this.isRichEditorEnabled) {
@@ -398,11 +413,14 @@ export default {
     },
     conversationIdByRoute(conversationId, oldConversationId) {
       if (conversationId !== oldConversationId) {
+        this.resetLinkPreview();
         this.setToDraft(oldConversationId, this.replyType);
         this.getFromDraft();
       }
     },
     message(updatedMessage) {
+      this.scheduleLinkPreview(updatedMessage);
+
       // Check if the message starts with a slash.
       const bodyWithoutSignature = removeSignature(
         updatedMessage,
@@ -432,6 +450,7 @@ export default {
 
   mounted() {
     this.getFromDraft();
+    this.scheduleLinkPreview(this.message);
     // Don't use the keyboard listener mixin here as the events here are supposed to be
     // working even if input/textarea is focussed.
     document.addEventListener('paste', this.onPaste);
@@ -468,6 +487,8 @@ export default {
     );
   },
   beforeDestroy() {
+    if (this.linkPreviewTimer) clearTimeout(this.linkPreviewTimer);
+    this.linkPreviewRequestId += 1;
     this.$emitter.off(
       BUS_EVENTS.NEW_CONVERSATION_MODAL,
       this.onNewConversationModalActive
@@ -909,6 +930,99 @@ export default {
     },
     removeAttachment(attachments) {
       this.attachedFiles = attachments;
+      this.scheduleLinkPreview(this.message);
+    },
+    extractPreviewUrl(value) {
+      const match = value
+        ?.toString()
+        .match(/https?:\/\/[^\s<>{}\[\]"']+/i);
+      if (!match) return '';
+
+      return match[0].replace(/[.,!?;:]+$/, '').replace(/\)+$/, '');
+    },
+    scheduleLinkPreview(value) {
+      if (this.linkPreviewTimer) clearTimeout(this.linkPreviewTimer);
+
+      if (!this.isAWhatsAppChannel || this.isPrivate || this.hasAttachments) {
+        this.resetLinkPreview();
+        return;
+      }
+
+      const url = this.extractPreviewUrl(value);
+      if (!url) {
+        this.resetLinkPreview();
+        return;
+      }
+
+      if (url !== this.linkPreviewDismissedUrl) {
+        this.linkPreviewDismissedUrl = '';
+      }
+
+      if (url === this.linkPreviewDismissedUrl) {
+        this.linkPreview = null;
+        this.linkPreviewLoading = false;
+        return;
+      }
+
+      if (url === this.linkPreviewUrl && this.linkPreview) return;
+
+      this.linkPreviewUrl = url;
+      this.linkPreview = null;
+      this.linkPreviewLoading = false;
+      const requestId = ++this.linkPreviewRequestId;
+
+      this.linkPreviewTimer = setTimeout(
+        () => this.loadLinkPreview(url, requestId),
+        550
+      );
+    },
+    async loadLinkPreview(url, requestId) {
+      if (requestId !== this.linkPreviewRequestId) return;
+
+      this.linkPreviewLoading = true;
+      try {
+        const response = await LinkPreviewAPI.get(url);
+        if (
+          requestId === this.linkPreviewRequestId &&
+          url === this.linkPreviewUrl
+        ) {
+          this.linkPreview = response?.data?.preview || null;
+        }
+      } catch (error) {
+        if (requestId === this.linkPreviewRequestId) {
+          this.linkPreview = null;
+        }
+      } finally {
+        if (requestId === this.linkPreviewRequestId) {
+          this.linkPreviewLoading = false;
+        }
+      }
+    },
+    dismissLinkPreview() {
+      this.linkPreviewDismissedUrl = this.linkPreviewUrl;
+      this.linkPreview = null;
+      this.linkPreviewLoading = false;
+      this.linkPreviewRequestId += 1;
+    },
+    resetLinkPreview() {
+      if (this.linkPreviewTimer) clearTimeout(this.linkPreviewTimer);
+      this.linkPreviewTimer = null;
+      this.linkPreview = null;
+      this.linkPreviewLoading = false;
+      this.linkPreviewUrl = '';
+      this.linkPreviewDismissedUrl = '';
+      this.linkPreviewRequestId += 1;
+    },
+    setLinkPreviewInPayload(payload) {
+      if (!this.canPreviewLinks || !this.linkPreview?.url) return payload;
+
+      return {
+        ...payload,
+        contentAttributes: {
+          ...payload.contentAttributes,
+          link_preview: this.linkPreview,
+        },
+      };
     },
     setReplyToInPayload(payload) {
       if (this.inReplyTo?.id) {
@@ -953,6 +1067,7 @@ export default {
         };
 
         messagePayload = this.setReplyToInPayload(messagePayload);
+        messagePayload = this.setLinkPreviewInPayload(messagePayload);
 
         multipleMessagePayload.push(messagePayload);
       }
@@ -967,6 +1082,7 @@ export default {
         sender: this.sender,
       };
       messagePayload = this.setReplyToInPayload(messagePayload);
+      messagePayload = this.setLinkPreviewInPayload(messagePayload);
 
       if (this.attachedFiles && this.attachedFiles.length) {
         messagePayload.files = [];
@@ -1106,6 +1222,13 @@ export default {
         v-if="shouldShowReplyToMessage"
         :message="inReplyTo"
         @dismiss="resetReplyToMessage"
+      />
+      <LinkPreviewCard
+        v-if="showLinkPreview"
+        :preview="linkPreview"
+        :loading="linkPreviewLoading"
+        dismissible
+        @dismiss="dismissLinkPreview"
       />
       <CannedResponse
         v-if="showMentions && hasSlashCommand"
