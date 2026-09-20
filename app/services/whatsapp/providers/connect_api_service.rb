@@ -132,6 +132,7 @@ class Whatsapp::Providers::ConnectApiService < Whatsapp::Providers::WhatsappClou
     }
     quoted = native_quoted_message(message)
     body[:quoted] = quoted if quoted.present?
+    body[:linkPreview] = true if message_has_http_url?(message)
 
     started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
     response = HTTParty.post(
@@ -187,6 +188,10 @@ class Whatsapp::Providers::ConnectApiService < Whatsapp::Providers::WhatsappClou
     end
 
     [body, 'sendMedia', :media]
+  end
+
+  def message_has_http_url?(message)
+    message.content.to_s.match?(%r{https?://[^\s<>{}\[\]"']+}i)
   end
 
   def native_quoted_message(message)
