@@ -31,7 +31,7 @@
 
       <div class="forward-panel__list" role="list">
         <button
-          v-for="contact in contacts"
+          v-for="contact in visibleContacts"
           :key="contact.id"
           type="button"
           class="forward-contact"
@@ -64,7 +64,7 @@
           </span>
         </button>
 
-        <div v-if="!contacts.length && !isLoadingContacts" class="forward-panel__empty">
+        <div v-if="!visibleContacts.length && !isLoadingContacts" class="forward-panel__empty">
           <fluent-icon icon="people" size="28" />
           <strong>Nenhum contato encontrado</strong>
           <span>Revise a busca e tente novamente.</span>
@@ -107,6 +107,7 @@
 
 <script>
 import { mapGetters } from 'vuex';
+import ContactAPI from 'dashboard/api/contacts';
 import { useAlert } from 'dashboard/composables';
 import TimeAgo from 'dashboard/components/ui/TimeAgo';
 import Thumbnail from 'dashboard/components/widgets/Thumbnail.vue';
@@ -132,19 +133,20 @@ export default {
       selectedContactIds: [],
       isSubmitting: false,
       searchTimer: null,
+      forwardContacts: [],
+      isLoadingContacts: false,
+      contactRequestId: 0,
     };
   },
   computed: {
     ...mapGetters({
-      contacts: 'contacts/getContacts',
       currentAccountId: 'getCurrentAccountId',
-      contactsUIFlags: 'contacts/getUIFlags',
     }),
+    visibleContacts() {
+      return this.forwardContacts.filter(contact => !this.isContactMuted(contact));
+    },
     selectedCount() {
       return this.selectedContactIds.length;
-    },
-    isLoadingContacts() {
-      return !!this.contactsUIFlags?.isFetching;
     },
   },
   mounted() {
@@ -160,21 +162,43 @@ export default {
     normalizedSearch() {
       return this.searchQuery.trim().replace(/^\+/, '');
     },
-    fetchContacts() {
-      const requestParams = {
-        page: DEFAULT_PAGE,
-        sortAttr: '-last_activity_at',
-      };
+    async fetchContacts() {
+      const requestId = ++this.contactRequestId;
       const value = this.normalizedSearch();
+      this.isLoadingContacts = true;
 
-      if (!value) {
-        return this.$store.dispatch('contacts/get', requestParams);
+      try {
+        const response = value
+          ? await ContactAPI.search(
+              encodeURIComponent(value),
+              DEFAULT_PAGE,
+              '-last_activity_at'
+            )
+          : await ContactAPI.get(DEFAULT_PAGE, '-last_activity_at');
+
+        if (requestId === this.contactRequestId) {
+          this.forwardContacts = response?.data?.payload || [];
+        }
+      } catch (error) {
+        if (requestId === this.contactRequestId) {
+          this.forwardContacts = [];
+          useAlert('Não foi possível carregar os contatos para encaminhamento.');
+        }
+      } finally {
+        if (requestId === this.contactRequestId) {
+          this.isLoadingContacts = false;
+        }
       }
+    },
+    isContactMuted(contact) {
+      if (contact?.blocked === true) return true;
 
-      return this.$store.dispatch('contacts/search', {
-        search: encodeURIComponent(value),
-        ...requestParams,
-      });
+      const mute = contact?.additional_attributes?.hub_mute;
+      if (!mute || mute.muted === false) return false;
+      if (!mute.muted_until) return true;
+
+      const mutedUntil = Date.parse(mute.muted_until);
+      return Number.isFinite(mutedUntil) && mutedUntil > Date.now();
     },
     scheduleSearch() {
       if (this.searchTimer) clearTimeout(this.searchTimer);
