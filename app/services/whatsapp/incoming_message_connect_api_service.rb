@@ -219,7 +219,9 @@ class Whatsapp::IncomingMessageConnectApiService < Whatsapp::IncomingMessageWhat
     # Mesmo quando o webhook Meta-compatible já traz direção/JID, consultamos
     # o registro nativo para recuperar o contexto de quoted/reply, que não faz
     # parte do envelope compatível atual da Connect|API.
-    should_lookup_native = existing_context.blank? || message[:type].to_s == 'text'
+    should_lookup_native =
+      existing_context.blank? ||
+      (message[:type].to_s == 'text' && message[:context].blank? && !existing_context['recovered'])
     return unless should_lookup_native
 
     native = native_message_by_source_id(message[:id])
