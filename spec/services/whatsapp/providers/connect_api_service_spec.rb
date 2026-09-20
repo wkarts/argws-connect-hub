@@ -56,6 +56,64 @@ describe Whatsapp::Providers::ConnectApiService do
     expect(service.send_message('+55 (75) 9623-6940', message)).to eq('MSG-1')
   end
 
+  it 'sends a real native quoted reply when the HUB message references another WhatsApp message' do
+    conversation = create(:conversation, inbox: whatsapp_channel.inbox)
+    original = create(
+      :message,
+      account: whatsapp_channel.account,
+      inbox: whatsapp_channel.inbox,
+      conversation: conversation,
+      message_type: :incoming,
+      source_id: 'ORIGINAL-WA-ID',
+      content: 'Mensagem original'
+    )
+    message = create(
+      :message,
+      account: whatsapp_channel.account,
+      inbox: whatsapp_channel.inbox,
+      conversation: conversation,
+      message_type: :outgoing,
+      content: 'Resposta pelo HUB',
+      content_attributes: { in_reply_to: original.id }
+    )
+
+    native_lookup = double(
+      success?: true,
+      parsed_response: {
+        'messages' => {
+          'records' => [{
+            'key' => {
+              'id' => 'ORIGINAL-WA-ID',
+              'fromMe' => false,
+              'remoteJid' => '557596236940@s.whatsapp.net'
+            },
+            'message' => { 'conversation' => 'Mensagem original' }
+          }]
+        }
+      }
+    )
+    send_response = double(success?: true, parsed_response: { 'key' => { 'id' => 'REPLY-WA-ID' } })
+
+    allow(HTTParty).to receive(:post) do |url, options|
+      if url.include?('/chat/findMessages/')
+        native_lookup
+      else
+        body = JSON.parse(options[:body])
+        expect(body['quoted']).to eq(
+          'key' => {
+            'id' => 'ORIGINAL-WA-ID',
+            'fromMe' => false,
+            'remoteJid' => '557596236940@s.whatsapp.net'
+          },
+          'message' => { 'conversation' => 'Mensagem original' }
+        )
+        send_response
+      end
+    end
+
+    expect(service.send_message('557596236940', message)).to eq('REPLY-WA-ID')
+  end
+
   it 'sends files through the native media endpoint' do
     file = double(attached?: true, filename: 'arquivo.pdf', content_type: 'application/pdf')
     attachment = double(file_type: 'file', download_url: 'https://hub.example/file.pdf', file: file)
