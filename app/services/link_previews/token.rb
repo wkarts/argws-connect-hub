@@ -18,7 +18,16 @@ module LinkPreviews
     end
 
     def self.verifier
-      Rails.application.message_verifier(:hub_link_preview)
+      @verifier ||= begin
+        secret = ActiveSupport::KeyGenerator
+                 .new(Rails.application.secret_key_base)
+                 .generate_key(PURPOSE, 32)
+        ActiveSupport::MessageVerifier.new(
+          secret,
+          digest: 'SHA256',
+          serializer: JSON
+        )
+      end
     end
     private_class_method :verifier
   end
