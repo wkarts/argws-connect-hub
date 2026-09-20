@@ -77,7 +77,7 @@ describe Channels::Whatsapp::ConnectApiMediaSyncJob do
     expect(message.attachments.first.file_type).to eq('audio')
     expect(message.attachments.first.file.download).to eq('voice-bytes')
   end
-  it 'does not turn the media recovery job into text or status reconciliation' do
+  it 'recovers recent text missed while HUB was unavailable' do
     text_record = {
       'key' => {
         'id' => 'TEXT-ONLY-1',
@@ -102,7 +102,13 @@ describe Channels::Whatsapp::ConnectApiMediaSyncJob do
 
     expect do
       described_class.perform_now(channel.id)
-    end.not_to change(Message, :count)
+    end.to change(Message, :count).by(1)
+
+    recovered = Message.find_by(inbox_id: channel.inbox.id, source_id: 'TEXT-ONLY-1')
+    expect(recovered).to be_present
+    expect(recovered.content).to eq('texto do smartphone')
+    expect(recovered.message_type).to eq('outgoing')
+    expect(recovered.status).to eq('read')
   end
 
 end

@@ -1,4 +1,5 @@
 json.additional_attributes resource.additional_attributes
+json.blocked resource.blocked
 json.availability_status resource.availability_status
 json.email resource.email
 json.id resource.id
