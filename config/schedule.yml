@@ -21,9 +21,16 @@ trigger_imap_email_inboxes_job:
   class: 'Inboxes::FetchImapEmailInboxesJob'
   queue: scheduled_jobs
 
-# Connect|API media is reconciled natively every minute. This covers provider
-# events that arrive before media persistence and media sent by the linked
-# device outside HUB.
+# Validate and repair the Meta-compatible realtime webhook automatically.
+# The service is idempotent: it only writes when the remote webhook diverges.
+connect_api_realtime_repair_scheduler_job:
+  cron: '*/2 * * * *'
+  class: 'Channels::Whatsapp::ConnectApiRealtimeRepairSchedulerJob'
+  queue: low
+
+# Connect|API reliability recovery runs every minute. Besides the pre-existing
+# media recovery, it now also catches recent text/status events persisted while
+# HUB was temporarily unavailable. source_id deduplication prevents re-sends.
 connect_api_media_sync_scheduler_job:
   cron: '*/1 * * * *'
   class: 'Channels::Whatsapp::ConnectApiMediaSyncSchedulerJob'
