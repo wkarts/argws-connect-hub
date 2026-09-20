@@ -17,6 +17,8 @@ module ConversationMuteHelpers
 
     contact.update!(additional_attributes: attributes)
     create_muted_message
+    dispatch_conversation_updated_event('muted' => [false, true])
+    schedule_mute_expiration(seconds, attributes[MUTE_ATTRIBUTE]['muted_until'])
   end
 
   def unmute!
@@ -33,6 +35,7 @@ module ConversationMuteHelpers
     end
 
     create_unmuted_message
+    dispatch_conversation_updated_event('muted' => [true, false])
   end
 
   def muted?
@@ -57,6 +60,14 @@ module ConversationMuteHelpers
   end
 
   private
+
+  def schedule_mute_expiration(seconds, muted_until)
+    return unless seconds && muted_until.present?
+
+    Conversations::ExpireMuteJob
+      .set(wait: seconds.seconds)
+      .perform_later(id, muted_until)
+  end
 
   def normalized_mute_duration(value)
     return nil if value.blank? || value.to_i.zero?
