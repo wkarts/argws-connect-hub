@@ -190,9 +190,10 @@ class Whatsapp::Providers::ConnectApiService < Whatsapp::Providers::WhatsappClou
   end
 
   def native_quoted_message(message)
-    source_id = message.in_reply_to_external_id.to_s.presence
-    if source_id.blank? && message.in_reply_to.to_s.present?
-      referenced = message.conversation.messages.find_by(id: message.in_reply_to)
+    source_id = message.respond_to?(:in_reply_to_external_id) ? message.in_reply_to_external_id.to_s.presence : nil
+    in_reply_to = message.respond_to?(:in_reply_to) ? message.in_reply_to.to_s.presence : nil
+    if source_id.blank? && in_reply_to.present?
+      referenced = message.conversation.messages.find_by(id: in_reply_to)
       source_id = referenced&.source_id.to_s.presence
     end
     return if source_id.blank?
