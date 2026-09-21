@@ -104,4 +104,38 @@ describe Whatsapp::IncomingMessageConnectApiStatusAwareService do
       { status: 'deleted', timestamp: Time.current.to_i }.with_indifferent_access
     )
   end
+
+  it 'processes a Meta-compatible deleted status end-to-end' do
+    message = create(
+      :message,
+      inbox: inbox,
+      account: inbox.account,
+      message_type: :incoming,
+      source_id: 'REMOTE-DELETE-E2E',
+      content: 'Mensagem original'
+    )
+    timestamp = Time.current.to_i
+    params = {
+      entry: [{
+        changes: [{
+          value: {
+            statuses: [{
+              id: 'REMOTE-DELETE-E2E',
+              status: 'deleted',
+              timestamp: timestamp.to_s
+            }]
+          }
+        }]
+      }]
+    }.with_indifferent_access
+
+    described_class.new(inbox: inbox, params: params).perform
+
+    message.reload
+    expect(message.deleted).to be(true)
+    expect(message.content_attributes['deleted_for_everyone']).to be(true)
+    expect(message.content_attributes['deleted_source']).to eq('whatsapp_remote')
+    expect(Time.iso8601(message.content_attributes['deleted_at']).to_i).to eq(timestamp)
+  end
+
 end
