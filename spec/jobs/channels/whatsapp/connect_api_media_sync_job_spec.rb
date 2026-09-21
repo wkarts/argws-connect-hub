@@ -118,4 +118,52 @@ describe Channels::Whatsapp::ConnectApiMediaSyncJob do
     expect(recovered.status).to eq('read')
   end
 
+
+  it 'reconciles a remote delete for an incoming contact message' do
+    message = conversation.messages.create!(
+      account_id: channel.account_id,
+      inbox_id: channel.inbox.id,
+      message_type: :incoming,
+      sender: contact_inbox.contact,
+      source_id: 'CONTACT-REMOTE-DELETE',
+      content: 'Mensagem que o contato apagou'
+    )
+
+    deleted_record = {
+      'key' => {
+        'id' => 'CONTACT-REMOTE-DELETE',
+        'fromMe' => false,
+        'remoteJid' => '557588449231@s.whatsapp.net'
+      },
+      'messageTimestamp' => Time.current.to_i,
+      'messageType' => 'conversation',
+      'message' => {
+        'conversation' => 'Mensagem que o contato apagou'
+      },
+      'MessageUpdate' => [
+        { 'status' => 'DELETED' }
+      ]
+    }
+
+    allow(client).to receive(:request).with(
+      :post,
+      '/chat/findMessages/hub-test-instance',
+      body: hash_including(
+        page: 1,
+        offset: described_class::MAX_RECORDS,
+        where: hash_including(
+          messageTimestamp: hash_including(:gte, :lte)
+        )
+      ),
+      timeout: described_class::DEFAULT_HTTP_TIMEOUT_SECONDS
+    ).and_return('messages' => { 'records' => [deleted_record] })
+
+    described_class.perform_now(channel.id)
+
+    message.reload
+    expect(message.deleted).to be(true)
+    expect(message.content_attributes['deleted_for_everyone']).to be(true)
+    expect(message.content_attributes['deleted_source']).to eq('whatsapp_remote')
+  end
+
 end
