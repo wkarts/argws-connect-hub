@@ -217,10 +217,9 @@ class Channels::Whatsapp::ConnectApiMediaSyncJob < ApplicationJob
   end
 
   def reconcile_native_status(record, message)
-    return unless message.outgoing?
-
     status = native_status(record)
     return if status.blank?
+    return unless status == 'deleted' || message.outgoing?
 
     decision = HubDiagnostics::StatusPolicy.decision(message.status.to_s, status)
     return unless decision == :apply
