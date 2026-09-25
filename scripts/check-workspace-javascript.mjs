@@ -9,6 +9,7 @@ const collect = dir => fs.readdirSync(dir, { withFileTypes: true }).flatMap(entr
   return entry.isDirectory() ? collect(file) : [file];
 });
 const files = [
+  'public/workspace-navigation-bridge.js', `${root}/helper/workspacePresentation.mjs`, `${root}/helper/workspaceNavigation.mjs`,
   `${root}/App.vue`, `${root}/api/workspaceApps.js`, `${root}/helper/workspaceApps.mjs`,
   `${root}/store/index.js`, `${root}/store/modules/workspaceApps.js`,
   `${root}/components/layout/Sidebar.vue`, `${root}/components/layout/config/sidebarItems/settings.js`,

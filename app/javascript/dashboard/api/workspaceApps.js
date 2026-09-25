@@ -10,6 +10,7 @@ export default {
   create: (accountId, data) => axios.post(base(accountId), data),
   update: (accountId, id, data) => axios.patch(`${base(accountId)}/${Number(id)}`, data),
   remove: (accountId, id) => axios.delete(`${base(accountId)}/${Number(id)}`),
+  diagnose: (accountId, id) => axios.post(`${base(accountId)}/${Number(id)}/diagnose`),
   credential: (accountId, id) => axios.get(`${base(accountId)}/${Number(id)}/credential`),
   forgetCredential: (accountId, id) => axios.delete(`${base(accountId)}/${Number(id)}/credential`),
   launch: (accountId, id, data) => axios.post(`${base(accountId)}/${Number(id)}/launch`, data),

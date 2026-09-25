@@ -12,6 +12,7 @@ vi.mock('dashboard/api/workspaceApps', () => ({
 }));
 const localVue = createLocalVue();
 localVue.use(Vuex);
+localVue.directive('tooltip', {});
 const app = (id = 1) => ({
   id, name: `Test ${id}`, url: `https://app${id}.example.test/home`, enabled: true,
   launch_mode: 'embedded', auth_mode: 'session', icon_name: 'globe', integration_revision: 'revision-1',

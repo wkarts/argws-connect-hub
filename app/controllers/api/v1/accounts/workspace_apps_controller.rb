@@ -1,8 +1,8 @@
 class Api::V1::Accounts::WorkspaceAppsController < Api::V1::Accounts::BaseController
   before_action :require_membership
   before_action :check_admin_authorization?, only: [:manage, :create, :update, :destroy]
-  before_action :fetch_app, only: [:show, :update, :destroy, :credential, :forget_credential, :launch]
-  before_action :require_interactive_user, only: [:credential, :forget_credential, :launch]
+  before_action :fetch_app, only: [:show, :update, :destroy, :credential, :forget_credential, :launch, :diagnose]
+  before_action :require_interactive_user, only: [:credential, :forget_credential, :launch, :diagnose]
   before_action :disable_caching
 
   def index
@@ -18,6 +18,20 @@ class Api::V1::Accounts::WorkspaceAppsController < Api::V1::Accounts::BaseContro
     return unless authorize_app
 
     render json: app_payload(@app)
+  end
+
+  def diagnose
+    return unless authorize_app
+
+    # No caller-supplied URL, origin, credentials or headers. Explicit user action
+    # only, with a short shared cache per authorized application configuration.
+    hub_origin = URI(ENV.fetch('FRONTEND_URL', request.base_url))
+    hub_origin = "#{hub_origin.scheme}://#{hub_origin.host}#{hub_origin.port == hub_origin.default_port ? '' : ":#{hub_origin.port}"}"
+    key = ['workspace-diagnostic-v1', Current.account.id, @app.id, @app.integration_revision, hub_origin]
+    result = Rails.cache.fetch(key, expires_in: 45.seconds) do
+      WorkspaceApps::DestinationProbe.new(url: @app.url, hub_origin: hub_origin).call
+    end
+    render json: result
   end
 
   def create

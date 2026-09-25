@@ -1,12 +1,16 @@
 <script>
 import api from 'dashboard/api/workspaceApps';
-import WorkspaceIcon from './WorkspaceIcon.vue';
+import WorkspaceToolbar from './WorkspaceToolbar.vue';
+import WorkspaceDiagnostics from './WorkspaceDiagnostics.vue';
+import { NAVIGATION_CHANNEL, navigationMessage, navigationNonce } from 'dashboard/helper/workspaceNavigation.mjs';
 import { submitApplicationLogin } from 'dashboard/helper/workspaceApps.mjs';
 
 export default {
-  components: { WorkspaceIcon },
+  components: { WorkspaceToolbar, WorkspaceDiagnostics },
   props: {
     app: { type: Object, required: true },
+    active: { type: Boolean, default: true },
+    scope: { type: String, default: '' },
     accountId: { type: Number, required: true },
   },
   data() {
@@ -15,15 +19,58 @@ export default {
       frameReady: this.app.auth_mode === 'session',
       initialSrc: this.app.auth_mode === 'session' ? this.app.url : 'about:blank',
       showLogin: false, busy: false, disposed: false, username: '', password: '',
-      remember: false, autoLogin: false, saved: false, error: '', showHelp: true,
+      remember: false, autoLogin: false, saved: false, error: '', pinned: false, showDiagnostics: false,
+      navigation: { ready: false, back: false, forward: false }, navigationToken: '',
+      slow: false, offline: !navigator.onLine, localFailure: null,
     };
   },
   computed: {
     destination() { return new URL(this.app.login_url || this.app.url).host; },
   },
-  mounted() { if (this.app.auth_mode === 'form_post') this.prepareLogin(); },
-  beforeDestroy() { this.disposed = true; this.password = ''; this.username = ''; },
+  mounted() {
+    window.addEventListener('message', this.receiveNavigation);
+    window.addEventListener('online', this.networkChanged);
+    window.addEventListener('offline', this.networkChanged);
+    document.addEventListener('securitypolicyviolation', this.policyViolation);
+    if (this.app.auth_mode === 'form_post') this.prepareLogin();
+    else this.startLoadTimer();
+  },
+  beforeDestroy() {
+    this.disposed = true; this.password = ''; this.username = '';
+    clearTimeout(this.loadTimer);
+    window.removeEventListener('message', this.receiveNavigation);
+    window.removeEventListener('online', this.networkChanged);
+    window.removeEventListener('offline', this.networkChanged);
+    document.removeEventListener('securitypolicyviolation', this.policyViolation);
+  },
   methods: {
+    startLoadTimer() {
+      clearTimeout(this.loadTimer); this.slow = false;
+      this.loadTimer = setTimeout(() => { if (!this.disposed) this.slow = true; }, 12000);
+    },
+    frameLoaded() {
+      // load is not proof of a successful foreign document. Never claim success here.
+      clearTimeout(this.loadTimer); this.slow = false;
+      this.navigation = { ready: false, back: false, forward: false };
+      this.navigationToken = navigationNonce();
+      this.$refs.frame?.contentWindow?.postMessage({ channel: NAVIGATION_CHANNEL, type: 'hello', nonce: this.navigationToken }, new URL(this.app.url).origin);
+    },
+    receiveNavigation(event) {
+      if (!navigationMessage(event, this.$refs.frame, new URL(this.app.url).origin, this.navigationToken)) return;
+      this.navigation = { ready: event.data.supported, back: event.data.back, forward: event.data.forward };
+    },
+    navigate(direction) {
+      if (!this.navigation.ready || !['back', 'forward'].includes(direction) || !this.navigation[direction]) return;
+      this.$refs.frame?.contentWindow?.postMessage({ channel: NAVIGATION_CHANNEL, type: 'navigate', nonce: this.navigationToken, direction }, new URL(this.app.url).origin);
+    },
+    networkChanged() { this.offline = !navigator.onLine; },
+    policyViolation(event) {
+      if (event.disposition !== 'enforce' || !['frame-src', 'child-src'].includes(event.effectiveDirective)) return;
+      try {
+        if (new URL(event.blockedURI).origin !== new URL(this.app.url).origin) return;
+        this.localFailure = { code: 'hub_frame_policy', directive: event.effectiveDirective, origin: new URL(event.blockedURI).origin };
+      } catch (_) { /* A redacted browser event cannot identify this application. */ }
+    },
     async prepareLogin() {
       this.busy = true;
       try {
@@ -50,6 +97,7 @@ export default {
         this.frameReady = true;
         await this.$nextTick();
         if (this.disposed) return;
+        this.startLoadTimer();
         submitApplicationLogin(document, this.$refs.frame, this.app, payload, window.location.origin);
         this.saved = this.saved || this.remember;
         this.showLogin = false;
@@ -63,6 +111,7 @@ export default {
       }
     },
     nativeLogin() {
+      this.startLoadTimer();
       this.initialSrc = this.app.url;
       this.frameReady = true;
       this.showLogin = false;
@@ -82,20 +131,10 @@ export default {
 </script>
 
 <template>
-  <section class="workspace-frame" :aria-label="app.name">
-    <header class="workspace-frame__header">
-      <button type="button" class="workspace-frame__action" :aria-label="$t('WORKSPACE_APPS.BACK_TO_HUB')" :title="$t('WORKSPACE_APPS.BACK_TO_HUB')" @click="$store.commit('workspaceApps/deactivate')"><fluent-icon icon="chevron-left" size="20" /></button>
-      <WorkspaceIcon :app="app" />
-      <strong class="workspace-frame__title">{{ app.name }}</strong>
-      <button v-if="app.auth_mode === 'form_post'" type="button" class="workspace-frame__action" :aria-label="$t('WORKSPACE_APPS.MY_LOGIN')" :title="$t('WORKSPACE_APPS.MY_LOGIN')" @click="showLogin = true"><fluent-icon icon="key" size="20" /></button>
-      <button type="button" class="workspace-frame__action" :aria-label="$t('WORKSPACE_APPS.RELOAD')" :title="$t('WORKSPACE_APPS.RELOAD')" @click="$emit('confirmAction', { action: 'reload', id: app.id })"><fluent-icon icon="arrow-clockwise" size="20" /></button>
-      <a :href="app.url" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer" class="workspace-frame__action" :aria-label="$t('WORKSPACE_APPS.OPEN_EXTERNAL')" :title="$t('WORKSPACE_APPS.OPEN_EXTERNAL')"><fluent-icon icon="open" size="20" /></a>
-      <button type="button" class="workspace-frame__action" :aria-label="$t('WORKSPACE_APPS.CLOSE_APP')" :title="$t('WORKSPACE_APPS.CLOSE_APP')" @click="$emit('confirmAction', { action: 'close', id: app.id })"><fluent-icon icon="dismiss" size="20" /></button>
-    </header>
-    <div v-if="showHelp" class="workspace-frame__help">
-      <span>{{ $t('WORKSPACE_APPS.EMBED_HELP') }}</span>
-      <button type="button" :aria-label="$t('WORKSPACE_APPS.DISMISS')" @click="showHelp = false"><fluent-icon icon="dismiss" size="14" /></button>
-    </div>
+  <section class="workspace-frame" :class="{ 'workspace-frame--pinned': pinned }" :aria-label="app.name">
+    <WorkspaceToolbar :app="app" :scope="scope" :active="active" :force-visible="showLogin || showDiagnostics" :navigation="navigation"
+      @pin="pinned = $event" @hub="$store.commit('workspaceApps/deactivate')" @navigate="navigate" @login="showLogin = true" @diagnose="showDiagnostics = true"
+      @reload="$emit('confirmAction', { action: 'reload', id: app.id })" @close="$emit('confirmAction', { action: 'close', id: app.id })" />
     <div class="workspace-frame__body">
       <iframe
         v-if="frameReady"
@@ -104,10 +143,16 @@ export default {
         :src="initialSrc"
         :title="app.name"
         class="workspace-frame__iframe"
+        @load="frameLoaded"
         sandbox="allow-forms allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-downloads allow-modals"
         allow="camera 'none'; microphone 'none'; geolocation 'none'; payment 'none'"
         referrerpolicy="no-referrer"
       />
+      <div v-if="offline || slow || localFailure" class="workspace-frame__notice" role="status">
+        <span>{{ $t(offline ? 'WORKSPACE_APPS.NETWORK_OFFLINE' : localFailure ? 'WORKSPACE_APPS.LOCAL_POLICY_ERROR' : 'WORKSPACE_APPS.LOAD_UNCONFIRMED') }}</span>
+        <button type="button" @click="showDiagnostics = true">{{ $t('WORKSPACE_APPS.DIAGNOSE') }}</button>
+      </div>
+      <WorkspaceDiagnostics v-if="showDiagnostics" :app="app" :account-id="accountId" :local-failure="localFailure" @close="showDiagnostics = false" />
       <div v-if="!frameReady && !showLogin" class="workspace-frame__loading" role="status">{{ $t('WORKSPACE_APPS.LOADING') }}</div>
       <div v-if="showLogin" class="workspace-frame__login-overlay">
         <form class="workspace-frame__login" @submit.prevent="login(false)">
@@ -137,18 +182,17 @@ export default {
 </template>
 
 <style scoped>
-.workspace-frame { height: 100%; width: 100%; display: flex; flex-direction: column; background: white; color: #0f172a; }
-.workspace-frame__header { display: flex; align-items: center; gap: .65rem; min-height: 3.5rem; flex-shrink: 0; padding: .4rem .8rem; border-bottom: 1px solid #e2e8f0; }
-.workspace-frame__title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .95rem; }
+.workspace-frame { position: relative; height: 100%; width: 100%; display: flex; flex-direction: column; background: white; color: #0f172a; }
 .workspace-frame__action { display: inline-flex; align-items: center; justify-content: center; width: 2.2rem; height: 2.2rem; flex-shrink: 0; padding: 0; background: transparent; color: #475569; border: 0; border-radius: .5rem; cursor: pointer; }
 .workspace-frame__action:hover { background: #f1f5f9; }
 .workspace-frame__action:focus-visible { outline: 2px solid #3b82f6; }
-.workspace-frame__help { display: flex; align-items: center; justify-content: space-between; gap: .7rem; padding: .4rem 1rem; font-size: .75rem; color: #64748b; background: #f8fafc; }
-.workspace-frame__help button { display: flex; padding: 0; background: transparent; border: 0; color: inherit; cursor: pointer; }
+.workspace-frame--pinned { padding-top: 38px; box-sizing: border-box; }
 .workspace-frame__body { flex: 1; min-height: 0; position: relative; }
+.workspace-frame__notice { position: absolute; bottom: 12px; inset-inline: 12px; z-index: 1; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; background: #f8fafc; color: #475569; font-size: 12px; }
+.workspace-frame__notice button { border: 0; padding: 4px; background: transparent; color: #2563eb; cursor: pointer; }
 .workspace-frame__iframe { width: 100%; height: 100%; border: 0; display: block; background: white; }
 .workspace-frame__loading { display: grid; place-items: center; height: 100%; }
-.workspace-frame__login-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; overflow: auto; padding: 1.5rem; background: rgb(15 23 42 / .25); }
+.workspace-frame__login-overlay { position: absolute; z-index: 2; inset: 0; display: flex; align-items: center; justify-content: center; overflow: auto; padding: 1.5rem; background: rgb(15 23 42 / .25); }
 .workspace-frame__login { width: min(100%, 30rem); max-height: 100%; overflow: auto; padding: 1.5rem; border: 1px solid #e2e8f0; border-radius: 1rem; background: white; box-shadow: 0 12px 36px rgb(15 23 42 / .12); }
 .workspace-frame__login-heading { display: flex; align-items: center; justify-content: space-between; }
 .workspace-frame__login-heading h2 { font-size: 1.15rem; margin: 0 0 1rem; }
@@ -160,9 +204,7 @@ export default {
 .workspace-frame__text-action { display: block; background: none; border: 0; padding: .4rem 0; font-size: .85rem; color: #2563eb; cursor: pointer; }
 .workspace-frame__login .workspace-frame__error { color: #b91c1c; }
 .dark .workspace-frame, .dark .workspace-frame__login { background: #0f172a; color: #e2e8f0; border-color: #334155; }
-.dark .workspace-frame__header { border-color: #334155; }
-.dark .workspace-frame__help { background: #1e293b; color: #cbd5e1; }
 .dark .workspace-frame__action { color: #cbd5e1; }
 .dark .workspace-frame__action:hover { background: #1e293b; }
-@media (max-width: 640px) { .workspace-frame__header { gap: .2rem; padding-inline: .25rem; } .workspace-frame__login-overlay { padding: .5rem; } }
+@media (max-width: 640px) { .workspace-frame__login-overlay { padding: .5rem; } }
 </style>
