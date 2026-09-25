@@ -34,7 +34,10 @@ import inbox from './inbox.json';
 import general from './general.json';
 import datePicker from './datePicker.json';
 
+import workspaceApps from './workspaceApps.json';
+
 export default {
+  ...workspaceApps,
   ...advancedFilters,
   ...agentBots,
   ...agentMgmt,
@@ -63,6 +66,8 @@ export default {
   ...search,
   ...setNewPassword,
   ...settings,
+  SIDEBAR: { ...settings.SIDEBAR, WORKSPACE_APPS: workspaceApps.WORKSPACE_APPS.TITLE },
+  SIDEBAR_ITEMS: { ...settings.SIDEBAR_ITEMS, WORKSPACE_APPS: workspaceApps.WORKSPACE_APPS.TITLE },
   ...signup,
   ...sla,
   ...teamsSettings,

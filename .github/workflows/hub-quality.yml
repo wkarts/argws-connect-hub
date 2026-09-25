@@ -33,6 +33,9 @@ jobs:
           node --test ./scripts/test-campaign-channel-ui.mjs
           node --test ./scripts/test-connect-api-call-media-recovery.mjs
           node --test ./scripts/test-message-actions-ui.mjs
+          node --test ./scripts/test-workspace-apps.mjs
+          node --experimental-vm-modules --test ./scripts/test-workspace-state.mjs
+          node --experimental-vm-modules ./scripts/check-workspace-javascript.mjs
       - name: Enterprise runtime contracts
         run: ruby ./scripts/check-enterprise-contracts.rb
 
@@ -144,3 +147,25 @@ jobs:
           spec/requests/frontend_two_factor_policy_spec.rb
           spec/requests/account_two_factor_policy_spec.rb
           spec/services/two_factor/totp_spec.rb
+
+      - name: Company applications and credential isolation specs
+        run: >-
+          bundle exec rspec
+          spec/models/workspace_app_spec.rb
+          spec/models/workspace_app_credential_spec.rb
+          spec/requests/workspace_apps_spec.rb
+
+  workspace-ui:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: yarn
+      - name: Install locked frontend dependencies
+        run: yarn install --frozen-lockfile --ignore-scripts --network-timeout 120000
+      - name: Compile affected Vue templates
+        run: node ./scripts/check-workspace-vue.cjs
+      - name: Persistent frames and authentication regression tests
+        run: yarn test app/javascript/dashboard/components/workspace/specs/workspaceApps.spec.js

@@ -4,6 +4,7 @@ import { frontendURL } from '../../../../helper/URLHelper';
 const settings = accountId => ({
   parentNav: 'settings',
   routes: [
+    'workspace_apps_settings',
     'agent_bots',
     'agent_list',
     'attributes_list',
@@ -41,6 +42,14 @@ const settings = accountId => ({
     'sla_list',
   ],
   menuItems: [
+    {
+      icon: 'globe',
+      label: 'WORKSPACE_APPS',
+      hasSubMenu: false,
+      meta: { permissions: ['administrator'] },
+      toState: frontendURL(`accounts/${accountId}/settings/workspace-apps`),
+      toStateName: 'workspace_apps_settings',
+    },
     {
       icon: 'briefcase',
       label: 'ACCOUNT_SETTINGS',

@@ -1,6 +1,7 @@
 <script>
 export default {
   props: {
+    suppressActive: { type: Boolean, default: false },
     to: {
       type: String,
       default: '',
@@ -37,7 +38,7 @@ export default {
       class="text-slate-700 dark:text-slate-100 w-10 h-10 my-2 flex items-center justify-center rounded-lg hover:bg-slate-25 dark:hover:bg-slate-700 dark:hover:text-slate-100 hover:text-slate-600 relative"
       :class="{
         'bg-hub-50 dark:bg-slate-800 text-hub-500 hover:bg-hub-50':
-          isActive || isChildMenuActive,
+          !suppressActive && (isActive || isChildMenuActive),
       }"
       :rel="openInNewPage ? 'noopener noreferrer nofollow' : undefined"
       :target="openInNewPage ? '_blank' : undefined"
@@ -46,7 +47,7 @@ export default {
       <fluent-icon
         :icon="icon"
         :class="{
-          'text-hub-500': isActive || isChildMenuActive,
+          'text-hub-500': !suppressActive && (isActive || isChildMenuActive),
         }"
       />
       <span class="sr-only">{{ name }}</span>
