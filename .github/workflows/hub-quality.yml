@@ -33,7 +33,8 @@ jobs:
           node --test ./scripts/test-campaign-channel-ui.mjs
           node --test ./scripts/test-connect-api-call-media-recovery.mjs
           node --test ./scripts/test-message-actions-ui.mjs
-          node --test ./scripts/test-workspace-apps.mjs
+          node --test ./scripts/test-workspace-apps.mjs ./scripts/test-workspace-presentation.mjs
+          ruby ./scripts/test-workspace-diagnostics.rb
           node --experimental-vm-modules --test ./scripts/test-workspace-state.mjs
           node --experimental-vm-modules ./scripts/check-workspace-javascript.mjs
       - name: Enterprise runtime contracts
@@ -154,6 +155,7 @@ jobs:
           spec/models/workspace_app_spec.rb
           spec/models/workspace_app_credential_spec.rb
           spec/requests/workspace_apps_spec.rb
+          spec/requests/workspace_diagnostics_spec.rb
 
   workspace-ui:
     runs-on: ubuntu-24.04
@@ -168,4 +170,4 @@ jobs:
       - name: Compile affected Vue templates
         run: node ./scripts/check-workspace-vue.cjs
       - name: Persistent frames and authentication regression tests
-        run: yarn test app/javascript/dashboard/components/workspace/specs/workspaceApps.spec.js
+        run: yarn test app/javascript/dashboard/components/workspace/specs

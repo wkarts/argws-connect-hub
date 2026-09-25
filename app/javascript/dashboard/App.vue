@@ -140,7 +140,7 @@ export default {
       <NetworkNotification />
     </div>
     <LoadingState v-else />
-  <WorkspaceHost />
+    <WorkspaceHost :available="!authUIFlags.isFetching && !accountUIFlags.isFetchingItem" />
   </div>
 </template>
 

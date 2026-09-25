@@ -83,6 +83,7 @@ Rails.application.routes.draw do
               get :credential
               delete :credential, action: :forget_credential
               post :launch
+              post :diagnose
             end
           end
           namespace :channels do

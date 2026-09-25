@@ -3,6 +3,7 @@ import { reconcileWorkspaceTabs, safeApplicationUrl, workspaceScope } from 'dash
 
 export const createState = () => ({
   scope: '', epoch: 0, accountId: null, apps: [], tabs: [], activeId: null,
+  contextMenu: null, pendingAction: null,
   launcherOpen: false, loading: false, failed: false, requestId: 0, openRequestId: 0, sequence: 0,
 });
 
@@ -21,8 +22,21 @@ export const mutations = {
     state.loading = false;
     state.failed = false;
   },
+  context(state, value) {
+    state.contextMenu = value && state.tabs.some(tab => tab.id === value.id) ? value : null;
+  },
+  requestAction(state, value) {
+    state.contextMenu = null;
+    state.pendingAction = value && ['close', 'closeOthers', 'reload'].includes(value.action) && state.tabs.some(tab => tab.id === value.id) ? value : null;
+  },
+  closeOthers(state, id) {
+    if (!state.tabs.some(tab => tab.id === id)) return;
+    state.tabs = state.tabs.filter(tab => tab.id === id);
+    if (state.activeId !== null) state.activeId = id;
+    state.openRequestId += 1;
+  },
   launcher(state, value) { state.launcherOpen = value; },
-  deactivate(state) { state.activeId = null; state.launcherOpen = false; state.openRequestId += 1; },
+  deactivate(state) { state.contextMenu = null; state.pendingAction = null; state.activeId = null; state.launcherOpen = false; state.openRequestId += 1; },
   opening(state) { state.openRequestId += 1; state.launcherOpen = false; },
   open(state, app) {
     const previous = state.tabs.find(tab => tab.id === app.id);
