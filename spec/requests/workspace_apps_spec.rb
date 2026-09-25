@@ -163,4 +163,45 @@ RSpec.describe 'Company workspace applications', type: :request do
     launch_as(admin, 'not-an-object')
     expect(response).to have_http_status(:unprocessable_entity)
   end
+
+  # Match the complete settings form, not just a minimal name/URL API call.
+  def registration_values
+    {
+      name: 'Another application', url: 'https://other.example.test/manager/login', icon_name: 'globe',
+      enabled: true, position: 0, launch_mode: 'embedded', auth_mode: 'session', login_url: '',
+      username_field: 'username', password_field: 'password', allow_saved_credentials: false,
+      allow_auto_login: false, access_mode: 'everyone', allowed_user_ids: [], remove_icon: false
+    }
+  end
+
+  it 'creates another application from the full JSON form without modifying the existing one' do
+    existing = workspace_app.attributes
+    post base, params: { workspace_app: registration_values }, headers: headers, as: :json
+    expect(response).to have_http_status(:created), response.body
+    expect(account.workspace_apps.count).to eq(2)
+    expect(workspace_app.reload.attributes).to eq(existing)
+  end
+
+  it 'creates from the full multipart form with an icon and a selected company user' do
+    values = registration_values.transform_values(&:to_s).merge(
+      access_mode: 'selected', allowed_user_ids: [admin.id.to_s],
+      icon: fixture_file_upload(Rails.root.join('spec/assets/avatar.png'), 'image/png')
+    )
+    post base, params: { workspace_app: values }, headers: headers
+    expect(response).to have_http_status(:created), response.body
+    saved = WorkspaceApp.find(response.parsed_body.fetch('id'))
+    expect(saved.allowed_user_ids).to eq([admin.id])
+    expect(saved.icon).to be_attached
+    expect(saved.allow_saved_credentials).to be false
+    expect(saved.allow_auto_login).to be false
+  end
+
+  it 'creates from the full multipart form with an icon and no selected users' do
+    values = registration_values.transform_values(&:to_s).merge(
+      allowed_user_ids: [''], icon: fixture_file_upload(Rails.root.join('spec/assets/avatar.png'), 'image/png')
+    )
+    post base, params: { workspace_app: values }, headers: headers
+    expect(response).to have_http_status(:created), response.body
+    expect(WorkspaceApp.find(response.parsed_body.fetch('id')).allowed_user_ids).to eq([])
+  end
 end
