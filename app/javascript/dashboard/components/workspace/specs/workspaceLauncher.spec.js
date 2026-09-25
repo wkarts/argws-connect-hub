@@ -89,8 +89,14 @@ it('opens an app and retracts the selector without needing a close button', asyn
 // installed v-tooltip and Popper overflow/offset/flip algorithms unmocked.
 const rect = (left, top, width, height) => ({ left, top, width, height, right: left + width, bottom: top + height, x: left, y: top });
 function mockGeometry(railLeft, tooltipWidth = 120) {
+  // jsdom returns empty computed border/margin values without a stylesheet;
+  // Popper 1 parses those as numbers. Model the real browser's zero defaults.
+  const style = document.createElement('style');
+  style.textContent = 'html, body, .narrow-rail, .narrow-rail button, .tooltip, .tooltip * { margin: 0px; padding: 0px; border: 0px solid transparent; }';
+  document.body.appendChild(style);
   vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function bounds() {
     if (this.classList.contains('tooltip')) return rect(0, 0, tooltipWidth, 24);
+    if (this.classList.contains('tooltip-arrow')) return rect(0, 0, 0, 0);
     if (this.classList.contains('narrow-rail')) return rect(railLeft, 0, 64, 600);
     if (this.tagName === 'BUTTON') return rect(railLeft + 12, 80, 40, 40);
     return rect(0, 0, 1000, 700);
@@ -124,6 +130,8 @@ it.each([
   const tooltip = button._tooltip._tooltipNode;
   expect(tooltip.parentNode).toBe(document.body);
   expect(geometry.placement).toBe(rtl ? 'left' : 'right');
+  expect(Number.isFinite(geometry.offsets.popper.left)).toBe(true);
+  expect(Number.isFinite(geometry.offsets.popper.right)).toBe(true);
   const icon = button.getBoundingClientRect();
   if (rtl) expect(geometry.offsets.popper.right).toBeLessThanOrEqual(icon.left - 8);
   else expect(geometry.offsets.popper.left).toBeGreaterThanOrEqual(icon.right + 8);
