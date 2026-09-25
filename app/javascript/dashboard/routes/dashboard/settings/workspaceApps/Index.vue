@@ -12,6 +12,17 @@ const emptyForm = () => ({
   access_mode: 'everyone', allowed_user_ids: [],
 });
 const EDITABLE = Object.keys(emptyForm());
+const saveErrorMessage = (error, fallback) => {
+  const response = error?.response;
+  const data = response?.data;
+  const detail = [data?.message, data?.error].find(value => typeof value === 'string' && value.trim());
+  const status = Number(response?.status);
+  const requestId = response?.headers?.['x-request-id'];
+  const context = [];
+  if (Number.isInteger(status) && status >= 400 && status <= 599) context.push(`HTTP ${status}`);
+  if (typeof requestId === 'string' && /^[a-zA-Z0-9-]{1,128}$/.test(requestId)) context.push(`ID: ${requestId}`);
+  return `${detail ? detail.slice(0, 2000) : fallback}${context.length ? ` (${context.join(' · ')})` : ''}`;
+};
 
 export default {
   components: { WorkspaceIcon, SettingsLayout, BaseSettingsHeader },
@@ -94,7 +105,7 @@ export default {
         await this.$store.dispatch('workspaceApps/refresh');
         useAlert(this.$t('WORKSPACE_APPS.SAVED'));
       } catch (error) {
-        if (!this.disposed && accountId === this.accountId) this.error = error.response?.data?.message || this.$t('WORKSPACE_APPS.SAVE_ERROR');
+        if (!this.disposed && accountId === this.accountId) this.error = saveErrorMessage(error, this.$t('WORKSPACE_APPS.SAVE_ERROR'));
       } finally { if (!this.disposed) this.saving = false; }
     },
     async remove() {

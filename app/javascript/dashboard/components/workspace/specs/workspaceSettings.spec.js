@@ -4,6 +4,10 @@ import axios from 'axios';
 import { createLocalVue, mount } from '@vue/test-utils';
 import WorkspaceSettings from 'dashboard/routes/dashboard/settings/workspaceApps/Index.vue';
 
+// Keep this unit test on the settings form, not the router imported by its header.
+vi.mock('dashboard/routes/dashboard/settings/components/BaseSettingsHeader.vue', () => ({ default: { render: h => h('header') } }));
+vi.mock('dashboard/routes/dashboard/settings/SettingsLayout.vue', () => ({ default: { render: h => h('div') } }));
+
 const localVue = createLocalVue();
 localVue.use(Vuex);
 const tick = async () => { for (let i = 0; i < 15; i += 1) await Vue.nextTick(); };
@@ -63,3 +67,28 @@ it('submits an icon and selected users through the real Axios FormData transform
   expect(wrapper.vm.error).toBe('');
   expect(wrapper.vm.showForm).toBe(false);
 });
+
+it('keeps the backend error and request ID instead of hiding them behind a generic save message', async () => {
+  await settings();
+  axiosForFailure({ error: 'param is missing or the value is empty: icon_file' });
+  await wrapper.vm.save();
+  expect(wrapper.vm.error).toContain('icon_file');
+  expect(wrapper.vm.error).toContain('HTTP 422');
+  expect(wrapper.vm.error).toContain('test-request-id');
+  expect(wrapper.vm.showForm).toBe(true);
+  expect(wrapper.vm.form.name).toBe('New application');
+  expect(wrapper.vm.saving).toBe(false);
+});
+
+it('does not render raw HTML error pages from a proxy', async () => {
+  await settings();
+  axiosForFailure('<html>Proxy failure</html>');
+  await wrapper.vm.save();
+  expect(wrapper.vm.error).toContain('WORKSPACE_APPS.SAVE_ERROR');
+  expect(wrapper.vm.error).toContain('HTTP 422');
+  expect(wrapper.vm.error).not.toContain('<html>');
+});
+
+function axiosForFailure(data) {
+  window.axios.defaults.adapter = config => Promise.reject({ response: { data, status: 422, headers: { 'x-request-id': 'test-request-id' }, config } });
+}
