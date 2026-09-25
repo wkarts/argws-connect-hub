@@ -6,7 +6,8 @@ RSpec.describe 'Company workspace applications', type: :request do
   let(:agent) { create(:user, account: account, role: :agent) }
   let(:headers) { admin.create_new_auth_token }
   let(:base) { "/api/v1/accounts/#{account.id}/workspace_apps" }
-  let(:app) { account.workspace_apps.create!(name: 'Test application', url: 'https://app.example.test/home') }
+  # `app` belongs to the Rails/Rack request harness; do not shadow it with a model.
+  let(:workspace_app) { account.workspace_apps.create!(name: 'Test application', url: 'https://app.example.test/home') }
   let(:login_app) do
     account.workspace_apps.create!(name: 'Test login', url: 'https://app.example.test/home', auth_mode: 'form_post',
                                   login_url: 'https://app.example.test/login', allow_saved_credentials: true, allow_auto_login: true)
@@ -17,6 +18,11 @@ RSpec.describe 'Company workspace applications', type: :request do
     payload = { integration_revision: revision }
     payload[:workspace_credentials] = values unless values.nil?
     post "#{base}/#{login_app.id}/launch", params: payload, headers: user.create_new_auth_token, as: :json
+  end
+
+  it 'keeps the Rails application as the Rack request target' do
+    expect(app).to equal(Rails.application)
+    expect { app }.not_to change(WorkspaceApp, :count)
   end
 
   it 'requires authentication' do
@@ -54,18 +60,18 @@ RSpec.describe 'Company workspace applications', type: :request do
   end
 
   it 'keeps inactive applications out of the user catalog but in administrative settings' do
-    app.update!(enabled: false)
+    workspace_app.update!(enabled: false)
     get base, headers: headers, as: :json
     expect(response.parsed_body).to eq([])
     get "#{base}/manage", headers: headers, as: :json
-    expect(response.parsed_body.map { |entry| entry['id'] }).to include(app.id)
+    expect(response.parsed_body.map { |entry| entry['id'] }).to include(workspace_app.id)
   end
 
   it 'enforces application permissions on both catalog and direct access' do
-    app.update!(access_mode: 'administrators')
+    workspace_app.update!(access_mode: 'administrators')
     get base, headers: agent.create_new_auth_token, as: :json
     expect(response.parsed_body).to eq([])
-    get "#{base}/#{app.id}", headers: agent.create_new_auth_token, as: :json
+    get "#{base}/#{workspace_app.id}", headers: agent.create_new_auth_token, as: :json
     expect(response).to have_http_status(:forbidden)
   end
 
