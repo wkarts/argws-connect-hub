@@ -1,6 +1,9 @@
 // Reuse the native HUB tooltip directive/style; never attach hints to the iframe.
 export const workspaceTooltip = (content, rtl = false) => ({
   content, placement: rtl ? 'left' : 'right', container: 'body',
+  // Popper must use the viewport, not the 64 px scroll parent of either app rail.
+  // Appending to body alone does not change its default overflow boundary.
+  boundariesElement: 'viewport', offset: 8, html: false,
   delay: { show: 180, hide: 0 }, trigger: 'hover focus',
   classes: ['workspace-tooltip'], autoHide: true,
 });

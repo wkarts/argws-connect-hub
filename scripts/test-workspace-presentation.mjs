@@ -15,6 +15,27 @@ test('hints use native tooltip styles at body level and never intercept hover', 
   assert.match(read(`${root}WorkspaceHost.vue`), /\.tooltip\.workspace-tooltip\s*\{\s*pointer-events: none !important/);
 });
 
+test('app hints escape narrow scroll containers with an explicit gap and plain text', () => {
+  for (const rtl of [false, true]) {
+    const hint = workspaceTooltip('<App name>', rtl);
+    assert.equal(hint.boundariesElement, 'viewport');
+    assert.equal(hint.offset, 8);
+    assert.equal(hint.html, false);
+    assert.equal(hint.placement, rtl ? 'left' : 'right');
+  }
+});
+
+test('application catalog dedicates its full rail to apps, without close or settings controls', () => {
+  const launcher = read(`${root}WorkspaceLauncher.vue`);
+  assert.doesNotMatch(launcher, /closeButton|CLOSE_CATALOG|WORKSPACE_APPS\.MANAGE|settingsPath|<router-link/);
+  assert.match(launcher, /tabindex="-1"/);
+  assert.match(launcher, /this\.\$el\.focus\(\{ preventScroll: true \}\)/);
+  assert.match(launcher, /event\.key === 'Escape'/);
+  assert.match(launcher, /onOutsideClick/);
+  assert.match(read(`${root}WorkspaceSidebar.vue`), /@click\.stop="toggleLauncher"/);
+  assert.match(read('app/javascript/dashboard/components/layout/config/sidebarItems/settings.js'), /workspace-apps/);
+});
+
 test('toolbar pin preference is isolated by company/user and tolerates unavailable storage', () => {
   const values = new Map();
   globalThis.localStorage = { getItem: key => values.get(key), setItem: (key, value) => values.set(key, value) };
