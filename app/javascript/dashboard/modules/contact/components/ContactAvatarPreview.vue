@@ -77,9 +77,6 @@ export default {
         :username="username"
         :status="status"
       />
-      <span v-if="largeImageSrc" class="contact-avatar-preview__zoom-badge">
-        <fluent-icon icon="zoom-in" size="14" />
-      </span>
     </button>
 
     <transition name="avatar-preview-fade">
@@ -176,28 +173,12 @@ export default {
 }
 
 .contact-avatar-preview__trigger.is-clickable {
-  cursor: zoom-in;
+  cursor: pointer;
 }
 
 .contact-avatar-preview__trigger:focus-visible {
   outline: 3px solid rgba(59, 130, 246, 0.55);
   outline-offset: 3px;
-}
-
-.contact-avatar-preview__zoom-badge {
-  position: absolute;
-  right: -3px;
-  bottom: -3px;
-  width: 24px;
-  height: 24px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 2px solid white;
-  border-radius: 9999px;
-  background: #0f172a;
-  color: white;
-  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.28);
 }
 
 .contact-avatar-preview__overlay {

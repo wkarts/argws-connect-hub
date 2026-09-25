@@ -291,14 +291,6 @@ export default {
   >
     <div>
       <div class="w-full">
-        <div v-if="avatarUrl" class="mb-4">
-          <ContactAvatarPreview
-            :src="avatarUrl"
-            :username="name"
-            size="80px"
-          />
-          <small>{{ $t('CONTACT_FORM.FORM.AVATAR.PREVIEW_HELP') }}</small>
-        </div>
         <hub-avatar-uploader
           :label="$t('CONTACT_FORM.FORM.AVATAR.LABEL')"
           :src="avatarUrl"
@@ -307,7 +299,17 @@ export default {
           class="settings-item"
           @change="handleImageUpload"
           @onAvatarDelete="handleAvatarDelete"
-        />
+        >
+          <template #preview>
+            <ContactAvatarPreview
+              v-if="avatarUrl"
+              :src="avatarUrl"
+              :preview-src="avatarFile ? avatarUrl : contact.avatar_url || avatarUrl"
+              :username="name"
+              size="80px"
+            />
+          </template>
+        </hub-avatar-uploader>
       </div>
     </div>
     <div>

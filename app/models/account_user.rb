@@ -26,6 +26,7 @@ class AccountUser < ApplicationRecord
   include AvailabilityStatusable
 
   belongs_to :account
+  has_many :workspace_app_credentials, dependent: :destroy
   belongs_to :user
   belongs_to :inviter, class_name: 'User', optional: true
 

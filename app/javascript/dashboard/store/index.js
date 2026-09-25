@@ -28,6 +28,7 @@ import conversationWatchers from './modules/conversationWatchers';
 import csat from './modules/csat';
 import customViews from './modules/customViews';
 import dashboardApps from './modules/dashboardApps';
+import workspaceApps from './modules/workspaceApps';
 import globalConfig from 'shared/store/globalConfig';
 import inboxAssignableAgents from './modules/inboxAssignableAgents';
 import inboxes from './modules/inboxes';
@@ -78,6 +79,7 @@ export default new Vuex.Store({
     csat,
     customViews,
     dashboardApps,
+    workspaceApps,
     globalConfig,
     inboxAssignableAgents,
     inboxes,

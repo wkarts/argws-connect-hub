@@ -17,6 +17,7 @@ import store from '../../../store';
 import sla from './sla/sla.routes';
 import teams from './teams/teams.routes';
 import profile from './profile/profile.routes';
+import workspaceApps from './workspaceApps/routes';
 
 export default {
   routes: [
@@ -50,5 +51,6 @@ export default {
     ...sla.routes,
     ...teams.routes,
     ...profile.routes,
+    ...workspaceApps.routes,
   ],
 };
