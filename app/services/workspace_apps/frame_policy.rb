@@ -52,16 +52,25 @@ module WorkspaceApps
     def matches_source?(source)
       return true if source == '*'
       return same_origin?(@destination, @parent) if source == "'self'"
-      return @parent.scheme == source.delete_suffix(':') if %w[http: https:].include?(source)
+      return scheme_matches?(source.delete_suffix(':')) if %w[http: https:].include?(source.downcase)
 
       match = source.match(%r{\A(?:(https?)://)?(\*\.)?([a-z0-9.-]+)(?::(\d+|\*))?/?\z}i)
       return nil unless match
 
       scheme, wildcard, host, port = match.captures
-      scheme ||= @destination.scheme
-      port ||= scheme == 'https' ? '443' : '80'
+      scheme = (scheme || @destination.scheme).downcase
+      port_match = if port.nil?
+                     @parent.port == @parent.default_port
+                   else
+                     port == '*' || @parent.port == port.to_i || (port.to_i == 80 && @parent.port == 443)
+                   end
       host_match = wildcard ? @parent.host.downcase.end_with?(".#{host.downcase}") : @parent.host.casecmp?(host)
-      host_match && @parent.scheme == scheme.downcase && (port == '*' || @parent.port == port.to_i)
+      host_match && scheme_matches?(scheme) && port_match
+    end
+
+    def scheme_matches?(scheme)
+      scheme = scheme.downcase
+      @parent.scheme == scheme || (scheme == 'http' && @parent.scheme == 'https')
     end
 
     def same_origin?(a, b)

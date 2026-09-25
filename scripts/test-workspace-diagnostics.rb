@@ -41,6 +41,14 @@ class WorkspaceDiagnosticsTest < Minitest::Test
     assert_equal 'inconclusive', policy(csp: 'frame-ancestors https://hub.example.test/some/path')[:verdict]
   end
 
+  def test_csp_secure_upgrades_and_case_insensitive_schemes_do_not_report_false_blocks
+    %w[http: HTTP: HTTPS: http://hub.example.test HTTP://HUB.EXAMPLE.TEST https://hub.example.test http://hub.example.test:80].each do |source|
+      assert_equal 'no_block_observed', policy(csp: "frame-ancestors #{source}")[:verdict], source
+    end
+    assert_equal 'blocked', policy(csp: 'frame-ancestors https:', parent: 'http://hub.example.test')[:verdict]
+    assert_equal 'blocked', policy(csp: 'frame-ancestors http://hub.example.test:8443')[:verdict]
+  end
+
   def test_private_reserved_and_translation_addresses_are_rejected
     %w[127.0.0.1 10.0.0.2 169.254.169.254 172.16.1.2 192.168.0.1 100.64.0.1 198.18.0.1
        0.0.0.0 224.0.0.1 240.0.0.1 192.0.2.1 ::1 ::ffff:127.0.0.1 fc00::1 fe80::1
