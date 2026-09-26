@@ -3,7 +3,10 @@ const fs = require('node:fs');
 const compiler = require('vue-template-compiler');
 const root = 'app/javascript/dashboard/';
 const files = [
-  'App.vue', 'components/layout/Sidebar.vue',
+  'App.vue', 'components/layout/Sidebar.vue', 'components/ChatList.vue', 'components/widgets/ChatTypeTabs.vue',
+  'components/widgets/conversation/ConversationHeader.vue',
+  'routes/dashboard/settings/inbox/channels/ConnectApi.vue',
+  'routes/dashboard/settings/inbox/settingsPage/ConnectApiConfiguration.vue',
   'components/layout/sidebarComponents/Primary.vue',
   'components/layout/sidebarComponents/PrimaryNavItem.vue',
   'components/widgets/forms/AvatarUploader.vue',

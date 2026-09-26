@@ -51,7 +51,7 @@
           @change="setIncomingCallRing($event.target.checked)"
         />
         <span
-          class="h-6 w-11 rounded-full bg-slate-300 transition peer-checked:bg-hub-500 peer-disabled:cursor-not-allowed peer-disabled:opacity-50 dark:bg-slate-600"
+          class="h-6 w-11 rounded-full bg-slate-300 transition peer-checked:bg-hub-500 peer-disabled:cursor-not-allowed peer-disabled:opacity-60 dark:bg-slate-600"
         />
         <span
           class="pointer-events-none absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform peer-checked:translate-x-5"
@@ -59,6 +59,10 @@
       </label>
     </div>
 
+    <div class="mb-5 rounded-lg border border-slate-200 p-4 dark:border-slate-700">
+      <label class="flex items-center gap-2"><input type="checkbox" :checked="inbox.whatsapp_groups_enabled === true" :disabled="isSavingGroups" @change="setGroups($event.target)" />{{ $t('WHATSAPP_GROUPS.ENABLE') }}</label>
+      <p class="mb-0 text-xs text-slate-500">{{ $t('WHATSAPP_GROUPS.HELP') }}</p>
+    </div>
     <ConnectApiOpeningTemplates ref="openingTemplates" :inbox="inbox" />
 
     <div v-if="config.qrcode_base64" class="mb-5">
@@ -98,6 +102,7 @@ export default {
   data() {
     return {
       isReconciling: false,
+      isSavingGroups: false,
       isDisconnecting: false,
       isSavingIncomingCallRing: false,
     };
@@ -143,6 +148,15 @@ export default {
         useAlert(error?.response?.data?.message || error?.message || 'Falha ao comunicar com a Connect|API.');
         return false;
       }
+    },
+    async setGroups(input) {
+      const enabled = input.checked;
+      if (this.isSavingGroups) return;
+      this.isSavingGroups = true;
+      try {
+        const saved = await this.update({ ignore_group_messages: !enabled }, this.$t(enabled ? 'WHATSAPP_GROUPS.ENABLED' : 'WHATSAPP_GROUPS.DISABLED'));
+        if (!saved) input.checked = this.inbox.whatsapp_groups_enabled === true;
+      } finally { this.isSavingGroups = false; }
     },
     async setIncomingCallRing(enabled) {
       if (this.isSavingIncomingCallRing) return;

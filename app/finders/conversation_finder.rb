@@ -40,6 +40,7 @@ class ConversationFinder
 
     mine_count, unassigned_count, all_count, = set_count_for_all_conversations
     assigned_count = all_count - unassigned_count
+    groups_count = group_conversations.count
 
     filter_by_assignee_type
 
@@ -49,7 +50,8 @@ class ConversationFinder
         mine_count: mine_count,
         assigned_count: assigned_count,
         unassigned_count: unassigned_count,
-        all_count: all_count
+        all_count: all_count,
+        group_count: groups_count
       }
     }
   end
@@ -93,6 +95,8 @@ class ConversationFinder
 
   def filter_by_assignee_type
     case @assignee_type
+    when 'groups'
+      @conversations = group_conversations
     when 'me'
       @conversations = @conversations.assigned_to(current_user)
     when 'unassigned'
@@ -101,6 +105,14 @@ class ConversationFinder
       @conversations = @conversations.assigned
     end
     @conversations
+  end
+
+  def group_conversations
+    channels = Channel::Whatsapp.where(account_id: current_account.id, provider: 'connectapi')
+                                .where("provider_config->>'ignore_group_messages' IN (?)", ActiveModel::Type::Boolean::FALSE_VALUES.map(&:to_s).uniq)
+    enabled_inboxes = current_account.inboxes.where(channel_type: 'Channel::Whatsapp', channel_id: channels.select(:id))
+    group_contacts = ContactInbox.where(inbox_id: @inbox_ids).where("source_id ~ ?", '^[0-9]+(-[0-9]+)?@g\\.us$').select(:id)
+    @conversations.where(inbox_id: enabled_inboxes.select(:id), contact_inbox_id: group_contacts)
   end
 
   def filter_by_conversation_type

@@ -37,6 +37,11 @@ class Channel::Whatsapp < ApplicationRecord
 
   after_create :sync_templates
 
+  # Missing configuration stays disabled, including pre-existing inboxes.
+  def groups_enabled?
+    provider == 'connectapi' && ActiveModel::Type::Boolean.new.cast(provider_config.to_h.fetch('ignore_group_messages', true)) == false
+  end
+
   def name
     'Whatsapp'
   end
@@ -101,7 +106,16 @@ class Channel::Whatsapp < ApplicationRecord
   end
 
   def validate_provider_config
-    errors.add(:provider_config, 'Invalid Credentials') unless provider_service.validate_provider_config?
+    unless provider_service.validate_provider_config?
+      errors.add(:provider_config, 'Invalid Credentials')
+      return
+    end
+    previous = ActiveModel::Type::Boolean.new.cast(provider_config_in_database.to_h.fetch('ignore_group_messages', true)) == false
+    if provider == 'connectapi' && previous != groups_enabled?
+      Whatsapp::ConnectApiGroupSettingsService.new(self).sync!
+    end
+  rescue ConnectApi::Error => e
+    errors.add(:provider_config, e.message)
   rescue HTTParty::Error => e
     errors.add(:provider_config, e.message)
   rescue SocketError, Errno::ECONNREFUSED

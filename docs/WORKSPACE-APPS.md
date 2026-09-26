@@ -212,3 +212,15 @@ autorizando a origem exata do HUB na política existente (não substituir toda a
 CSP, liberar `*`, desabilitar segurança ou falsificar User-Agent). Também devem
 ser verificados proxy/CDN, certificados, cookies e regras do login. Este patch
 não modifica nenhum sistema externo, incluindo a aplicação mostrada no exemplo.
+
+## Restauração após recarregar ou reabrir o HUB
+
+O navegador armazena somente IDs dos aplicativos, a revisão da integração e o ID da guia ativa, separados por empresa e usuário. Não são armazenados URLs, senhas, tokens ou dados internos das páginas. O catálogo autorizado é consultado novamente antes de reconstruir os iframes. Aplicativos excluídos, desativados, sem permissão, com destino alterado ou convertidos em links externos não são reabertos automaticamente. Fechar explicitamente uma guia remove-a da restauração. Retornar às conversas apenas a oculta. Falhas temporárias de rede não apagam a lista de restauração; o evento `online` ou foco permite tentar novamente.
+
+Reabrir restaura uma **nova página** no endereço cadastrado, não a memória do iframe que foi encerrado. A sessão de login depende dos cookies válidos do aplicativo e das regras do navegador, ou do login POST previamente autorizado. Formulários não salvos, downloads locais e JavaScript do iframe não continuam executando depois que o navegador é fechado. Processos que pertencem ao servidor do aplicativo podem continuar lá. O HUB não assume controle desses processos e não instala navegador remoto, worker ou serviço adicional. Limpar o armazenamento do navegador remove a lista de restauração. O catálogo é revalidado também ao trocar de empresa/usuário.
+
+## Falhas no cadastro e preparação de release
+
+O formulário preserva `error`/`message`, status HTTP e ID de requisição devolvidos pelo servidor. Criação e alteração passam a emitir diagnóstico seguro `workspace.write_finished`/`workspace.write_failed` com status/classe e nomes dos campos inválidos, **sem seus valores**. Erros de gravação ficam no registrador existente. Falhas bloqueadas antes de chegar ao controller (proxy, autenticação, rede) devem ser correlacionadas pelo status e ID da requisição no navegador.
+
+O diagnóstico antigo fornecido não continha as tentativas recentes de cadastro. Os testes de criação JSON/multipart e de segundo aplicativo passam, mas isso **não comprova que a falha específica da instalação foi resolvida**. Confirmar uma criação real antes da próxima release de produção.

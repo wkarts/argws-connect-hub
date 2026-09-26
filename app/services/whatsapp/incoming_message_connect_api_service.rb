@@ -484,3 +484,5 @@ class Whatsapp::IncomingMessageConnectApiService < Whatsapp::IncomingMessageWhat
     value.positive? ? value : 60
   end
 end
+
+Whatsapp::IncomingMessageConnectApiService.prepend(Whatsapp::IncomingConnectApiGroups)

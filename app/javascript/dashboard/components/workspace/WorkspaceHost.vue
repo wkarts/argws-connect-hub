@@ -36,6 +36,7 @@ export default {
   },
   mounted() {
     window.addEventListener('focus', this.refresh);
+    window.addEventListener('online', this.refresh);
     window.addEventListener('resize', this.measureBounds);
     window.addEventListener('blur', this.closeContext);
     document.addEventListener('pointerdown', this.outsideContext);
@@ -51,6 +52,7 @@ export default {
     clearInterval(this.timer);
     this.observer?.disconnect();
     window.removeEventListener('focus', this.refresh);
+    window.removeEventListener('online', this.refresh);
     window.removeEventListener('resize', this.measureBounds);
     window.removeEventListener('blur', this.closeContext);
     document.removeEventListener('pointerdown', this.outsideContext);
@@ -58,7 +60,7 @@ export default {
     this.$store.commit('workspaceApps/reset');
   },
   methods: {
-    refresh() { if (this.tabCount) this.$store.dispatch('workspaceApps/refresh'); },
+    refresh() { if (this.tabCount || this.workspace.failed || !this.workspace.sessionRestored) this.$store.dispatch('workspaceApps/refresh'); },
     updateTimer() { clearInterval(this.timer); this.timer = this.tabCount ? setInterval(this.refresh, 60000) : null; },
     measureBounds() {
       const primary = document.querySelector('[data-workspace-primary]');

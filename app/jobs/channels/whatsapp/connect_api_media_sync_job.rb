@@ -180,7 +180,7 @@ class Channels::Whatsapp::ConnectApiMediaSyncJob < ApplicationJob
   end
 
   def recover_text_message(record, key, id, body)
-    peer_phone = canonical_peer_phone(key)
+    peer_phone = canonical_peer_phone(key) || (key['remoteJid'] if key['remoteJid'].to_s.match?(/\A\d+(?:-\d+)?@g\.us\z/))
     unless peer_phone.present?
       HubDiagnostics::Recorder.emit(
         'sync.skipped',
@@ -204,7 +204,7 @@ class Channels::Whatsapp::ConnectApiMediaSyncJob < ApplicationJob
   end
 
   def recover_media_message(record, key, id, media_type, media_node)
-    peer_phone = canonical_peer_phone(key)
+    peer_phone = canonical_peer_phone(key) || (key['remoteJid'] if key['remoteJid'].to_s.match?(/\A\d+(?:-\d+)?@g\.us\z/))
     return unless peer_phone.present?
 
     from_me = ActiveModel::Type::Boolean.new.cast(key['fromMe'])
@@ -356,6 +356,7 @@ class Channels::Whatsapp::ConnectApiMediaSyncJob < ApplicationJob
                 participant: key['participant'],
                 participant_alt: key['participantAlt'],
                 source: record['source'],
+                group_subject: record['groupSubject'],
                 recovered: true
               }.compact,
               context: native_reply_context(record)
@@ -449,7 +450,10 @@ class Channels::Whatsapp::ConnectApiMediaSyncJob < ApplicationJob
   end
 
   def ignored_jid?(value)
-    value.to_s.end_with?('@g.us', '@broadcast')
+    return true if value.to_s.end_with?('@broadcast')
+    return false unless value.to_s.end_with?('@g.us')
+
+    !@channel.groups_enabled? || !value.to_s.match?(/\A\d+(?:-\d+)?@g\.us\z/)
   end
 
   def timestamp_for(record)

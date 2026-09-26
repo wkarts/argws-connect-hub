@@ -10,6 +10,8 @@ const collect = dir => fs.readdirSync(dir, { withFileTypes: true }).flatMap(entr
 });
 const files = [
   'public/workspace-navigation-bridge.js', `${root}/helper/workspacePresentation.mjs`, `${root}/helper/workspaceNavigation.mjs`,
+  `${root}/helper/workspaceSession.mjs`, `${root}/components/ChatList.vue`, `${root}/components/widgets/ChatTypeTabs.vue`,
+  `${root}/routes/dashboard/settings/inbox/channels/ConnectApi.vue`, `${root}/routes/dashboard/settings/inbox/settingsPage/ConnectApiConfiguration.vue`,
   `${root}/App.vue`, `${root}/api/workspaceApps.js`, `${root}/helper/workspaceApps.mjs`,
   `${root}/store/index.js`, `${root}/store/modules/workspaceApps.js`,
   `${root}/components/layout/Sidebar.vue`, `${root}/components/layout/config/sidebarItems/settings.js`,

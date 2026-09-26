@@ -26,6 +26,7 @@ class Whatsapp::Providers::ConnectApiService < Whatsapp::Providers::WhatsappClou
   # existing Graph-compatible interactive flow for input_select so this repair
   # does not regress lists/buttons already supported by HUB.
   def send_message(phone_number, message)
+    return reject_disabled_group(phone_number, message) if phone_number.to_s.end_with?('@g.us') && (!group_destination?(phone_number) || !whatsapp_channel.groups_enabled?)
     return super if message.content_type == 'input_select'
 
     if message.attachments.present?
@@ -36,6 +37,7 @@ class Whatsapp::Providers::ConnectApiService < Whatsapp::Providers::WhatsappClou
   end
 
   def send_template(message, phone_number, template_info)
+    return reject_disabled_group(phone_number, message) if phone_number.to_s.end_with?('@g.us') && (!group_destination?(phone_number) || !whatsapp_channel.groups_enabled?)
     template = whatsapp_channel.opening_template_catalog.entries.find do |entry|
       entry['name'] == template_info[:name] && entry['language'] == template_info[:lang_code]
     end
@@ -400,7 +402,18 @@ class Whatsapp::Providers::ConnectApiService < Whatsapp::Providers::WhatsappClou
     value.positive? ? value : DEFAULT_TIMEOUT
   end
 
+  def group_destination?(value)
+    value.to_s.match?(/\A\d+(?:-\d+)?@g\.us\z/)
+  end
+
+  def reject_disabled_group(_destination, message)
+    message.update!(status: :failed, external_error: 'Grupos de WhatsApp estão desabilitados nesta caixa de entrada.')
+    nil
+  end
+
   def normalize_phone(value)
+    return value.to_s if group_destination?(value)
+
     value.to_s.gsub(/\D/, '')
   end
 end

@@ -44,7 +44,7 @@ class Whatsapp::ConnectApiHistoricalReconciliationService
       existing = find_message(source_id)
       return reconcile_existing(existing, record) if existing
 
-      peer_phone = canonical_peer_phone(key)
+      peer_phone = group_jid?(key['remoteJid']) ? key['remoteJid'] : canonical_peer_phone(key)
       return skipped('peer_phone_unresolved', source_id: source_id) if peer_phone.blank?
 
       timestamp = timestamp_for(record)
@@ -130,6 +130,19 @@ class Whatsapp::ConnectApiHistoricalReconciliationService
     content_attributes['deleted'] = true if native_message_status == 'deleted'
     content_attributes['is_unsupported'] = true if content.blank? && media_descriptor(record).blank?
 
+    sender_id = from_me ? nil : contact_inbox.contact_id
+    if group_jid?(contact_inbox.source_id)
+      participant = key['participantAlt'].presence || key['participant'].presence
+      content_attributes.merge!('whatsapp_group' => true, 'group_jid' => contact_inbox.source_id, 'group_participant' => participant)
+      sender_id = nil
+      if !from_me && participant.to_s.match?(/\A\d+@(s\.whatsapp\.net|c\.us)\z/)
+        phone = participant.split('@').first
+        sender_id = (Contact.find_by(account_id: @channel.account_id, phone_number: "+#{phone}") ||
+                     insert_historical_contact(phone, record, timestamp)).id
+      end
+      content = "*#{record['pushName']}*: #{content}" if !from_me && content.present? && record['pushName'].present?
+    end
+
     row = {
       content: content,
       account_id: @channel.account_id,
@@ -143,8 +156,8 @@ class Whatsapp::ConnectApiHistoricalReconciliationService
       source_id: source_id,
       content_type: Message.content_types.fetch('text'),
       content_attributes: content_attributes,
-      sender_type: from_me ? nil : 'Contact',
-      sender_id: from_me ? nil : contact_inbox.contact_id,
+      sender_type: sender_id ? 'Contact' : nil,
+      sender_id: sender_id,
       external_source_ids: {},
       additional_attributes: { 'connect_api_historical_reconciled' => true },
       processed_message_content: content,
@@ -160,12 +173,16 @@ class Whatsapp::ConnectApiHistoricalReconciliationService
   end
 
   def find_or_create_contact_inbox(peer_phone, record, timestamp)
-    source_id = peer_phone.to_s.gsub(/\D/, '')
+    source_id = group_jid?(peer_phone) ? peer_phone.to_s : peer_phone.to_s.gsub(/\D/, '')
     existing = ContactInbox.find_by(inbox_id: @channel.inbox.id, source_id: source_id)
     return existing if existing
 
-    contact = Contact.find_by(account_id: @channel.account_id, phone_number: "+#{source_id}") ||
-              insert_historical_contact(source_id, record, timestamp)
+    contact = if group_jid?(source_id)
+                historical_group_contact(source_id, record, timestamp)
+              else
+                Contact.find_by(account_id: @channel.account_id, phone_number: "+#{source_id}") ||
+                  insert_historical_contact(source_id, record, timestamp)
+              end
 
     result = ContactInbox.insert_all!(
       [{
@@ -179,10 +196,32 @@ class Whatsapp::ConnectApiHistoricalReconciliationService
       returning: %w[id]
     )
     contact_inbox = ContactInbox.find(result.rows.first.first)
-    Channels::Whatsapp::ConnectApiProfilePictureJob.perform_later(contact.id, @channel.id, force: true)
+    Channels::Whatsapp::ConnectApiProfilePictureJob.perform_later(contact.id, @channel.id, force: true) unless group_jid?(source_id)
     contact_inbox
   rescue ActiveRecord::RecordNotUnique
     ContactInbox.find_by!(inbox_id: @channel.inbox.id, source_id: source_id)
+  end
+
+  def group_jid?(value)
+    value.to_s.match?(/\A\d+(?:-\d+)?@g\.us\z/)
+  end
+
+  def historical_group_contact(source_id, record, timestamp)
+    identifier = "whatsapp-group:#{@channel.inbox.id}:#{source_id}"
+    existing = Contact.find_by(account_id: @channel.account_id, identifier: identifier)
+    return existing if existing
+
+    result = Contact.insert_all!([{
+      account_id: @channel.account_id, identifier: identifier,
+      name: record['groupSubject'].presence || source_id,
+      created_at: timestamp, updated_at: timestamp, last_activity_at: timestamp,
+      additional_attributes: { 'whatsapp_group' => true, 'group_jid' => source_id, 'connect_api_historical_import' => true },
+      custom_attributes: {}, blocked: false, contact_type: Contact.contact_types.fetch('visitor'),
+      middle_name: '', last_name: '', location: '', country_code: ''
+    }], returning: %w[id])
+    Contact.find(result.rows.first.first)
+  rescue ActiveRecord::RecordNotUnique
+    Contact.find_by!(account_id: @channel.account_id, identifier: identifier)
   end
 
   def insert_historical_contact(source_id, record, timestamp)
@@ -240,7 +279,7 @@ class Whatsapp::ConnectApiHistoricalReconciliationService
         created_at: timestamp,
         updated_at: timestamp,
         last_activity_at: timestamp,
-        additional_attributes: { 'connect_api_historical_import' => true },
+        additional_attributes: { 'connect_api_historical_import' => true }.merge(group_jid?(contact_inbox.source_id) ? { 'is_group' => true, 'group_jid' => contact_inbox.source_id } : {}),
         custom_attributes: {}
       }],
       returning: %w[id]
@@ -389,7 +428,10 @@ class Whatsapp::ConnectApiHistoricalReconciliationService
   end
 
   def ignored_jid?(value)
-    value.to_s.end_with?('@g.us', '@broadcast')
+    return true if value.to_s.end_with?('@broadcast')
+    return false unless value.to_s.end_with?('@g.us')
+
+    !@channel.groups_enabled? || !group_jid?(value)
   end
 
   def timestamp_for(record)

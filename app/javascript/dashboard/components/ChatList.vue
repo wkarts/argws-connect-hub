@@ -263,6 +263,13 @@ export default {
         name,
       };
     },
+    groupInboxIds() {
+      return this.inboxesList.filter(inbox => inbox.whatsapp_groups_enabled === true).map(inbox => Number(inbox.id));
+    },
+    showGroupsTab() {
+      if (this.hideAllChatsForAgents) return false;
+      return this.conversationInbox ? this.groupInboxIds.includes(Number(this.conversationInbox)) : this.groupInboxIds.length > 0;
+    },
     assigneeTabItems() {
       const ASSIGNEE_TYPE_TAB_KEYS = {
         me: 'mineCount',
@@ -278,6 +285,8 @@ export default {
         ASSIGNEE_TYPE_TAB_KEYS.all = 'allCount';
       }
 
+      if (this.showGroupsTab) ASSIGNEE_TYPE_TAB_KEYS.groups = 'groupCount';
+
       return Object.keys(ASSIGNEE_TYPE_TAB_KEYS).map(key => {
         const count = this.conversationStats[ASSIGNEE_TYPE_TAB_KEYS[key]] || 0;
         return {
@@ -290,7 +299,7 @@ export default {
     showAssigneeInConversationCard() {
       return (
         this.hasAppliedFiltersOrActiveFolders ||
-        this.activeAssigneeTab === hubConstants.ASSIGNEE_TYPE.ALL
+        ['all', 'groups'].includes(this.activeAssigneeTab)
       );
     },
     inbox() {
@@ -320,13 +329,14 @@ export default {
       const { activeAssigneeTab } = this;
       const count = this.assigneeTabItems.find(
         item => item.key === activeAssigneeTab
-      ).count;
+      )?.count || 0;
       return count;
     },
     conversationFilters() {
       return {
         inboxId: this.conversationInbox ? this.conversationInbox : undefined,
         assigneeType: this.activeAssigneeTab,
+        groupInboxIds: this.groupInboxIds,
         status: this.activeStatus,
         sortBy: this.activeSortBy,
         page: this.conversationListPagination,
@@ -428,6 +438,12 @@ export default {
     },
   },
   watch: {
+    showGroupsTab(value) {
+      if (!value && this.activeAssigneeTab === 'groups') {
+        this.activeAssigneeTab = hubConstants.ASSIGNEE_TYPE.ME;
+        this.resetAndFetchData();
+      }
+    },
     teamId() {
       this.updateVirtualListProps('teamId', this.teamId);
     },

@@ -1,0 +1,8 @@
+{
+  "WHATSAPP_GROUPS": {
+    "ENABLE": "Habilitar grupos de WhatsApp",
+    "HELP": "Desativado por padrão. Ativa recepção e envio nos grupos desta caixa e a guia Grupos. Desativar não apaga o histórico.",
+    "ENABLED": "Grupos habilitados nesta caixa.",
+    "DISABLED": "Grupos desabilitados nesta caixa."
+  }
+}

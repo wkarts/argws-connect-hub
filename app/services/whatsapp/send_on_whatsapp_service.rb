@@ -8,6 +8,11 @@ class Whatsapp::SendOnWhatsappService < Base::SendOnChannelService
   def perform_reply
     return if message.outgoing? && message.source_id.present? # is message send by own
 
+    if channel.provider == 'connectapi' && message.conversation.whatsapp_group? && !channel.groups_enabled?
+      message.update!(status: :failed, external_error: 'Grupos de WhatsApp estão desabilitados nesta caixa de entrada.')
+      return
+    end
+
     Whatsapp::ConnectApiOpeningMessageValidator.new(message).validate!
 
     should_send_template_message = !campaign_freeform_message? && (template_params.present? || !message.conversation.can_reply?)

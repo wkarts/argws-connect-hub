@@ -25,6 +25,15 @@ RSpec.describe 'Company workspace applications', type: :request do
     expect { app }.not_to change(WorkspaceApp, :count)
   end
 
+  it 'records safe write failure metadata even outside a capture session' do
+    allow(HubDiagnostics::Recorder).to receive(:emit)
+    post base, params: { workspace_app: { name: 'Private label', url: 'not-https' } }, headers: headers, as: :json
+    expect(response).to have_http_status(:unprocessable_entity)
+    expect(HubDiagnostics::Recorder).to have_received(:emit).with('workspace.write_failed', hash_including(
+      level: 'error', account_id: account.id, exception_class: 'ActiveRecord::RecordInvalid', details: ['url']
+    ))
+  end
+
   it 'requires authentication' do
     get base, as: :json
     expect(response).to have_http_status(:unauthorized)

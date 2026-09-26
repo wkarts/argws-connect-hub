@@ -63,6 +63,10 @@ class Api::V1::Accounts::Conversations::ConnectApiCallsController < Api::V1::Acc
   end
 
   def connect_api_channel!
+    if @conversation.whatsapp_group?
+      render json: { error: 'Chamadas de grupo não estão disponíveis nesta integração.' }, status: :unprocessable_entity
+      return
+    end
     @whatsapp_channel = @conversation.inbox.channel
     return if @whatsapp_channel.is_a?(Channel::Whatsapp) && @whatsapp_channel.provider == 'connectapi'
 

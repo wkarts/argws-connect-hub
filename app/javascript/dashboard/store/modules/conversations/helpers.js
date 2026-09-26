@@ -36,7 +36,8 @@ export const filterByUnattended = (
 };
 
 export const applyPageFilters = (conversation, filters) => {
-  const { inboxId, status, labels = [], teamId, conversationType } = filters;
+  const { inboxId, status, labels = [], teamId, conversationType, assigneeType, groupInboxIds = [] } = filters;
+  if (assigneeType === 'groups' && !(conversation.is_group === true && groupInboxIds.includes(Number(conversation.inbox_id)))) return false;
   const {
     status: chatStatus,
     inbox_id: chatInboxId,

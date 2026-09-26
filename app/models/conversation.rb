@@ -113,7 +113,12 @@ class Conversation < ApplicationRecord
 
   delegate :auto_resolve_duration, to: :account
 
+  def whatsapp_group?
+    inbox&.whatsapp? && contact_inbox&.source_id.to_s.match?(/\A\d+(?:-\d+)?@g\.us\z/)
+  end
+
   def can_reply?
+    return false if whatsapp_group? && inbox.channel.provider == 'connectapi' && !inbox.channel.groups_enabled?
     channel = inbox&.channel
 
     return can_reply_on_instagram? if additional_attributes['type'] == 'instagram_direct_message'

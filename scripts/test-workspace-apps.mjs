@@ -49,7 +49,11 @@ test('host is independent of native route instances and frames hide without unmo
   assert.match(host, /:key="tab.key"/);
   assert.doesNotMatch(host, /<router-view|:key=".*\$route/);
   assert.ok(root.indexOf('<WorkspaceHost') > root.indexOf('<LoadingState v-else'));
-  assert.doesNotMatch(read('app/javascript/dashboard/store/modules/workspaceApps.js'), /localStorage|sessionStorage|password/);
+  // Restoration now stores a whitelisted identity snapshot, never credentials.
+  const store = read('app/javascript/dashboard/store/modules/workspaceApps.js');
+  assert.doesNotMatch(store, /sessionStorage|password/);
+  assert.match(store, /readWorkspaceSession/);
+  assert.match(store, /restoredApplications\(snapshot, apps\)/);
 });
 
 test('contact uploader owns the single preview and preserves upload/delete controls', () => {
