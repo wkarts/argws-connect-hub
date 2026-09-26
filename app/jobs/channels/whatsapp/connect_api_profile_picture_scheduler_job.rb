@@ -6,6 +6,8 @@ class Channels::Whatsapp::ConnectApiProfilePictureSchedulerJob < ApplicationJob
   MAX_CONTACTS_PER_CHANNEL = 200
   POSITIVE_CACHE = 12.hours
   NEGATIVE_CACHE = 15.minutes
+  GROUP_CACHE = 6.hours
+  MAX_GROUPS_PER_CHANNEL = 100
 
   def perform
     Channel::Whatsapp.where(provider: 'connectapi').includes(:inbox).find_each do |channel|
@@ -23,6 +25,13 @@ class Channels::Whatsapp::ConnectApiProfilePictureSchedulerJob < ApplicationJob
 
         Channels::Whatsapp::ConnectApiProfilePictureJob.perform_later(contact.id, channel.id)
       end
+
+      WhatsappGroup.where(inbox_id: channel.inbox.id)
+                   .where('profile_picture_checked_at IS NULL OR profile_picture_checked_at < ?', GROUP_CACHE.ago)
+                   .order(Arel.sql('last_activity_at DESC NULLS LAST, id DESC'))
+                   .limit(MAX_GROUPS_PER_CHANNEL)
+                   .pluck(:id)
+                   .each { |group_id| Whatsapp::Groups::ProfilePictureJob.perform_later(group_id) }
     end
   end
 
