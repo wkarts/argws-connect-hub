@@ -36,6 +36,11 @@ class Inboxes extends CacheEnabledApiClient {
       agent_bot: botId,
     });
   }
+
+  testEmailConnection(inboxId, kind) {
+    return axios.post(`${this.url}/${inboxId}/test_email_connection`, { kind });
+  }
+
 }
 
 export default new Inboxes();
