@@ -26,15 +26,17 @@ module Whatsapp::IncomingConnectApiGroups
   def message_content(message)
     return super unless group_message? && %w[image audio video document sticker].include?(message[:type].to_s)
 
-    caption = message[message[:type]].to_h[:caption].presence
+    caption = message[message[:type]].to_h.with_indifferent_access[:caption].presence
     caption && !outgoing_message_type? && @sender ? "*#{@sender.name}*: #{caption}" : caption
   end
 
   def set_contact
     return super unless group_message?
 
-    contact_params = @processed_params.dig(:contacts, 0).to_h
-    context = @processed_params.dig(:messages, 0, :connect_api).to_h
+    # HashWithIndifferentAccess#to_h returns string keys; preserve symbol access
+    # for both Meta-compatible envelopes and native recovery metadata.
+    contact_params = @processed_params.dig(:contacts, 0).to_h.with_indifferent_access
+    context = @processed_params.dig(:messages, 0, :connect_api).to_h.with_indifferent_access
     @contact_inbox = ContactInboxWithContactBuilder.new(
       inbox: inbox, source_id: group_jid,
       contact_attributes: {
@@ -81,7 +83,7 @@ module Whatsapp::IncomingConnectApiGroups
     super
     return @message unless group_message?
 
-    context = message[:connect_api].to_h
+    context = message[:connect_api].to_h.with_indifferent_access
     @message.content_attributes = @message.content_attributes.to_h.merge(
       'whatsapp_group' => true, 'group_jid' => group_jid,
       'group_participant' => context[:participant_alt].presence || context[:participant].presence

@@ -46,7 +46,9 @@ cleanup_cache() {
 }
 
 cleanup_ghcr() {
-  local tmp page json count current previous id tags exact_tag protected
+  local tmp page json count current previous id tags digest protected version tag
+  local script_dir registry canonical_tags canonical_digests
+  local -a release_versions
 
   # Hard safety boundary: this cleanup is ONLY for the application package.
   # Content-addressed build/runtime/deps base packages must never be touched here.
@@ -54,6 +56,14 @@ cleanup_ghcr() {
     echo "Refusing GHCR cleanup for package '$PACKAGE'; only argws-connect-hub is allowed." >&2
     return 1
   fi
+
+  # Fail closed before listing/deleting images if the cumulative policy is
+  # absent, malformed or no longer contains the immutable 1.1.8 floor.
+  script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+  registry="${script_dir}/../config/canonical-releases.json"
+  node "${script_dir}/canonical-releases.mjs" validate || return 1
+  canonical_tags="$(jq -er '.releases[] | .version, .git_tag' "$registry")" || return 1
+  canonical_digests="$(jq -er '.releases[].image_digest' "$registry")" || return 1
 
   tmp="$(mktemp)"
   trap 'rm -f "$tmp"' RETURN
@@ -64,6 +74,13 @@ cleanup_ghcr() {
   while :; do
     json="$(gh api -H 'Accept: application/vnd.github+json' \
       "/users/${OWNER}/packages/container/${PACKAGE}/versions?per_page=100&page=${page}")"
+    # Validate every page before considering any deletion. Never prune from
+    # an incomplete/error response or an unexpected package-version shape.
+    jq -e 'type == "array" and all(.[];
+      (.id | type == "number" and . > 0 and . == floor) and
+      (.name | type == "string" and test("^sha256:[a-f0-9]{64}$")) and
+      (.metadata.container.tags | type == "array" and all(.[]; type == "string"))
+    )' <<<"$json" >/dev/null || return 1
     count="$(jq 'length' <<<"$json")"
     [[ "$count" -eq 0 ]] && break
     jq -c '.[]' <<<"$json" >> "$tmp"
@@ -90,7 +107,7 @@ cleanup_ghcr() {
     return
   fi
 
-  echo "Protected application images: current=${current}, previous=${previous:-none}, plus develop."
+  echo "Protected application images: current=${current}, previous=${previous:-none}, all canonical tags/digests and active aliases."
   echo "Untagged OCI child/SBOM/provenance manifests are always preserved."
 
   while IFS= read -r version; do
@@ -104,42 +121,37 @@ cleanup_ghcr() {
       continue
     fi
 
-    if grep -qx 'develop' <<<"$tags"; then
-      echo "Keeping GHCR version id=${id}: active develop image."
+    digest="$(jq -r '.name' <<<"$version")"
+    if grep -Fqx -- "$digest" <<<"$canonical_digests"; then
+      echo "Keeping GHCR version id=${id}: canonical image digest."
       continue
     fi
 
-    exact_tag="$(jq -r '[.metadata.container.tags[]? | select(test("^[0-9]+\\.[0-9]+\\.[0-9]+$"))][0] // empty' <<<"$version")"
-    if [[ -n "$exact_tag" ]]; then
-      if [[ "$exact_tag" == "$current" || ( -n "$previous" && "$exact_tag" == "$previous" ) ]]; then
-        echo "Keeping GHCR release id=${id}: ${exact_tag}."
-        continue
-      fi
-
-      echo "Deleting old top-level SemVer release id=${id}: ${exact_tag}."
-      gh api --method DELETE -H 'Accept: application/vnd.github+json' \
-        "/users/${OWNER}/packages/container/${PACKAGE}/versions/${id}" >/dev/null
-      continue
-    fi
-
-    # Old development indexes are safe to remove only when every tag on the
-    # top-level version is a develop/sha tracking alias and the mutable
-    # 'develop' tag is no longer attached to it.
+    # A package version may have several tags. ANY protected tag protects the
+    # entire version, even when an old SemVer happens to be its first tag.
+    # Unknown/manual tags remain protected rather than being guessed obsolete.
     protected=false
     while IFS= read -r tag; do
       [[ -n "$tag" ]] || continue
-      if [[ ! "$tag" =~ ^develop-[0-9a-f]{7,64}$ && ! "$tag" =~ ^sha-[0-9a-f]{7,64}$ ]]; then
+      if grep -Fqx -- "$tag" <<<"$canonical_tags" ||
+         [[ "$tag" == "$current" || "$tag" == "$previous" ||
+            "$tag" == develop || "$tag" == latest || "$tag" == stable || "$tag" == canonical ]]; then
+        protected=true
+        break
+      fi
+      if [[ ! "$tag" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ &&
+            ! "$tag" =~ ^develop-[0-9a-f]{7,64}$ && ! "$tag" =~ ^sha-[0-9a-f]{7,64}$ ]]; then
         protected=true
         break
       fi
     done <<<"$tags"
 
     if [[ "$protected" == false ]]; then
-      echo "Deleting obsolete tagged development index id=${id}: $(tr '\n' ',' <<<"$tags" | sed 's/,$//')."
+      echo "Deleting obsolete tagged application version id=${id}: $(tr '\n' ',' <<<"$tags" | sed 's/,$//')."
       gh api --method DELETE -H 'Accept: application/vnd.github+json' \
         "/users/${OWNER}/packages/container/${PACKAGE}/versions/${id}" >/dev/null
     else
-      echo "Keeping GHCR version id=${id}: non-retention tags $(tr '\n' ',' <<<"$tags" | sed 's/,$//')."
+      echo "Keeping GHCR version id=${id}: protected tags $(tr '\n' ',' <<<"$tags" | sed 's/,$//')."
     fi
   done < "$tmp"
 
