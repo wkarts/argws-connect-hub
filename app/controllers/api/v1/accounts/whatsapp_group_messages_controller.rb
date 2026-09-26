@@ -15,12 +15,18 @@ class Api::V1::Accounts::WhatsappGroupMessagesController < Api::V1::Accounts::Ba
     scope = @group.whatsapp_group_messages
     scope = scope.where('id < ?', params[:before].to_i) if params[:before].present?
     records = scope.order(id: :desc).limit(50).to_a
-    render json: { messages: records.reverse.map { |message| Whatsapp::Groups::Presenter.message(message, Current.user) },
-                   next_before: records.size == 50 ? records.last.id : nil }
+    timeline = records.reverse
+    directory = Whatsapp::Groups::ParticipantDirectory.new(@group, timeline)
+    render json: {
+      messages: timeline.map { |message| Whatsapp::Groups::Presenter.message(message, Current.user, participant: directory.for(message)) },
+      next_before: records.size == 50 ? records.last.id : nil
+    }
   end
 
   def show
-    render json: Whatsapp::Groups::Presenter.message(@group.whatsapp_group_messages.find(params[:id]), Current.user)
+    message = @group.whatsapp_group_messages.find(params[:id])
+    directory = Whatsapp::Groups::ParticipantDirectory.new(@group, [message])
+    render json: Whatsapp::Groups::Presenter.message(message, Current.user, participant: directory.for(message))
   end
 
   def create
@@ -45,10 +51,20 @@ class Api::V1::Accounts::WhatsappGroupMessagesController < Api::V1::Accounts::Ba
           reply_to_source_id: reply, sent_at: Time.current, policy_version: @group.policy_version)
         message.files.attach(upload) if upload
         message.save!
+        preview = content.to_s.strip.presence
+        preview ||= upload ? upload.original_filename.to_s : nil
+        @group.update_columns(
+          last_activity_at: [@group.last_activity_at || message.sent_at, message.sent_at].max,
+          last_message_preview: preview.to_s.first(512).presence,
+          last_sender_name: Current.user.name.to_s.first(256),
+          last_message_kind: message.kind,
+          updated_at: Time.current
+        )
       end
     end
     Whatsapp::Groups::SendJob.perform_later(message.id) if message.status == 'queued'
-    render json: Whatsapp::Groups::Presenter.message(message, Current.user), status: :created
+    directory = Whatsapp::Groups::ParticipantDirectory.new(@group, [message])
+    render json: Whatsapp::Groups::Presenter.message(message, Current.user, participant: directory.for(message)), status: :created
   end
 
   def destroy
