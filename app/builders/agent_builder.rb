@@ -18,6 +18,7 @@ class AgentBuilder
       @user = find_or_create_user
       create_account_user
     end
+    send_access_instructions
     @user
   end
 
@@ -37,6 +38,31 @@ class AgentBuilder
   # @return [Boolean] true if the user is persisted and not confirmed, false otherwise.
   def user_needs_confirmation?
     @user.persisted? && !@user.confirmed?
+  end
+
+  def send_access_instructions
+    return unless user_needs_confirmation?
+
+    previous_account = Current.account
+    Current.account = account
+    @user.send_confirmation_instructions
+    HubDiagnostics::Recorder.emit(
+      'email.access_instructions_queued',
+      component: 'email',
+      account_id: account.id,
+      user_id: @user.id
+    ) if defined?(HubDiagnostics::Recorder)
+  rescue StandardError => e
+    Rails.logger.error("[HUB email] failed to queue access instructions user=#{@user&.id}: #{e.class}: #{e.message}")
+    HubDiagnostics::Recorder.error(
+      'email.access_instructions_queue_failed',
+      e,
+      component: 'email',
+      account_id: account.id,
+      user_id: @user&.id
+    ) if defined?(HubDiagnostics::Recorder)
+  ensure
+    Current.account = previous_account if defined?(previous_account)
   end
 
   # Creates an account user linking the user to the current account.
