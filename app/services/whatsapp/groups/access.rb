@@ -3,9 +3,12 @@ module Whatsapp::Groups
     class << self
       def eligible_users(inbox)
         memberships = inbox.account.account_users
-        admins = memberships.where(role: AccountUser.roles.fetch('administrator')).select(:user_id)
         members = InboxMember.where(inbox_id: inbox.id).select(:user_id)
-        inbox.account.users.where(id: admins).or(inbox.account.users.where(id: members)).distinct
+        eligible = memberships.where(role: AccountUser.roles.fetch('administrator'))
+                              .or(memberships.where(user_id: members)).select(:user_id)
+        # A semijoin deduplicates identities without comparing users.*. The
+        # existing users.tokens JSON column has no PostgreSQL equality operator.
+        User.where(id: eligible)
       end
 
       def validate_user_ids(record, field, inbox)

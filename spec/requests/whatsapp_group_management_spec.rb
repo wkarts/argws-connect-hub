@@ -39,6 +39,21 @@ RSpec.describe 'Group inbox administration and operational authorization', type:
     end
   end
 
+  it 'lists eligible users once without comparing JSON columns or admitting a foreign inbox member' do
+    join_agent
+    create(:inbox_member, inbox: channel.inbox, user: admin)
+    create(:user, account: account, role: :agent) # No membership in this inbox.
+    stranger = create(:user, account: create(:account), role: :administrator)
+    create(:inbox_member, inbox: channel.inbox, user: stranger) # Inconsistent legacy link cannot grant account access.
+
+    users = Whatsapp::Groups::Access.eligible_users(channel.inbox).order(:name).to_a
+    expect(users.map(&:id)).to contain_exactly(admin.id, agent.id)
+    get settings_path, headers: admin.create_new_auth_token, as: :json
+    expect(response).to have_http_status(:ok)
+    expect(response.parsed_body.fetch('users').map { |user| user.fetch('id') }).to contain_exactly(admin.id, agent.id)
+    expect(response.parsed_body.fetch('users').all? { |user| user.keys.sort == %w[id name] }).to be true
+  end
+
   it 'uses native administrator permission for reading and writing configuration' do
     join_agent
     get settings_path, headers: agent.create_new_auth_token, as: :json
