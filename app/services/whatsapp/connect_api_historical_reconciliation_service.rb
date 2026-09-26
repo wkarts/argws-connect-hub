@@ -35,13 +35,27 @@ class Whatsapp::ConnectApiHistoricalReconciliationService
 
   def process(raw_record)
     record = raw_record.to_h.deep_stringify_keys
+    return process_record(raw_record) unless Whatsapp::Groups::NativeMessage.group?(record)
+
+    result = Whatsapp::Groups::Router.new(@channel.inbox).dispatch(Whatsapp::Groups::NativeMessage.envelope(record), historical: true) { process_record(raw_record) }
+    return result if result.is_a?(Result)
+    Result.new(result: result.is_a?(WhatsappGroupMessage) ? 'created' : 'skipped')
+  end
+
+  def process_record(raw_record)
+    record = raw_record.to_h.deep_stringify_keys
     key = record['key'].to_h.deep_stringify_keys
     source_id = key['id'].to_s.presence || record['id'].to_s.presence
     return skipped('source_id_missing') if source_id.blank?
     return skipped('unsupported_group_or_broadcast', source_id: source_id) if ignored_jid?(key['remoteJid'])
 
     with_source_lock(source_id) do
-      existing = find_message(source_id)
+      existing = if group_jid?(key['remoteJid'])
+                   Message.where(account_id: @channel.account_id, inbox_id: @channel.inbox.id, source_id: source_id)
+                          .where(conversation_id: @channel.inbox.conversations.where(contact_inbox_id: ContactInbox.where(inbox_id: @channel.inbox.id, source_id: key['remoteJid']).select(:id)).select(:id)).first
+                 else
+                   find_message(source_id)
+                 end
       return reconcile_existing(existing, record) if existing
 
       peer_phone = group_jid?(key['remoteJid']) ? key['remoteJid'] : canonical_peer_phone(key)

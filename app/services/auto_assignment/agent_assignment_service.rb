@@ -25,7 +25,9 @@ class AutoAssignment::AgentAssignmentService
     # Hence taking an intersection of online agents and allowed member ids
 
     # the online user ids are string, since its from redis, allowed member ids are integer, since its from active record
-    @allowed_online_agent_ids ||= online_agent_ids & allowed_agent_ids&.map(&:to_s)
+    group = Whatsapp::Groups::Access.group_for(conversation)
+    eligible = group ? Array(allowed_agent_ids) & group.allowed_users.ids : allowed_agent_ids
+    @allowed_online_agent_ids ||= online_agent_ids & eligible&.map(&:to_s)
   end
 
   def round_robin_manage_service

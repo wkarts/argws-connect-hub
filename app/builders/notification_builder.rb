@@ -23,6 +23,10 @@ class NotificationBuilder
   end
 
   def build_notification
+    if primary_actor.is_a?(Conversation)
+      group = Whatsapp::Groups::Access.group_for(primary_actor)
+      return if group && (!group.allowed?(user) || group.whatsapp_group_preferences.exists?(user: user, muted: true))
+    end
     # Create conversation_creation notification only if user is subscribed to it
     return if notification_type == 'conversation_creation' && !user_subscribed_to_notification?
 

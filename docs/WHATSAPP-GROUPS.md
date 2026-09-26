@@ -1,186 +1,70 @@
-# Grupos de WhatsApp por caixa de entrada
+# Grupos de WhatsApp: Atendimento e Gerencial
 
-## Estado desta preparação
+## Escopo
 
-**Este documento distingue o código existente da implementação a preparar.** Na referência `b4c25c63832042629fee4fe134368109fd4f7cf6`, grupos ainda usam o fluxo de `Conversation`. A guia administrativa dedicada, seleção por grupo, permissões individuais e camada Gerencial descritas abaixo **não estão implementadas nem homologadas**. Este commit é somente de documentação; não ativa recursos nem altera permissões, banco ou processamento de mensagens.
+Toda a administração fica em **Configurações → Caixas de entrada → caixa → Grupos**, para caixas Connect API. A guia segue a autorização nativa de edição da caixa (`InboxPolicy#update?`), tanto no frontend quanto nos GET/PATCH administrativos. Agentes comuns não configuram por URL/API; nenhum perfil paralelo foi criado. A guia continua disponível para o administrador quando grupos estão desabilitados.
 
-A PR #82 permanece em rascunho até implementar e validar os dois modos. Os checks aprovados na referência acima não validam funcionalidades ainda não implementadas.
+Este documento descreve a implementação proposta na PR #82. A aprovação de sintaxe não equivale à homologação operacional: os testes Rails/Vue do commit e os testes reais com WhatsApp devem ser conferidos antes da release. Não houve alteração na Connect API, release/deploy ou nos artefatos da canônica 1.1.8.
 
-## Decisão vigente: tudo se configura na caixa de entrada
+## Configuração por caixa e grupo
 
-O único ponto administrativo será:
+- A habilitação mantém o parâmetro existente `ignore_group_messages`: ausente significa desabilitado. A criação da caixa começa desabilitada; toda a configuração de grupos foi concentrada na nova guia.
+- Acompanhar todos ou somente grupos selecionados. No modo selecionados, novos grupos não ficam selecionados automaticamente. O administrador atualiza o catálogo por ação explícita (sem polling adicional no provedor).
+- O padrão de tratamento/acesso vale para novas descobertas. Cada grupo recebe uma cópia materializada da política e pode ter uma exceção. Alterar o padrão não reclassifica grupos existentes.
+- As ações em lote são limitadas a 100 grupos, exigem confirmação e verificam as versões de todas as linhas. Um conflito desfaz o lote inteiro; as notificações de alteração só são agendadas depois do commit.
+- O modo Atendimento reutiliza o fluxo existente de conversas/tickets, com suas regras de atribuição, automação e métricas. O modo Gerencial tem mensagens/histórico próprios: não cria Conversation, Message de atendimento, contato artificial ou ticket oculto.
+- Modos diferentes podem coexistir na mesma caixa. Escolher o modo não altera `groupsIgnore`, não recria/reconecta a instância. Somente a mudança explícita de habilitação usa a sincronização remota já existente, preservando as demais configurações da instância.
 
-**Configurações → Caixas de entrada → selecionar a caixa → Grupos.**
+## Acesso
 
-Não criar um painel independente de administração de grupos, novo menu global de permissões ou configuração espalhada no cadastro de agentes. A definição individual de cada grupo também fica dentro dessa guia, em linha expansível ou painel interno.
+O padrão é herdar usuários elegíveis da caixa e manter as políticas do recurso original. O administrador conserva sua autoridade administrativa; o agente só utiliza grupos permitidos.
 
-A guia operacional **Grupos**, ao lado de Minha / Não atribuída / Todos, serve para utilizar os grupos autorizados. Ela não concede acesso à configuração da caixa.
+A seleção explícita de usuários restringe o conteúdo daquele grupo, nos dois modos. Um administrador fora da seleção ainda configura a caixa, mas não recebe mensagens/realtime/anexos do grupo até ser autorizado. Isso não representa sigilo absoluto contra quem pode editar a própria política; as alterações são auditadas.
 
-### Quem pode configurar: usar a regra que já existe
+A API deriva empresa/caixa da sessão, valida os usuários elegíveis, recusa IDs de outro escopo e não divulga a lista de autorizações em respostas operacionais. Filtros adicionais protegem conversas legadas, contatos de grupo, busca, exportação, notificações e entregas realtime. A distribuição automática só considera agentes autorizados no grupo. Remoção de associação à caixa e mudança de papel geram invalidação direcionada aos usuários afetados.
 
-A nova guia herda integralmente a autorização de administração da caixa. Não haverá cadastro extra de quem pode administrar cada grupo.
+O conteúdo nunca é transmitido a um canal coletivo para ser filtrado apenas no navegador. Mensagens Gerenciais geram eventos pequenos de atualização por usuário; a interface busca o histórico pela API autorizada. Eventos de alteração de acesso limpam o conteúdo ativo antes da revalidação. Cópias já baixadas por alguém anteriormente autorizado não podem ser retiradas do dispositivo.
 
-Na base examinada:
+## Operação
 
-- `app/javascript/dashboard/routes/dashboard/settings/inbox/inbox.routes.js` protege `settings_inbox_show` com `permissions: ['administrator']`.
-- `app/policies/inbox_policy.rb` permite `create?`, `update?` e `destroy?` somente ao administrador; seu escopo de leitura permite caixas da conta aos administradores e caixas atribuídas aos agentes.
-- `app/controllers/api/v1/accounts/inboxes_controller.rb` busca a caixa em `Current.account.inboxes`, autoriza sua leitura e também a ação correspondente. Portanto, não basta conhecer o ID de outra empresa nem esconder uma aba no frontend.
+A quarta guia **Grupos** permanece na mesma região de Minha / Não atribuída / Todos. Ela mostra somente grupos acessíveis, com indicação de tratamento, pesquisa, paginação, silêncio pessoal e destino correto. Não cria tickets por navegação.
 
-Preparar a nova configuração para reutilizar essas autorizações, e não para redefini-las:
+Atendimento abre a conversa existente. Gerencial abre sua própria tela com mensagens, participante, arquivos, resposta, envio, status, exclusão autorizada e histórico anterior somente leitura. Mensagens de Atendimento permanecem nas filas/métricas originais; as Gerenciais ficam fora dos contadores de tickets.
 
-| Operação | Administrador autorizado da empresa | Agente comum da caixa |
-| --- | --- | --- |
-| Abrir a guia administrativa Grupos | Sim, pela autorização existente | Não |
-| Habilitar grupos e escolher quais acompanhar | Sim | Não |
-| Definir Atendimento/Gerencial e acesso por grupo | Sim | Não |
-| Utilizar grupos na área operacional | Conforme a política de conteúdo abaixo | Conforme a política de conteúdo abaixo |
-| Silenciar alertas próprios de grupo acessível | Sim | Sim |
+O silêncio é pessoal: muda alertas, não interrompe recebimento, não altera permissões, não suspende SLA de Atendimento e não modifica o silêncio remoto do WhatsApp. A atualização usa os eventos realtime/foco/reconexão existentes; não foi acrescentado serviço permanente ou consulta periódica pesada ao catálogo.
 
-Os endpoints administrativos devem autorizar a operação equivalente a `InboxPolicy#update?` também em consultas administrativas, e não apenas `show?`, que pode permitir leitura operacional ao agente. Não criar um novo perfil de administrador de grupos. Se o sistema vier a permitir delegação da edição de caixas por sua política central, o módulo deverá seguir essa política sem reimplementar papéis em paralelo.
+## Identidade, dados e troca de tratamento
 
-### Quem pode ler as mensagens: definição na mesma guia
+A identidade é empresa + caixa + JID integral `@g.us`. O participante é separado; LID não vira telefone inventado. A migração aditiva registra grupos já presentes como Atendimento, sem ligar caixas desabilitadas nem transformar mensagens existentes. As sete novas tabelas são `whatsapp_group_settings`, `whatsapp_groups`, `whatsapp_group_policy_changes`, `whatsapp_group_messages`, `whatsapp_group_deliveries`, `whatsapp_group_pending_events` e `whatsapp_group_preferences`.
 
-Acesso à configuração e acesso ao conteúdo são decisões diferentes, mas **não são duas telas de parametrização**.
+Uma mensagem tem um único destino persistido no ledger por grupo/ID do provedor. Duplicatas e recibos/revogações de registros conhecidos localizam seu domínio original mesmo depois de trocar o modo. Um ledger cujo histórico foi removido continua como tombstone: replay não recria o conteúdo nem ticket. Mensagens individuais continuam no pipeline original.
 
-Para evitar alteração silenciosa dos contratos, o comportamento padrão proposto é **herdar o acesso já permitido pela caixa e pelo recurso**. No modo Atendimento, manter ainda as restrições existentes da conversa, inclusive papéis personalizados. Não transformar a guia Grupos em um atalho que contorne restrições de atendimento.
+A troca usa revisão otimista, trava por caixa/grupo e confirmação. Não é permitida enquanto existirem tickets não resolvidos ou envios queued/sending/uncertain. O administrador deve resolver os atendimentos e verificar/cancelar pendências explicitamente. Nenhum chamado é encerrado ou apagado como efeito silencioso do seletor.
 
-Na mesma guia administrativa, cada grupo poderá ser configurado como:
+Ativar Atendimento não abre ticket por si só. Históricos permanecem no domínio em que foram gravados, sem migração retroativa. Eventos desconhecidos datados de antes de uma troca ficam retidos, não reinterpretados pelo modo atual. A ação administrativa de importação do histórico retido (até 100 por vez) grava somente histórico Gerencial, sem tickets nem notificações de novas mensagens, independentemente do modo atual.
 
-1. **Todos os usuários autorizados da caixa (padrão):** preserva o acesso que as políticas vigentes já permitem. Não exige adicionar o administrador repetidamente a cada grupo.
-2. **Somente usuários selecionados:** restringe o conteúdo aos usuários explicitamente escolhidos, que também precisam ser elegíveis no escopo da empresa/caixa e nas políticas do recurso. A seleção não concede acesso a outra empresa ou caixa.
+## Arquivos e envio
 
-A seleção restrita pode incluir administradores e agentes. Se um administrador não estiver selecionado em um grupo explicitamente restrito, ele continua podendo administrar a configuração da caixa, mas a leitura operacional desse conteúdo depende da seleção. Isso não deve ser vendido como sigilo absoluto contra administradores: quem administra a política pode alterá-la. A interface precisa deixar esse efeito claro; mudanças de acesso devem ser auditadas. O padrão herdado, por outro lado, não restringe administradores que já tinham acesso.
+Mídia Gerencial é obtida pela credencial da instância usando os clientes existentes, com limite de 25 MB por arquivo. Não há download arbitrário de URL fornecida pelo cliente. Texto, imagem, vídeo, áudio e documento reutilizam os endpoints nativos existentes da Connect API. Cada mensagem enviada aceita um arquivo; upload e legenda têm limites validados no servidor.
 
-Não acrescentar um checkbox separado "administrador pode configurar". A autorização administrativa já é a da caixa. Não utilizar o bypass de leitura de `AgentBot` para conceder acesso ao novo domínio de grupos sem política específica.
+Os anexos Gerenciais e anexos dos tickets de grupos são servidos por endpoint autenticado que revalida conta/caixa/grupo. URLs públicas assinadas de ActiveStorage não são usadas como autorização de leitura. O cookie de mídia é criptografado, HttpOnly, SameSite=Strict e limitado ao caminho de arquivos; referencia a sessão Devise atual e não é aceito em outras APIs. Tokens de API existentes continuam funcionando, sem troca do mecanismo de login. A resposta suporta range para áudio/vídeo, não é armazenada em cache e não executa HTML/SVG como página ativa.
 
-## Organização da nova guia
+O envio utiliza ID de cliente idempotente. O worker revalida modo, revisão, acesso, habilitação e identidade da instância antes de enviar. Um marcador `sending` é persistido antes do HTTP; resposta incerta não provoca reenvio automático. Após conferir no WhatsApp, o usuário pode encerrar a pendência manualmente. Isso não promete desfazer uma mensagem que o provedor eventualmente entregou. Trocar a instância impede operações remotas em registros da instância anterior.
 
-Adicionar a guia em `app/javascript/dashboard/routes/dashboard/settings/inbox/Settings.vue`, seguindo os componentes, traduções e apresentação existentes. A guia é exclusiva de caixas Connect API compatíveis, e permanece visível ao administrador quando grupos estão desabilitados, para permitir habilitá-los. Não remover ou renomear abas existentes.
+Os logs omitem o corpo de `group_message` e argumentos sensíveis dos jobs. Diagnósticos e auditoria registram IDs, revisões e classes/status, não mensagens ou credenciais.
 
-### Configuração geral da caixa
+## Testes e homologação
 
-- Habilitar/desabilitar grupos, preservando o opt-in existente.
-- Acompanhar todos os grupos ou somente grupos selecionados.
-- Tratamento padrão para novos grupos: **Atendimento** ou **Gerencial**.
-- Acesso padrão para novos grupos: herdar os usuários elegíveis da caixa ou uma seleção explícita de usuários elegíveis.
+Além dos testes históricos preservados, a PR inclui cenários de:
 
-Os campos de modo e acesso devem mostrar claramente o valor aplicado. Não aplicar um modo silenciosamente por erro de carregamento. Alterar o padrão de grupos novos não reclassifica grupos já configurados; alterações em lote exigem seleção, prévia e confirmação.
+- administração nativa e isolamento entre contas/caixas; usuários selecionados e administrador não selecionado;
+- coexistência Atendimento/Gerencial e ausência de Contact/Conversation/Message/Notification de atendimento na ingestão Gerencial;
+- deduplicação por grupo, tombstones, recibos/revogações após transição e eventos históricos retidos;
+- acesso REST, busca, realtime, anexos e URLs públicas do armazenamento;
+- silêncio, envio idempotente/incerto, revogação, seleção e alteração de padrão sem reclassificação;
+- interface, confirmação de troca, composição somente Gerencial e descarte de respostas atrasadas;
+- chamadas com endereço de grupo sem criação de contato/ticket: conferência de voz continua não habilitada.
 
-### Lista e configuração individual
+Antes de release: executar CI completo no commit final, preparar a migração em ambiente de teste e testar os dois modos com grupos reais, dois agentes, mídia e revogação no smartphone. Validar layout na instalação do usuário, desempenho com seu volume de grupos e o cadastro de aplicativos previamente reportado. O erro de cadastro específico não é considerado corrigido apenas por esta implementação de grupos.
 
-Lista paginada com busca e atualização explícita do catálogo, sem varredura periódica pesada. Mostrar ícone/nome, acompanhamento, tratamento e acesso. Dentro da mesma guia, permitir escolher cada grupo e editar sua regra. Nome do grupo não é identificador único: usar empresa, caixa e JID integral.
-
-Modo selecionados: grupo novo fica fora até seleção explícita. Modo todos: grupo novo recebe o padrão validado da caixa, materializado junto com a revisão aplicada; alterações posteriores do padrão não mudam essa escolha retroativamente.
-
-Silenciamento pessoal é uma preferência operacional, acessível no grupo pelo próprio usuário. Não constitui uma segunda administração: não habilita grupos, não altera acesso e não muda Atendimento/Gerencial. Silenciar no HUB não altera remotamente o WhatsApp sem uma ação explícita. No modo Atendimento, silenciar alertas não suspende SLA, atribuição ou outras regras de atendimento.
-
-## Duas regras de negócio por grupo
-
-| Modo | Persistência e funcionamento | Efeitos de atendimento |
-| --- | --- | --- |
-| Atendimento | Preserva o pipeline existente de conversa, mensagens, anexos e chamados | Conforme as regras já configuradas: criação/reuso/reabertura, atribuição, automações e métricas |
-| Gerencial | Histórico e mensagens próprios na camada de grupos, sem `Conversation` oculto | Não cria/reabre chamado, não atribui atendente e não dispara SLA, CSAT, distribuição ou automações de atendimento |
-
-Dois grupos da mesma caixa podem usar modos diferentes. Um mesmo evento não pode criar uma mensagem nos dois domínios. A seleção Atendimento/Gerencial é local ao HUB, não modifica `groupsIgnore`, não reconecta a instância e não altera código da Connect API.
-
-A guia operacional Grupos reúne somente grupos autorizados, com indicação discreta do modo. Atendimento abre seu recurso existente; Gerencial abre a camada própria. Apenas registros de Atendimento participam das guias e métricas de tickets conforme o contrato histórico. Exibir um grupo de Atendimento na guia Grupos não duplica conversas ou contadores.
-
-## Preparação técnica para implementar sem quebrar contratos
-
-### 1. Configuração e catálogo
-
-Criar endpoints novos escopados à conta e à caixa para configuração e catálogo, reutilizando a autorização de edição da caixa. Separar a resposta administrativa, que pode conter seleção de usuários, da resposta operacional. Não acrescentar a lista completa de autorizações a payloads de inbox consumidos por todos os agentes.
-
-Persistir o cadastro de grupo e suas regras no HUB, com chave única por caixa/JID e revisão de configuração. A identidade da conta é derivada/validada a partir da caixa, não aceita livremente do cliente. Rejeitar grupos, usuários ou IDs pertencentes a outro escopo antes da gravação. Defaults e substituições individuais devem ter uma regra de precedência única no servidor.
-
-Não criar endpoints para gerenciar membros/administradores do grupo no WhatsApp nesta etapa. Usuários do HUB autorizados a ler não são os participantes WhatsApp.
-
-### 2. Resolver política antes de criar atendimento
-
-Mensagens individuais continuam no caminho atual. Para grupos, identificar JID e consultar habilitação, seleção e regra efetiva antes de criar contatos/conversas de atendimento.
-
-Atendimento delega ao caminho já existente em `Whatsapp::IncomingConnectApiGroups`. Gerencial encaminha a entidades/serviços próprios de grupo e mensagens. Recepção Gerencial não pode chamar builders de `Conversation`, nem utilizar `Message` de atendimento como suporte oculto se isso disparar seus callbacks.
-
-Política inválida ou indisponível não é motivo para encaminhar ao atendimento. Preservar uma possibilidade segura de reprocessamento e registrar diagnóstico sem expor conteúdo sensível; não descartar definitivamente o evento nem criar ticket como fallback.
-
-### 3. Identidade, atualizações e deduplicação
-
-Preservar JID integral `@g.us`, participante separado, ID do provedor e identidade LID sem converter LID em telefone. Manter registro do destino original e revisão da regra para cada mensagem, com deduplicação no escopo apropriado.
-
-Ecos, recibos, edições e revogações localizam a mensagem original, inclusive depois da troca de modo. Não decidir o destino de uma atualização histórica apenas pelo modo atual. Recebimento, envio, mídia, resposta, encaminhamento, retries e recuperação devem obedecer a mesma resolução de política e idempotência.
-
-Histórico desconhecido e eventos fora de ordem precisam de uma regra temporal explícita e testes. Não reaplicar cegamente a regra vigente a todo o passado, duplicar conteúdo nem abrir chamados por efeito colateral de replay.
-
-### 4. Aplicar acesso em todas as superfícies
-
-Resolver a leitura a partir de conta/caixa + política do recurso + seleção adicional do grupo. Revalidar envio e atribuição; a distribuição automática não pode selecionar agente impedido de ler aquele grupo.
-
-Cobrir listas, REST, URLs diretas, busca, histórico, anexos, downloads/URLs assinadas, exportações, contadores, notificações e realtime. Não transmitir o conteúdo a um canal coletivo de conta para depois filtrá-lo apenas no navegador. Revogação deve impedir novas entregas também para sessões já abertas e tarefas enfileiradas. Não prometer retirar cópias já baixadas pelo usuário.
-
-Manter autenticação e contratos históricos; adicionar a autorização por recurso sem exigir que consumidores mudem tokens nem alterem payloads de mensagens individuais. Alterar recursos compartilhados apenas nos pontos estritamente necessários, com regressões correspondentes.
-
-### 5. Troca de modo e dados existentes
-
-Mapear explicitamente para Atendimento grupos que já utilizam o comportamento anterior, sem ativar caixas desabilitadas ou converter grupos silenciosamente. Antes de qualquer migração de histórico, inventariar o que realmente existe; não presumir que a branch já foi implantada.
-
-Troca de modo exige autorização administrativa, confirmação, revisão auditável e coordenação das operações em andamento por grupo. Ao passar para Gerencial, tratar chamados e envios pendentes explicitamente antes de concluir a transição; não apagar/encerrar chamados silenciosamente. Depois de ativada a nova revisão, trabalho antigo não pode abrir/reabrir ticket nesse grupo por atraso de fila.
-
-Ao passar para Atendimento, gravar a opção não cria chamado por si só. O próximo evento novo elegível usa as regras históricas de criação/reuso. Históricos permanecem no domínio original, sem cópia retroativa automática; atualizações de registros antigos continuam atualizando o registro correto sem efeitos indevidos.
-
-### 6. Disponibilização conjunta
-
-Não mostrar um modo Gerencial selecionável enquanto sua persistência, envio, leitura e autorização não estiverem completos. Não entregar tela salvando uma regra que o backend ignore. Manter a PR em rascunho até passar a matriz abaixo e a homologação real. Não retirar testes ou enfraquecer guardas para obter CI verde.
-
-## Matriz mínima de aceite — ainda pendente
-
-| Cenário | Resultado exigido |
-| --- | --- |
-| Administrador da conta configura a caixa | Acesso autorizado pela regra nativa, sem permissão nova por grupo |
-| Agente abre URL administrativa ou tenta GET/PATCH direto | Configuração negada no servidor; uso de grupos autorizados continua possível |
-| Outra empresa fornece ID de caixa/grupo/usuário | Acesso negado e zero alterações |
-| Acesso herdado sem restrição explícita | Mantém a autoridade e as restrições históricas aplicáveis |
-| Grupo restrito a usuários selecionados | Seleção aplicada em conteúdo, APIs, anexos e realtime, sem ampliar escopos |
-| Administrador fora da seleção restrita | Configura a caixa, mas não recebe conteúdo operacional até seleção explícita |
-| Agente com papel personalizado em Atendimento | Guia Grupos não contorna restrições da conversa |
-| Revogação com sessão aberta | Novos acessos e entregas bloqueados; preferências não concedem permissão |
-| Dois grupos da mesma caixa em modos distintos | Um usa Atendimento e o outro não cria/reabre nenhum ticket |
-| Recepção/envio/mídia Gerencial | Sem Conversation, atribuição, SLA, CSAT ou automação de atendimento |
-| Atendimento | Mantém pipeline, automações e contadores que já se aplicavam |
-| Todos/selecionados e novos grupos | Somente grupos elegíveis são processados; defaults explícitos e estáveis |
-| Troca de padrão da caixa | Não reclassifica grupos existentes silenciosamente |
-| Silenciamento pessoal | Sem alertas pessoais, com histórico e ingestão preservados |
-| Retry, eco, histórico e revogação após troca de modo | Uma mensagem/destino original, sem ticket ou cópia indevida |
-| Troca de modo com fila/ticket em andamento | Exige tratamento explícito e mantém histórico; nenhuma perda silenciosa |
-| Habilitação desativada durante envio pendente | Novo envio bloqueado, sem apagar histórico |
-| Interface | Mesma região das quatro guias; sem controles de chamado no modo Gerencial |
-| Regressões | Mensagens individuais, chamadas existentes, autenticação e demais caixas preservadas |
-
-## Código existente em b4c25c6 — preservar como base do Atendimento
-
-O suporte é opt-in por caixa Connect API. Ausência de configuração significa **desabilitado**, inclusive em caixas existentes. A opção fica na criação/edição da própria caixa; não altera outras caixas ou a autenticação via token. Somente administradores com a autorização existente da caixa podem configurá-la. A preparação acima deslocará a administração completa para a nova guia, sem remover a compatibilidade do parâmetro existente.
-
-Ao alterar a opção de habilitação, o HUB consulta as configurações atuais da instância, preserva os campos de chamadas, leitura e histórico e modifica apenas `groupsIgnore`, verificando o resultado. Instâncias vinculadas externamente usam sua chave de instância. Resposta incompleta ou falta de confirmação gera erro, sem sobrescrever silenciosamente opções desconhecidas. Essa ação não reconecta nem recria a instância, não faz alterações no repositório da Connect API e não cria polling adicional. Se a comunicação interromper entre a escrita remota e a confirmação, consultar novamente e repetir a alteração é seguro/idempotente; as duas aplicações não têm transação distribuída.
-
-### Interface existente
-
-A quarta guia **Grupos** aparece somente quando há caixa habilitada e acessível no contexto atual. Uma caixa individual desabilitada não exibe a guia. As quatro opções Minha/Não atribuída/Todos/Grupos usam a mesma largura e altura da região existente; contadores grandes usam `99+`, com valor integral no hint. O fluxo restrito que esconde Todas dos agentes continua restrito e não ganha uma forma alternativa de consultar conversas.
-
-A consulta de grupos mantém filtros de empresa, associação do atendente às caixas, caixa selecionada, equipe, marcadores, status e paginação. As três guias históricas continuam com o comportamento original: grupos de Atendimento também podem aparecer nelas de acordo com atribuição e permissões. Desabilitar grupos interrompe nova ingestão/envio de grupos pela caixa e retira-os da guia Grupos, **sem apagar o histórico**.
-
-### Identidade e mensagens existentes
-
-Um grupo de Atendimento usa seu JID integral `...@g.us` como contato da conversa, sem conversão em telefone. O participante de cada mensagem é separado do grupo. Identificadores LID sem telefone não são inventados/convertidos em telefone. Nomes de participantes não substituem o nome do grupo. Texto, mídia, mensagem enviada pelo smartphone, resposta e exclusão para todos mantêm destino de grupo; eventos duplicados usam a idempotência existente. Recibos/revogações remotas de mensagens já existentes continuam sendo processados.
-
-Reconciliação histórica e recuperação usam os jobs existentes, respeitam o opt-in e não reenviam mensagens importadas. Uma mensagem em fila é rejeitada se a caixa já tiver desabilitado grupos antes de enviá-la. Chamadas a grupos não são oferecidas nesta implementação; chamadas individuais permanecem inalteradas. Não se implementa criação de grupos, gestão de membros/administradores ou chamadas coletivas.
-
-### Banco, carga e homologação da base
-
-Há apenas um novo índice parcial concorrente em `contact_inboxes` na implementação de b4c25c6 para localizar grupos por caixa. A migração `20260926004000` não transforma nem apaga dados. A futura camada Gerencial precisará de migrações aditivas próprias, ainda não incluídas. Não há dependências, containers ou workers novos nesta preparação. O volume de trabalho crescerá conforme o volume real de mensagens dos grupos habilitados; não prometer custo zero.
-
-Antes da release, além da nova matriz: habilitar uma caixa de teste; receber texto/mídia de dois participantes; responder; confirmar eco único de mensagem do smartphone; testar exclusão para todos; testar atendente sem acesso; desabilitar e confirmar bloqueio sem perda de histórico. Verificar também o cadastro de um segundo aplicativo na instalação reportada, cuja falha ainda exige evidência operacional.
-
-## Fora desta preparação
-
-Chamadas de voz em grupo continuam como evolução futura, com capacidade própria a verificar/homologar no provedor; chamadas simultâneas individuais não comprovam conferência. Não vincular uma futura chamada Gerencial a um ticket. Não modificar o repositório da Connect API nesta tarefa.
-
-Preservar restauração dos aplicativos, sidebar/hints e demais correções anteriores. A canônica 1.1.8 e suas guardas de retenção/republicação não são alteradas por esta preparação. Não executar merge, deploy, release ou limpeza de armazenamento como efeito desta documentação.
+Chamadas coletivas, gestão de participantes WhatsApp e edição remota de mensagens não são habilitadas por esta entrega. Não anunciar conferência a partir da capacidade de chamadas individuais simultâneas. A arquitetura própria de grupos não exige ticket para uma futura chamada Gerencial.

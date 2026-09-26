@@ -6,6 +6,7 @@ class Conversations::ForwardMessageJob < ApplicationJob
     @user = User.find(payload[:user_id])
     @account = Account.find(payload[:account_id])
     @message = Message.find_by!(id: payload[:message_id], account_id: @account.id)
+    Whatsapp::Groups::Access.assert_conversation!(@message.conversation, @user)
     @contacts = Array(payload[:contacts]).map(&:to_i).uniq
     @operation_id = payload[:operation_id].to_s.presence || SecureRandom.uuid
 
@@ -20,12 +21,14 @@ class Conversations::ForwardMessageJob < ApplicationJob
 
   def forward_to_contact(contact_id)
     contact = @account.contacts.find(contact_id)
+    Whatsapp::Groups::Access.assert_contact!(contact, @user)
     forwarded_message = existing_forwarded_message(contact)
 
     if forwarded_message
       conversation = forwarded_message.conversation
     else
       conversation = forward_conversation(contact)
+      Whatsapp::Groups::Access.assert_conversation!(conversation, @user, write: true)
       forwarded_message = conversation.messages.build(message_params(contact))
       process_attachments(forwarded_message)
       forwarded_message.save!

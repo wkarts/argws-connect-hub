@@ -5,5 +5,6 @@ class Api::V1::Accounts::Contacts::BaseController < Api::V1::Accounts::BaseContr
 
   def ensure_contact
     @contact = Current.account.contacts.find(params[:contact_id])
+    Whatsapp::Groups::Access.assert_contact!(@contact, Current.user)
   end
 end

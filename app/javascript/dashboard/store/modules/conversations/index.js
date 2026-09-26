@@ -27,6 +27,13 @@ const state = {
 
 // mutations
 export const mutations = {
+  PURGE_WHATSAPP_GROUP_CACHE(_state, { group_id: groupId, inbox_id: inboxId }) {
+    const revoked = _state.allConversations.filter(chat => chat.is_group && Number(chat.inbox_id) === Number(inboxId) && (!groupId || !chat.whatsapp_group_id || Number(chat.whatsapp_group_id) === Number(groupId)));
+    const ids = new Set(revoked.map(chat => chat.id));
+    _state.allConversations = _state.allConversations.filter(chat => !ids.has(chat.id));
+    ids.forEach(id => { Vue.delete(_state.attachments, id); Vue.delete(_state.syncConversationsMessages, id); });
+    if (ids.has(_state.selectedChatId)) _state.selectedChatId = null;
+  },
   [types.SET_ALL_CONVERSATION](_state, conversationList) {
     const newAllConversations = [..._state.allConversations];
     conversationList.forEach(conversation => {

@@ -67,6 +67,7 @@ class Conversation < ApplicationRecord
   validates :custom_attributes, jsonb_attributes_length: true
   validates :uuid, uniqueness: true
   validate :validate_referer_url
+  validate :validate_whatsapp_group_policy
 
   enum status: { open: 0, resolved: 1, pending: 2, snoozed: 3 }
   enum priority: { low: 0, medium: 1, high: 2, urgent: 3 }
@@ -117,7 +118,24 @@ class Conversation < ApplicationRecord
     inbox&.whatsapp? && contact_inbox&.source_id.to_s.match?(/\A\d+(?:-\d+)?@g\.us\z/)
   end
 
+  def validate_whatsapp_group_policy
+    return unless whatsapp_group? && inbox.channel.provider == 'connectapi'
+    group = WhatsappGroup.discover!(inbox, contact_inbox.source_id, contact&.name)
+    changing_flow = new_record? || (will_save_change_to_status? && status != 'resolved') || will_save_change_to_assignee_id?
+    if changing_flow && (group.management? || !group.active?)
+      errors.add(:base, 'O grupo não permite operações de atendimento neste modo.')
+    end
+    if changing_flow && Current.user.is_a?(User) && !group.allowed?(Current.user)
+      errors.add(:base, 'Usuário sem acesso ao grupo.')
+    end
+    if assignee_id.present? && (new_record? || will_save_change_to_assignee_id?) && !group.allowed?(assignee)
+      errors.add(:assignee, 'não possui acesso ao grupo')
+    end
+  end
+
   def can_reply?
+    group = Whatsapp::Groups::Access.group_for(self)
+    return false if group && (group.management? || !group.active?)
     return false if whatsapp_group? && inbox.channel.provider == 'connectapi' && !inbox.channel.groups_enabled?
     channel = inbox&.channel
 

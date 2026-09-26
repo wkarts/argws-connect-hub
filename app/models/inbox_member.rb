@@ -24,8 +24,14 @@ class InboxMember < ApplicationRecord
 
   after_create :add_agent_to_round_robin
   after_destroy :remove_agent_from_round_robin
+  after_commit :invalidate_whatsapp_group_access, on: [:create, :destroy]
 
   private
+
+  def invalidate_whatsapp_group_access
+    return unless inbox && WhatsappGroup.where(inbox_id: inbox_id).exists?
+    Whatsapp::Groups::AccessChangedJob.perform_later(inbox.account_id, user_id, inbox_id)
+  end
 
   def add_agent_to_round_robin
     ::AutoAssignment::InboxRoundRobinService.new(inbox: inbox).add_agent_to_queue(user_id)

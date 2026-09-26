@@ -40,6 +40,7 @@ json.contact_last_seen_at conversation.contact_last_seen_at.to_i
 json.custom_attributes conversation.custom_attributes
 json.inbox_id conversation.inbox_id
 json.is_group conversation.whatsapp_group?
+json.whatsapp_group_id Whatsapp::Groups::Access.group_for(conversation)&.id
 json.labels conversation.cached_label_list_array
 json.muted conversation.muted?
 json.snoozed_until conversation.snoozed_until

@@ -13,3 +13,6 @@ Rails.application.config.filter_parameters += [filter_regex]
 
 # Application credentials are private to their owner, including diagnostics.
 Rails.application.config.filter_parameters += [:workspace_credentials, :encrypted_credentials]
+
+# Management group content never belongs in request/diagnostic logs.
+Rails.application.config.filter_parameters += [:group_message]

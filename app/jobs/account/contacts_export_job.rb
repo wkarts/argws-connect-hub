@@ -16,7 +16,7 @@ class Account::ContactsExportJob < ApplicationJob
   def generate_csv(headers)
     csv_data = CSV.generate do |csv|
       csv << headers
-      contacts.each do |contact|
+      Whatsapp::Groups::Access.filter_contacts(contacts, @account_user, @account).each do |contact|
         csv << headers.map { |header| contact.send(header) }
       end
     end

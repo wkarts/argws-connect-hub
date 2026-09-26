@@ -90,6 +90,7 @@ class ConversationFinder
   def find_all_conversations
     @conversations = current_account.conversations.where(inbox_id: @inbox_ids)
     filter_by_conversation_type if params[:conversation_type]
+    @conversations = Whatsapp::Groups::Access.filter_conversations(@conversations, current_user, current_account)
     @conversations
   end
 

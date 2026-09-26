@@ -26,6 +26,12 @@ class Whatsapp::Providers::ConnectApiService < Whatsapp::Providers::WhatsappClou
   # existing Graph-compatible interactive flow for input_select so this repair
   # does not regress lists/buttons already supported by HUB.
   def send_message(phone_number, message)
+    if group_destination?(phone_number)
+      group = WhatsappGroup.find_by(inbox_id: whatsapp_channel.inbox.id, jid: phone_number)
+      if group && (group.management? || !group.active? || (message.sender.is_a?(User) && !group.allowed?(message.sender)))
+        return reject_disabled_group(phone_number, message)
+      end
+    end
     return reject_disabled_group(phone_number, message) if phone_number.to_s.end_with?('@g.us') && (!group_destination?(phone_number) || !whatsapp_channel.groups_enabled?)
     return super if message.content_type == 'input_select'
 
@@ -170,7 +176,11 @@ class Whatsapp::Providers::ConnectApiService < Whatsapp::Providers::WhatsappClou
   end
 
   def native_attachment_payload(phone_number, message, attachment)
-    download_url = attachment.download_url
+    download_url = if group_destination?(phone_number) && attachment_file_available?(attachment)
+                     Base64.strict_encode64(attachment.file.download)
+                   else
+                     attachment.download_url
+                   end
     body = { number: normalize_phone(phone_number) }
     quoted = native_quoted_message(message)
     body[:quoted] = quoted if quoted.present?

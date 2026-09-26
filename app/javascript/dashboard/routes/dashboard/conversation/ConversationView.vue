@@ -12,6 +12,7 @@ export default {
   components: {
     ChatList,
     ConversationBox,
+    WhatsappGroupThread: () => import('dashboard/components/whatsappGroups/GroupThread.vue'),
     PopOverSearch,
     CmdBarConversationSnooze,
   },
@@ -59,8 +60,9 @@ export default {
       chatList: 'getAllConversations',
       currentChat: 'getSelectedChat',
     }),
+    groupId() { return /^\d+$/.test(this.$route.query.groupId || '') ? Number(this.$route.query.groupId) : null; },
     showConversationList() {
-      return this.isOnExpandedLayout ? !this.conversationId : true;
+      return this.isOnExpandedLayout ? !(this.conversationId || this.groupId) : true;
     },
     showMessageView() {
       return this.conversationId ? true : !this.isOnExpandedLayout;
@@ -200,8 +202,9 @@ export default {
         @toggleConversationLayout="toggleConversationLayout"
       />
     </ChatList>
+    <WhatsappGroupThread v-if="groupId" :key="`${$route.params.accountId}:${groupId}`" :group-id="groupId" />
     <ConversationBox
-      v-if="showMessageView"
+      v-else-if="showMessageView"
       :inbox-id="inboxId"
       :is-contact-panel-open="isContactPanelOpen"
       :is-on-expanded-layout="isOnExpandedLayout"

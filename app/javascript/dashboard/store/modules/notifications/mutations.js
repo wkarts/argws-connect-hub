@@ -2,6 +2,12 @@ import Vue from 'vue';
 import types from '../../mutation-types';
 
 export const mutations = {
+  PURGE_WHATSAPP_GROUP_CACHE($state, { group_id: groupId, inbox_id: inboxId }) {
+    Object.values($state.records).forEach(record => {
+      const chat = record.primary_actor;
+      if (chat?.is_group && Number(chat.inbox_id) === Number(inboxId) && (!groupId || !chat.whatsapp_group_id || Number(chat.whatsapp_group_id) === Number(groupId))) Vue.delete($state.records, record.id);
+    });
+  },
   [types.SET_NOTIFICATIONS_UI_FLAG]($state, data) {
     $state.uiFlags = {
       ...$state.uiFlags,

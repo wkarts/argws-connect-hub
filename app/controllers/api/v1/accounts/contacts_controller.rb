@@ -55,6 +55,7 @@ class Api::V1::Accounts::ContactsController < Api::V1::Accounts::BaseController
   def active
     contacts = Current.account.contacts.where(id: ::OnlineStatusTracker
                   .get_available_contact_ids(Current.account.id))
+    contacts = Whatsapp::Groups::Access.filter_contacts(contacts, Current.user, Current.account)
     @contacts_count = contacts.count
     @contacts = contacts.page(@current_page)
   end
@@ -127,7 +128,7 @@ class Api::V1::Accounts::ContactsController < Api::V1::Accounts::BaseController
   def resolved_contacts
     return @resolved_contacts if @resolved_contacts
 
-    @resolved_contacts = Current.account.contacts.resolved_contacts
+    @resolved_contacts = Whatsapp::Groups::Access.filter_contacts(Current.account.contacts.resolved_contacts, Current.user, Current.account)
 
     @resolved_contacts = @resolved_contacts.tagged_with(params[:labels], any: true) if params[:labels].present?
     @resolved_contacts
@@ -183,6 +184,7 @@ class Api::V1::Accounts::ContactsController < Api::V1::Accounts::BaseController
 
   def fetch_contact
     @contact = Current.account.contacts.includes(contact_inboxes: [:inbox]).find(params[:id])
+    Whatsapp::Groups::Access.assert_contact!(@contact, Current.user)
   end
 
   def process_avatar_from_url

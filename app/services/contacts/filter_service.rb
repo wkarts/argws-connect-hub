@@ -30,7 +30,7 @@ class Contacts::FilterService < FilterService
 
   # TODO: @account.contacts.resolved_contacts ? to stay consistant with the behavior in ui
   def base_relation
-    @account.contacts
+    Whatsapp::Groups::Access.filter_contacts(@account.contacts, @user, @account)
   end
 
   def filter_config

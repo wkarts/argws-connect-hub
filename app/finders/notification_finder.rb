@@ -32,6 +32,8 @@ class NotificationFinder
 
   def find_all_notifications
     @notifications = current_user.notifications.where(account_id: @current_account.id)
+    allowed = Whatsapp::Groups::Access.filter_conversations(current_account.conversations, current_user, current_account)
+    @notifications = @notifications.where('primary_actor_type <> ? OR primary_actor_id IN (?)', 'Conversation', allowed.select(:id))
   end
 
   def filter_snoozed_notifications

@@ -59,10 +59,6 @@
       </label>
     </div>
 
-    <div class="mb-5 rounded-lg border border-slate-200 p-4 dark:border-slate-700">
-      <label class="flex items-center gap-2"><input type="checkbox" :checked="inbox.whatsapp_groups_enabled === true" :disabled="isSavingGroups" @change="setGroups($event.target)" />{{ $t('WHATSAPP_GROUPS.ENABLE') }}</label>
-      <p class="mb-0 text-xs text-slate-500">{{ $t('WHATSAPP_GROUPS.HELP') }}</p>
-    </div>
     <ConnectApiOpeningTemplates ref="openingTemplates" :inbox="inbox" />
 
     <div v-if="config.qrcode_base64" class="mb-5">
@@ -102,7 +98,6 @@ export default {
   data() {
     return {
       isReconciling: false,
-      isSavingGroups: false,
       isDisconnecting: false,
       isSavingIncomingCallRing: false,
     };
@@ -148,15 +143,6 @@ export default {
         useAlert(error?.response?.data?.message || error?.message || 'Falha ao comunicar com a Connect|API.');
         return false;
       }
-    },
-    async setGroups(input) {
-      const enabled = input.checked;
-      if (this.isSavingGroups) return;
-      this.isSavingGroups = true;
-      try {
-        const saved = await this.update({ ignore_group_messages: !enabled }, this.$t(enabled ? 'WHATSAPP_GROUPS.ENABLED' : 'WHATSAPP_GROUPS.DISABLED'));
-        if (!saved) input.checked = this.inbox.whatsapp_groups_enabled === true;
-      } finally { this.isSavingGroups = false; }
     },
     async setIncomingCallRing(enabled) {
       if (this.isSavingIncomingCallRing) return;

@@ -37,10 +37,6 @@
       </select>
       <p class="mt-1 text-xs text-slate-500">A credencial administrativa da Connect|API permanece somente no servidor do HUB.</p>
     </div>
-    <div class="w-[65%] max-w-[65%]">
-      <label><input v-model="groupsEnabled" type="checkbox" /> {{ $t('WHATSAPP_GROUPS.ENABLE') }}</label>
-      <p class="text-xs text-slate-500">{{ $t('WHATSAPP_GROUPS.HELP') }}</p>
-    </div>
     <div class="mt-5 w-full">
       <hub-submit-button :loading="uiFlags.isCreating" button-text="Criar caixa e conectar" />
     </div>
@@ -65,7 +61,6 @@ export default {
       connectApiProvider: 'WHATSAPP-BAILEYS',
       voipMaxConcurrentCalls: null,
       incomingCallRingEnabled: true,
-      groupsEnabled: false,
     };
   },
   computed: { ...mapGetters({ uiFlags: 'inboxes/getUIFlags' }) },
@@ -78,7 +73,7 @@ export default {
         auth_mode: this.authMode,
         connect_api_provider: this.connectApiProvider,
         connect: true,
-        ignore_group_messages: !this.groupsEnabled,
+        ignore_group_messages: true,
         ignore_history_messages: true,
         send_agent_name: true,
         incoming_call_ring_enabled: this.incomingCallRingEnabled,

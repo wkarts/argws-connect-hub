@@ -11,6 +11,7 @@ class BulkActionsJob < ApplicationJob
     Current.user = user
     @params = params
     @records = records_to_updated(params[:ids])
+    @records.each { |conversation| Whatsapp::Groups::Access.assert_conversation!(conversation, user, write: true) }
     bulk_update
   ensure
     Current.reset

@@ -59,6 +59,7 @@ class Message < ApplicationRecord
     }
   }.to_json.freeze
 
+  validate :validate_whatsapp_group_creation, on: :create
   before_validation :ensure_content_type
   before_validation :prevent_message_flooding
   before_save :ensure_processed_message_content
@@ -145,6 +146,13 @@ class Message < ApplicationRecord
 
   def channel_token
     @token ||= inbox.channel.try(:page_access_token)
+  end
+
+  def validate_whatsapp_group_creation
+    group = Whatsapp::Groups::Access.group_for(conversation)
+    return unless group
+    errors.add(:base, 'Este grupo não aceita mensagens pelo fluxo de atendimento.') if group.management?
+    errors.add(:sender, 'sem acesso ao grupo') if sender.is_a?(User) && !group.allowed?(sender)
   end
 
   def push_event_data

@@ -35,6 +35,9 @@ jobs:
           node --test ./scripts/test-message-actions-ui.mjs
           node --test ./scripts/test-workspace-apps.mjs ./scripts/test-workspace-presentation.mjs
           node --test ./scripts/test-canonical-releases.mjs
+          node --test ./scripts/test-group-management.mjs
+          ruby ./scripts/test-group-isolated-runtime.rb
+          node --experimental-vm-modules --test ./scripts/test-group-client-runtime.mjs
           ruby ./scripts/test-workspace-diagnostics.rb
           node --experimental-vm-modules --test ./scripts/test-workspace-state.mjs
           node --experimental-vm-modules ./scripts/check-workspace-javascript.mjs
@@ -160,6 +163,11 @@ jobs:
           spec/finders/conversation_finder_spec.rb
           spec/services/whatsapp/connect_api_groups_spec.rb
           spec/requests/whatsapp_groups_spec.rb
+      - name: Isolated group management and authorization regression specs
+        run: >-
+          bundle exec rspec
+          spec/services/whatsapp/group_management_spec.rb
+          spec/requests/whatsapp_group_management_spec.rb
       - name: Two-factor authentication regression specs
         run: >-
           bundle exec rspec

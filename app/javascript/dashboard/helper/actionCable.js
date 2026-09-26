@@ -11,6 +11,7 @@ class ActionCableConnector extends BaseActionCableConnector {
     this.CancelTyping = [];
     this.events = {
       'message.created': this.onMessageCreated,
+      'whatsapp_group.changed': this.onWhatsappGroupChanged,
       'message.updated': this.onMessageUpdated,
       'conversation.created': this.onConversationCreated,
       'conversation.status_changed': this.onStatusChange,
@@ -59,6 +60,17 @@ class ActionCableConnector extends BaseActionCableConnector {
       conversationId: data.conversation_id,
       call: data.content_attributes.connect_api_call,
     });
+  };
+
+  onWhatsappGroupChanged = data => {
+    if (Number(this.app.$store.getters.getCurrentAccountId) !== Number(data.account_id)) return;
+    if (data.invalidated) {
+      this.app.$store.commit('PURGE_WHATSAPP_GROUP_CACHE', data);
+      this.app.$store.commit('notifications/PURGE_WHATSAPP_GROUP_CACHE', data);
+      this.fetchConversationStats();
+    }
+    emitter.emit('whatsapp_group.changed', data);
+    if (data.notify) DashboardAudioNotificationHelper.onGroupMessage(data);
   };
 
   onMessageUpdated = data => {

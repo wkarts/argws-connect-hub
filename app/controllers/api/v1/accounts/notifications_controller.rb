@@ -69,7 +69,9 @@ class Api::V1::Accounts::NotificationsController < Api::V1::Accounts::BaseContro
   end
 
   def fetch_notification
-    @notification = current_user.notifications.find(params[:id])
+    @notification = current_user.notifications.where(account_id: Current.account.id).find(params[:id])
+    actor = @notification.primary_actor
+    Whatsapp::Groups::Access.assert_conversation!(actor, Current.user) if actor.is_a?(Conversation)
   end
 
   def set_current_page

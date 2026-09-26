@@ -38,6 +38,10 @@ class Whatsapp::IncomingConnectApiCallService
     data = @params[:data].to_h.with_indifferent_access
     call = data[:call].to_h.with_indifferent_access
     return log_ignored('missing call payload') if call.blank?
+    group_addresses = %i[groupJid groupId remoteJid peerJid peerJidAlt displayPeerJid].map { |key| call[key].to_s }
+    if ActiveModel::Type::Boolean.new.cast(call[:isGroup]) == true || group_addresses.any? { |jid| jid.end_with?('@g.us') }
+      return log_ignored('group calls are not supported; no ticket created')
+    end
 
     call_id = call[:callId].to_s.strip
     return log_ignored('missing callId') if call_id.blank?

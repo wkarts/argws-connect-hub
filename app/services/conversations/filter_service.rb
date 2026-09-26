@@ -23,7 +23,7 @@ class Conversations::FilterService < FilterService
   end
 
   def base_relation
-    @account.conversations.includes(
+    Whatsapp::Groups::Access.filter_conversations(@account.conversations, @user, @account).includes(
       :taggings, :inbox, { assignee: { avatar_attachment: [:blob] } }, { contact: { avatar_attachment: [:blob] } }, :team, :messages, :contact_inbox
     )
   end

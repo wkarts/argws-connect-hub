@@ -39,6 +39,7 @@ export default {
     ConversationBulkActions,
     IntersectionObserver,
     VirtualList,
+    WhatsappGroupList: () => import('./whatsappGroups/GroupList.vue'),
   },
   provide() {
     return {
@@ -99,10 +100,10 @@ export default {
     });
 
     const getKeyboardListenerParams = () => {
-      const allConversations = conversationListRef.value.querySelectorAll(
+      const allConversations = conversationListRef.value?.querySelectorAll(
         'div.conversations-list div.conversation'
-      );
-      const activeConversation = conversationListRef.value.querySelector(
+      ) || [];
+      const activeConversation = conversationListRef.value?.querySelector(
         'div.conversations-list div.conversation.active'
       );
       const activeConversationIndex = [...allConversations].indexOf(
@@ -119,6 +120,7 @@ export default {
     const handlePreviousConversation = () => {
       const { allConversations, activeConversationIndex } =
         getKeyboardListenerParams();
+      if (!allConversations.length) return;
       if (activeConversationIndex === -1) {
         allConversations[0].click();
       }
@@ -132,6 +134,7 @@ export default {
         activeConversationIndex,
         lastConversationIndex,
       } = getKeyboardListenerParams();
+      if (!allConversations.length) return;
       if (activeConversationIndex === -1) {
         allConversations[lastConversationIndex].click();
       } else if (activeConversationIndex < lastConversationIndex) {
@@ -160,7 +163,8 @@ export default {
   },
   data() {
     return {
-      activeAssigneeTab: hubConstants.ASSIGNEE_TYPE.ME,
+      activeAssigneeTab: this.$route.query.groupTab === '1' ? 'groups' : hubConstants.ASSIGNEE_TYPE.ME,
+      availableGroupCount: 0,
       activeStatus: hubConstants.STATUS_TYPE.OPEN,
       activeSortBy: hubConstants.SORT_BY_TYPE.LAST_ACTIVITY_AT_DESC,
       showAdvancedFilters: false,
@@ -288,7 +292,7 @@ export default {
       if (this.showGroupsTab) ASSIGNEE_TYPE_TAB_KEYS.groups = 'groupCount';
 
       return Object.keys(ASSIGNEE_TYPE_TAB_KEYS).map(key => {
-        const count = this.conversationStats[ASSIGNEE_TYPE_TAB_KEYS[key]] || 0;
+        const count = key === 'groups' ? this.availableGroupCount : (this.conversationStats[ASSIGNEE_TYPE_TAB_KEYS[key]] || 0);
         return {
           key,
           name: this.$t(`CHAT_LIST.ASSIGNEE_TYPE_TABS.${key}`),
@@ -438,7 +442,9 @@ export default {
     },
   },
   watch: {
+    '$route.query.groupTab'(value) { if (value === '1' && this.showGroupsTab) this.updateAssigneeTab('groups'); },
     showGroupsTab(value) {
+      if (value && this.$route.query.groupTab === '1') this.updateAssigneeTab('groups');
       if (!value && this.activeAssigneeTab === 'groups') {
         this.activeAssigneeTab = hubConstants.ASSIGNEE_TYPE.ME;
         this.resetAndFetchData();
@@ -623,6 +629,7 @@ export default {
       this.fetchConversations();
     },
     fetchConversations() {
+      if (this.activeAssigneeTab === 'groups') { this.emitConversationLoaded(); return; }
       this.$store.dispatch('updateChatListFilters', this.conversationFilters);
       this.$store
         .dispatch('fetchAllConversations')
@@ -950,7 +957,7 @@ export default {
     ]"
   >
     <slot />
-    <ChatListHeader
+    <ChatListHeader v-if="activeAssigneeTab !== 'groups'"
       :page-title="pageTitle"
       :has-applied-filters="hasAppliedFilters"
       :has-hide-filters-for-agents="hideFiltersForAgents"
@@ -987,13 +994,13 @@ export default {
     />
 
     <p
-      v-if="!chatListLoading && !conversationList.length"
+      v-if="activeAssigneeTab !== 'groups' && !chatListLoading && !conversationList.length"
       class="flex items-center justify-center p-4 overflow-auto"
     >
       {{ $t('CHAT_LIST.LIST.404') }}
     </p>
     <ConversationBulkActions
-      v-if="selectedConversations.length"
+      v-if="activeAssigneeTab !== 'groups' && selectedConversations.length"
       :conversations="selectedConversations"
       :all-conversations-selected="allConversationsSelected"
       :selected-inboxes="uniqueInboxes"
@@ -1006,7 +1013,9 @@ export default {
       @assignLabels="onAssignLabels"
       @assignTeam="onAssignTeamsForBulk"
     />
-    <div
+    <WhatsappGroupList v-if="showGroupsTab" v-show="activeAssigneeTab === 'groups'"
+      :inbox-id="conversationInbox" :active="activeAssigneeTab === 'groups'" @count="availableGroupCount = $event" />
+    <div v-show="activeAssigneeTab !== 'groups'"
       ref="conversationListRef"
       class="flex-1 conversations-list"
       :class="{ 'overflow-hidden': isContextMenuOpen }"

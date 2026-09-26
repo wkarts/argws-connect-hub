@@ -157,12 +157,25 @@ class Channels::Whatsapp::ConnectApiMediaSyncJob < ApplicationJob
 
   def sync_record(raw_record)
     record = raw_record.to_h.deep_stringify_keys
+    if Whatsapp::Groups::NativeMessage.group?(record)
+      return Whatsapp::Groups::Router.new(@channel.inbox).dispatch(Whatsapp::Groups::NativeMessage.envelope(record)) { sync_individual_record(raw_record) }
+    end
+    sync_individual_record(raw_record)
+  end
+
+  def sync_individual_record(raw_record)
+    record = raw_record.to_h.deep_stringify_keys
     key = record['key'].to_h.deep_stringify_keys
     id = key['id'].to_s.presence || record['id'].to_s.presence
     return if id.blank?
     return if ignored_jid?(key['remoteJid'])
 
-    existing = Message.find_by(account_id: @channel.account_id, inbox_id: @channel.inbox.id, source_id: id)
+    existing_scope = Message.where(account_id: @channel.account_id, inbox_id: @channel.inbox.id, source_id: id)
+    if key['remoteJid'].to_s.match?(WhatsappGroup::JID_PATTERN)
+      contact_ids = ContactInbox.where(inbox_id: @channel.inbox.id, source_id: key['remoteJid']).select(:id)
+      existing_scope = existing_scope.where(conversation_id: @channel.inbox.conversations.where(contact_inbox_id: contact_ids).select(:id))
+    end
+    existing = existing_scope.first
     body = text_body(record)
     media_type, media_node = media_descriptor(record)
 
