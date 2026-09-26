@@ -40,6 +40,23 @@ module Whatsapp::Groups
       entries.size
     end
 
+    def profile_picture_url(group)
+      response = @client.request(
+        :post,
+        "/chat/fetchProfilePictureUrl/#{@instance}",
+        body: { number: group.jid },
+        timeout: 15
+      )
+      data = response.respond_to?(:deep_stringify_keys) ? response.deep_stringify_keys : {}
+      data['profilePictureUrl'].to_s.presence ||
+        data.dig('data', 'profilePictureUrl').to_s.presence ||
+        data['url'].to_s.presence
+    rescue ConnectApi::Error => e
+      return nil if [400, 404, 422].include?(e.status.to_i)
+
+      raise
+    end
+
     def send!(message)
       group = message.whatsapp_group
       payload = { number: group.jid }

@@ -89,6 +89,14 @@
     "SELECTED_REPLY": "Replying to {name}",
     "UNAVAILABLE": "Group unavailable or access revoked.",
     "OPEN_TICKET": "Open support conversation",
-    "HISTORY_NOTE": "Earlier messages remain in the history of their original treatment."
+    "HISTORY_NOTE": "Earlier messages remain in the history of their original treatment.",
+    "PARTICIPANT": "Participant",
+    "KIND_IMAGE": "Image",
+    "KIND_AUDIO": "Audio",
+    "KIND_VIDEO": "Video",
+    "KIND_DOCUMENT": "Document",
+    "KIND_STICKER": "Sticker",
+    "KIND_LOCATION": "Location",
+    "KIND_CONTACTS": "Contact"
   }
 }

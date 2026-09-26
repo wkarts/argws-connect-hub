@@ -2,6 +2,7 @@
 import { mapGetters } from 'vuex';
 import { useAlert } from 'dashboard/composables';
 import SettingsSection from 'dashboard/components/SettingsSection.vue';
+import InboxesAPI from 'dashboard/api/inboxes';
 import { useVuelidate } from '@vuelidate/core';
 import { required, minLength } from '@vuelidate/validators';
 import InputRadioGroup from './components/InputRadioGroup.vue';
@@ -34,6 +35,7 @@ export default {
       starttls: true,
       openSSLVerifyMode: 'none',
       authMechanism: 'login',
+      testingConnection: false,
       encryptionProtocols: [
         { id: 'ssl', title: 'SSL/TLS', checked: false },
         { id: 'starttls', title: 'STARTTLS', checked: true },
@@ -124,6 +126,17 @@ export default {
     },
     handleAuthMechanismChange(mode) {
       this.authMechanism = mode;
+    },
+    async testConnection() {
+      this.testingConnection = true;
+      try {
+        const { data } = await InboxesAPI.testEmailConnection(this.inbox.id, 'smtp');
+        useAlert(data.ok ? this.$t('INBOX_MGMT.SMTP.TEST_SUCCESS') : data.error);
+      } catch (error) {
+        useAlert(error?.response?.data?.error || this.$t('INBOX_MGMT.SMTP.TEST_ERROR'));
+      } finally {
+        this.testingConnection = false;
+      }
     },
     async updateInbox() {
       try {
@@ -231,11 +244,22 @@ export default {
             :action="handleAuthMechanismChange"
           />
         </div>
-        <hub-submit-button
-          :button-text="$t('INBOX_MGMT.SMTP.UPDATE')"
-          :loading="uiFlags.isUpdatingSMTP"
-          :disabled="(v$.$invalid && isSMTPEnabled) || uiFlags.isUpdatingSMTP"
-        />
+        <div class="flex items-center gap-2">
+          <hub-submit-button
+            :button-text="$t('INBOX_MGMT.SMTP.UPDATE')"
+            :loading="uiFlags.isUpdatingSMTP"
+            :disabled="(v$.$invalid && isSMTPEnabled) || uiFlags.isUpdatingSMTP"
+          />
+          <hub-button
+            v-if="isSMTPEnabled"
+            type="button"
+            variant="clear"
+            :disabled="testingConnection || uiFlags.isUpdatingSMTP"
+            @click="testConnection"
+          >
+            {{ $t('INBOX_MGMT.SMTP.TEST_CONNECTION') }}
+          </hub-button>
+        </div>
       </form>
     </SettingsSection>
   </div>

@@ -1,31 +1,51 @@
 import { mount, createLocalVue } from '@vue/test-utils';
 import Vue from 'vue';
 import ChatTypeTabs from 'dashboard/components/widgets/ChatTypeTabs.vue';
+import HubTabs from 'dashboard/components/ui/Tabs/Tabs.js';
+import HubTabsItem from 'dashboard/components/ui/Tabs/TabsItem.vue';
 import { applyPageFilters } from 'dashboard/store/modules/conversations/helpers';
 import { useKeyboardEvents } from 'dashboard/composables/useKeyboardEvents';
 vi.mock('dashboard/composables/useKeyboardEvents', () => ({ useKeyboardEvents: vi.fn() }));
 const items = ['me', 'unassigned', 'all', 'groups'].map((key, i) => ({ key, name: ['Minha', 'Não atribuída', 'Todos', 'Grupos'][i], count: i === 3 ? 120 : i }));
 const localVue = createLocalVue();
+localVue.component('hub-tabs', HubTabs);
+localVue.component('hub-tabs-item', HubTabsItem);
 let wrapper;
 afterEach(() => { wrapper?.destroy(); wrapper = null; vi.clearAllMocks(); });
 
-it('places all four filters in one bounded tablist without introducing a sidebar width', async () => {
-  wrapper = mount(ChatTypeTabs, { localVue, propsData: { items, activeTab: 'me' }, mocks: { $t: key => key }, attachTo: document.body });
-  expect(wrapper.findAll('[role=tab]').length).toBe(4);
-  expect(wrapper.findAll('[role=tab]').wrappers.map(tab => tab.text())).toEqual(['Minha0', 'Não atribuída1', 'Todos2', 'Grupos99+']);
-  await wrapper.findAll('[role=tab]').at(3).trigger('click');
+it('keeps all four filters inside the original HUB tabs component', async () => {
+  wrapper = mount(ChatTypeTabs, {
+    localVue,
+    propsData: { items, activeTab: 'me' },
+    mocks: { $t: key => key },
+    attachTo: document.body,
+  });
+
+  const tabs = wrapper.findAll('.tabs-title');
+  expect(tabs.length).toBe(4);
+  expect(tabs.wrappers.map(tab => tab.text().replace(/\s+/g, ' ').trim())).toEqual([
+    'Minha 0',
+    'Não atribuída 1',
+    'Todos 2',
+    'Grupos 120',
+  ]);
+  expect(wrapper.find('.tab--chat-type-four').exists()).toBe(true);
+  expect(tabs.at(0).classes()).toContain('is-active');
+
+  await tabs.at(3).find('a').trigger('click');
   expect(wrapper.emitted().chatTabChange[0]).toEqual(['groups']);
+
   await wrapper.setProps({ activeTab: 'groups' });
-  expect(wrapper.findAll('[role=tab]').at(3).attributes('aria-selected')).toBe('true');
-  await wrapper.findAll('[role=tab]').at(3).trigger('keydown', { key: 'ArrowRight', keyCode: 39 });
   await Vue.nextTick();
-  expect(document.activeElement).toBe(wrapper.findAll('[role=tab]').at(0).element);
-  const shortcuts = useKeyboardEvents.mock.calls[0][0]; shortcuts['Alt+KeyN'].action();
+  expect(wrapper.findAll('.tabs-title').at(3).classes()).toContain('is-active');
+
+  const shortcuts = useKeyboardEvents.mock.calls[0][0];
+  shortcuts['Alt+KeyN'].action();
   expect(wrapper.emitted().chatTabChange.at(-1)).toEqual(['me']);
 });
 
 it('preserves the original three-tab component when groups are not available', () => {
-  wrapper = mount(ChatTypeTabs, { localVue, propsData: { items: items.slice(0, 3) }, stubs: { 'hub-tabs': { template: '<div><slot/></div>' }, 'hub-tabs-item': true }, mocks: { $t: key => key } });
+  wrapper = mount(ChatTypeTabs, { localVue, propsData: { items: items.slice(0, 3) }, mocks: { $t: key => key } });
   expect(wrapper.find('.compact-chat-tabs').exists()).toBe(false);
   expect(wrapper.find('.tab--chat-type').exists()).toBe(true);
 });

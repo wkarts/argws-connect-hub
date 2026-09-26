@@ -1,6 +1,7 @@
 require 'digest'
 
 class WhatsappGroup < ApplicationRecord
+  include Avatarable
   JID_PATTERN = /\A\d+(?:-\d+)?@g\.us\z/
   CONFIG_FIELDS = %w[selected treatment access_mode allowed_user_ids].freeze
   belongs_to :account
@@ -25,9 +26,10 @@ class WhatsappGroup < ApplicationRecord
     existing = find_by(inbox_id: inbox.id, jid: jid)
     return existing if existing
 
-    HubDiagnostics::ChannelLock.with(inbox.channel_id) do
-      discovery_key = Digest::SHA256.digest("hub:group-discovery:#{inbox.id}:#{jid}").unpack1('q>')
-      connection = ActiveRecord::Base.connection
+    # Group discovery is a local metadata operation. It must not compete with
+    # the channel-binding lock used for instance provisioning/rebinding.
+    discovery_key = Digest::SHA256.digest("hub:group-discovery:#{inbox.id}:#{jid}").unpack1('q>')
+    ActiveRecord::Base.connection_pool.with_connection do |connection|
       locked = connection.select_value("SELECT pg_try_advisory_lock(#{discovery_key})")
       raise HubDiagnostics::BindingBusy, 'Group discovery pending' unless locked == true || locked == 't'
       begin

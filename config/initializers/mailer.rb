@@ -11,24 +11,39 @@ Rails.application.configure do
   config.action_mailer.raise_delivery_errors = true
 
   # Config related to smtp
+  smtp_ssl = ActiveModel::Type::Boolean.new.cast(ENV.fetch('SMTP_SSL', false))
+  smtp_tls = ActiveModel::Type::Boolean.new.cast(ENV.fetch('SMTP_TLS', false))
+  smtp_starttls = ActiveModel::Type::Boolean.new.cast(ENV.fetch('SMTP_ENABLE_STARTTLS_AUTO', true))
+  # Implicit TLS (normally port 465) and STARTTLS (normally port 587) are
+  # different handshakes. Never advertise STARTTLS when implicit TLS was
+  # explicitly selected.
+  smtp_starttls = false if smtp_ssl || smtp_tls
+
   smtp_settings = {
     address: ENV.fetch('SMTP_ADDRESS', 'localhost'),
-    port: ENV.fetch('SMTP_PORT', 587)
+    port: ENV.fetch('SMTP_PORT', 587).to_i,
+    enable_starttls_auto: smtp_starttls,
+    open_timeout: [ENV.fetch('SMTP_OPEN_TIMEOUT', 10).to_i, 1].max,
+    read_timeout: [ENV.fetch('SMTP_READ_TIMEOUT', 20).to_i, 1].max
   }
 
   smtp_settings[:authentication] = ENV.fetch('SMTP_AUTHENTICATION', 'login').to_sym if ENV['SMTP_AUTHENTICATION'].present?
   smtp_settings[:domain] = ENV['SMTP_DOMAIN'] if ENV['SMTP_DOMAIN'].present?
   smtp_settings[:user_name] = ENV.fetch('SMTP_USERNAME', nil)
   smtp_settings[:password] = ENV.fetch('SMTP_PASSWORD', nil)
-  smtp_settings[:enable_starttls_auto] = ActiveModel::Type::Boolean.new.cast(ENV.fetch('SMTP_ENABLE_STARTTLS_AUTO', true))
   smtp_settings[:openssl_verify_mode] = ENV['SMTP_OPENSSL_VERIFY_MODE'] if ENV['SMTP_OPENSSL_VERIFY_MODE'].present?
-  smtp_settings[:ssl] = ActiveModel::Type::Boolean.new.cast(ENV.fetch('SMTP_SSL', true)) if ENV['SMTP_SSL']
-  smtp_settings[:tls] = ActiveModel::Type::Boolean.new.cast(ENV.fetch('SMTP_TLS', true)) if ENV['SMTP_TLS']
-  smtp_settings[:open_timeout] = ENV['SMTP_OPEN_TIMEOUT'].to_i if ENV['SMTP_OPEN_TIMEOUT'].present?
-  smtp_settings[:read_timeout] = ENV['SMTP_READ_TIMEOUT'].to_i if ENV['SMTP_READ_TIMEOUT'].present?
+  smtp_settings[:ssl] = true if smtp_ssl
+  smtp_settings[:tls] = true if smtp_tls
 
   config.action_mailer.delivery_method = :smtp unless Rails.env.test?
   config.action_mailer.smtp_settings = smtp_settings
+
+  if ENV['SMTP_ADDRESS'].present?
+    Rails.logger.info(
+      "[HUB email] SMTP configured address=#{smtp_settings[:address]} port=#{smtp_settings[:port]} " \
+      "auth=#{smtp_settings[:authentication] || 'none'} ssl=#{smtp_ssl} tls=#{smtp_tls} starttls=#{smtp_starttls}"
+    )
+  end
 
   # Use sendmail if using postfix for email
   config.action_mailer.delivery_method = :sendmail if ENV['SMTP_ADDRESS'].blank?

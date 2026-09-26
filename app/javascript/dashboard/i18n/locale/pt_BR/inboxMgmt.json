@@ -728,6 +728,9 @@
       "SUBTITLE": "Defina seus dados IMAP",
       "NOTE_TEXT": "Para habilitar o SMTP, por favor configure o IMAP.",
       "UPDATE": "Atualizar configurações do IMAP",
+      "TEST_CONNECTION": "Testar conexão IMAP",
+      "TEST_SUCCESS": "Conexão IMAP validada com sucesso",
+      "TEST_ERROR": "Não foi possível validar a conexão IMAP",
       "TOGGLE_AVAILABILITY": "Habilitar a configuração IMAP para esta caixa de entrada",
       "TOGGLE_HELP": "Habilitar o IMAP ajudará o usuário a receber e-mail",
       "EDIT": {
@@ -760,6 +763,9 @@
       "TITLE": "SMTP",
       "SUBTITLE": "Defina seus detalhes do SMTP",
       "UPDATE": "Atualizar configurações de SMTP",
+      "TEST_CONNECTION": "Testar conexão SMTP",
+      "TEST_SUCCESS": "Conexão SMTP validada com sucesso",
+      "TEST_ERROR": "Não foi possível validar a conexão SMTP",
       "TOGGLE_AVAILABILITY": "Ativar a configuração SMTP para esta caixa de entrada",
       "TOGGLE_HELP": "Habilitar o SMTP ajudará o usuário a enviar e-mail",
       "EDIT": {

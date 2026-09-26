@@ -11,9 +11,26 @@ class Api::V1::Accounts::WhatsappGroupsController < Api::V1::Accounts::BaseContr
       scope = scope.where('whatsapp_groups.name ILIKE ?', query)
     end
     page = [params[:page].to_i, 1].max
-    render json: { groups: scope.order(Arel.sql('whatsapp_groups.last_activity_at DESC NULLS LAST, whatsapp_groups.id DESC'))
-                               .offset((page - 1) * 25).limit(25).map { |group| Whatsapp::Groups::Presenter.group(group, Current.user) },
-                   total: scope.count, page: page, per_page: 25 }
+    per_page = params[:per_page].to_i
+    per_page = 50 unless per_page.between?(1, 200)
+    user_id = Current.user.id.to_i
+    preference_join = ActiveRecord::Base.sanitize_sql_array([
+      'LEFT JOIN whatsapp_group_preferences current_group_preference ON current_group_preference.whatsapp_group_id = whatsapp_groups.id AND current_group_preference.user_id = ?',
+      user_id
+    ])
+    ordered = scope.joins(preference_join).order(
+      Arel.sql(
+        'COALESCE(current_group_preference.pinned, FALSE) DESC, ' \
+        'current_group_preference.pinned_at DESC NULLS LAST, ' \
+        'whatsapp_groups.last_activity_at DESC NULLS LAST, whatsapp_groups.id DESC'
+      )
+    )
+    render json: {
+      groups: ordered.offset((page - 1) * per_page).limit(per_page).map { |group| Whatsapp::Groups::Presenter.group(group, Current.user) },
+      total: scope.count,
+      page: page,
+      per_page: per_page
+    }
   end
 
   def show
@@ -30,13 +47,18 @@ class Api::V1::Accounts::WhatsappGroupsController < Api::V1::Accounts::BaseContr
   end
 
   def preference
-    values = params.require(:preference).permit(:muted, :read, :last_message_id).to_h
-    if values.key?('muted') && ![true, false].include?(values['muted'])
-      raise ActionController::BadRequest, 'muted must be boolean'
+    values = params.require(:preference).permit(:muted, :pinned, :read, :last_message_id).to_h
+    %w[muted pinned].each do |field|
+      next unless values.key?(field)
+      raise ActionController::BadRequest, "#{field} must be boolean" unless [true, false].include?(values[field])
     end
     preference = @group.whatsapp_group_preferences.find_or_create_by!(user: Current.user)
     preference.with_lock do
       preference.muted = values['muted'] if values.key?('muted')
+      if values.key?('pinned')
+        preference.pinned = values['pinned']
+        preference.pinned_at = values['pinned'] ? Time.current : nil
+      end
       if values['read'] == true
         last_seen = values['last_message_id'].present? ? @group.whatsapp_group_messages.find(values['last_message_id']).sent_at : Time.current
         preference.last_read_at = [preference.last_read_at || Time.at(0), last_seen].max

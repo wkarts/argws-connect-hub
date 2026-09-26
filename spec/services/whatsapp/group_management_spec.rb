@@ -137,6 +137,31 @@ RSpec.describe 'WhatsApp group management domain' do
     expect(Whatsapp::Groups::BroadcastFilter.for([agent.pubsub_token], 'message.created', message.push_event_data.merge(account_id: channel.account_id))).to be_empty
   end
 
+
+  it 'passes ActionCable payload as a positional hash on Ruby 3' do
+    message = group.whatsapp_group_messages.create!(
+      direction: 'incoming', status: 'received', source_id: 'BROADCAST-RUBY3',
+      content: 'Atualização', policy_version: group.policy_version, sent_at: Time.current
+    )
+    server = Class.new do
+      attr_reader :calls
+      def initialize
+        @calls = []
+      end
+      def broadcast(stream, payload)
+        @calls << [stream, payload]
+      end
+    end.new
+    allow(ActionCable).to receive(:server).and_return(server)
+
+    Whatsapp::Groups::BroadcastJob.perform_now(group.id, message.id)
+
+    expect(server.calls.length).to eq(1)
+    expect(server.calls.first.first).to eq(admin.pubsub_token)
+    expect(server.calls.first.last).to include(event: 'whatsapp_group.changed')
+    expect(server.calls.first.last[:data]).to include(group_id: group.id, message_id: message.id)
+  end
+
   it 'mutes alerts without stopping ingestion or changing the group policy' do
     group.whatsapp_group_preferences.create!(user: admin, muted: true)
     receiver.new(inbox: channel.inbox, params: group_envelope(group)).perform

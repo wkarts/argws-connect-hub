@@ -2,6 +2,7 @@
 import { mapGetters } from 'vuex';
 import { useAlert } from 'dashboard/composables';
 import SettingsSection from 'dashboard/components/SettingsSection.vue';
+import InboxesAPI from 'dashboard/api/inboxes';
 import { useVuelidate } from '@vuelidate/core';
 import { required, minLength } from '@vuelidate/validators';
 
@@ -26,6 +27,7 @@ export default {
       login: '',
       password: '',
       isSSLEnabled: true,
+      testingConnection: false,
     };
   },
   validations: {
@@ -61,6 +63,17 @@ export default {
       this.login = imap_login;
       this.password = imap_password;
       this.isSSLEnabled = imap_enable_ssl;
+    },
+    async testConnection() {
+      this.testingConnection = true;
+      try {
+        const { data } = await InboxesAPI.testEmailConnection(this.inbox.id, 'imap');
+        useAlert(data.ok ? this.$t('INBOX_MGMT.IMAP.TEST_SUCCESS') : data.error);
+      } catch (error) {
+        useAlert(error?.response?.data?.error || this.$t('INBOX_MGMT.IMAP.TEST_ERROR'));
+      } finally {
+        this.testingConnection = false;
+      }
     },
     async updateInbox() {
       try {
@@ -155,11 +168,22 @@ export default {
             {{ $t('INBOX_MGMT.IMAP.ENABLE_SSL') }}
           </label>
         </div>
-        <hub-submit-button
-          :button-text="$t('INBOX_MGMT.IMAP.UPDATE')"
-          :loading="uiFlags.isUpdatingIMAP"
-          :disabled="(v$.$invalid && isIMAPEnabled) || uiFlags.isUpdatingIMAP"
-        />
+        <div class="flex items-center gap-2">
+          <hub-submit-button
+            :button-text="$t('INBOX_MGMT.IMAP.UPDATE')"
+            :loading="uiFlags.isUpdatingIMAP"
+            :disabled="(v$.$invalid && isIMAPEnabled) || uiFlags.isUpdatingIMAP"
+          />
+          <hub-button
+            v-if="isIMAPEnabled"
+            type="button"
+            variant="clear"
+            :disabled="testingConnection || uiFlags.isUpdatingIMAP"
+            @click="testConnection"
+          >
+            {{ $t('INBOX_MGMT.IMAP.TEST_CONNECTION') }}
+          </hub-button>
+        </div>
       </form>
     </SettingsSection>
   </div>

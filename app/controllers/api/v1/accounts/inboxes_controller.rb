@@ -26,6 +26,29 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
     head :ok
   end
 
+  def test_email_connection
+    raise Pundit::NotAuthorizedError unless Current.account_user&.administrator?
+    raise ActiveRecord::RecordNotFound unless @inbox.inbox_type == 'Email'
+
+    result = EmailChannel::ConnectionProbe.new(@inbox.channel).perform(params[:kind])
+    render json: result
+  rescue ArgumentError => e
+    render json: { ok: false, error: e.message }, status: :unprocessable_entity
+  rescue *ExceptionList::IMAP_EXCEPTIONS, Net::OpenTimeout, Net::ReadTimeout,
+         Net::IMAP::Error, Net::SMTPError, OpenSSL::SSL::SSLError,
+         SocketError, Errno::ECONNREFUSED, Errno::EHOSTUNREACH => e
+    HubDiagnostics::Recorder.emit(
+      'email.connection_probe_failed',
+      level: 'warn',
+      component: 'email',
+      account_id: Current.account.id,
+      inbox_id: @inbox.id,
+      kind: params[:kind].to_s,
+      exception_class: e.class.name
+    ) if defined?(HubDiagnostics::Recorder)
+    render json: { ok: false, error: "#{e.class}: #{e.message}".first(500) }, status: :bad_gateway
+  end
+
   def create
     ActiveRecord::Base.transaction do
       channel = create_channel

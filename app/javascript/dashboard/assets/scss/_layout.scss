@@ -45,3 +45,54 @@ body {
     }
   }
 }
+
+
+/* HUB scrollbars: visible only when useful, never as a visual divider. */
+.hub-scrollbar,
+.app-wrapper * {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+.hub-scrollbar:hover,
+.app-wrapper *:hover {
+  scrollbar-color: rgb(100 116 139 / 0.28) transparent;
+}
+
+.hub-scrollbar::-webkit-scrollbar,
+.app-wrapper *::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+.hub-scrollbar::-webkit-scrollbar-track,
+.app-wrapper *::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.hub-scrollbar::-webkit-scrollbar-thumb,
+.app-wrapper *::-webkit-scrollbar-thumb {
+  min-height: 28px;
+  border-radius: 999px;
+  background: transparent;
+}
+
+.hub-scrollbar:hover::-webkit-scrollbar-thumb,
+.app-wrapper *:hover::-webkit-scrollbar-thumb {
+  background: rgb(100 116 139 / 0.24);
+}
+
+.hub-scrollbar::-webkit-scrollbar-thumb:hover,
+.app-wrapper *::-webkit-scrollbar-thumb:hover {
+  background: rgb(100 116 139 / 0.4);
+}
+
+body.dark .hub-scrollbar:hover,
+body.dark .app-wrapper *:hover {
+  scrollbar-color: rgb(148 163 184 / 0.25) transparent;
+}
+
+body.dark .hub-scrollbar:hover::-webkit-scrollbar-thumb,
+body.dark .app-wrapper *:hover::-webkit-scrollbar-thumb {
+  background: rgb(148 163 184 / 0.22);
+}

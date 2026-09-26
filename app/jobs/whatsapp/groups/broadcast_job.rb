@@ -12,15 +12,28 @@ module Whatsapp::Groups
       recipient_ids = users.ids | Array(former_user_ids)
       message = group&.whatsapp_group_messages&.find_by(id: message_id)
       User.where(id: recipient_ids).find_each do |user|
+        token = user.pubsub_token.to_s.presence
+        next unless token
+
         # Recheck at delivery, not only when the job was queued. Invalidation
         # contains no message, participant, group name or attachment URL.
         allowed = group ? group.allowed?(user) && group.active? : true
         notify = new_message && allowed && message && !message.historical? && !message.outgoing? &&
                  !WhatsappGroupPreference.where(whatsapp_group_id: group.id, user_id: user.id, muted: true).exists?
-        ActionCable.server.broadcast(user.pubsub_token, event: 'whatsapp_group.changed', data: {
-          account_id: inbox.account_id, inbox_id: inbox.id, group_id: group&.id, message_id: allowed ? message&.id : nil,
-          invalidated: (invalidate.nil? ? message_id.nil? : invalidate) || !allowed, notify: !!notify
-        })
+        payload = {
+          event: 'whatsapp_group.changed',
+          data: {
+            account_id: inbox.account_id,
+            inbox_id: inbox.id,
+            group_id: group&.id,
+            message_id: allowed ? message&.id : nil,
+            invalidated: (invalidate.nil? ? message_id.nil? : invalidate) || !allowed,
+            notify: !!notify
+          }
+        }
+        # Ruby 3 treats event:/data: as keywords. ActionCable#broadcast expects
+        # the payload as its second positional argument.
+        ActionCable.server.broadcast(token, payload)
       end
     end
   end

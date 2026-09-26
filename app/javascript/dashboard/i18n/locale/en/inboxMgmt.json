@@ -734,6 +734,9 @@
       "SUBTITLE": "Set your IMAP details",
       "NOTE_TEXT": "To enable SMTP, please configure IMAP.",
       "UPDATE": "Update IMAP settings",
+      "TEST_CONNECTION": "Test IMAP connection",
+      "TEST_SUCCESS": "IMAP connection validated successfully",
+      "TEST_ERROR": "Could not validate the IMAP connection",
       "TOGGLE_AVAILABILITY": "Enable IMAP configuration for this inbox",
       "TOGGLE_HELP": "Enabling IMAP will help the user to receive email",
       "EDIT": {
@@ -766,6 +769,9 @@
       "TITLE": "SMTP",
       "SUBTITLE": "Set your SMTP details",
       "UPDATE": "Update SMTP settings",
+      "TEST_CONNECTION": "Test SMTP connection",
+      "TEST_SUCCESS": "SMTP connection validated successfully",
+      "TEST_ERROR": "Could not validate the SMTP connection",
       "TOGGLE_AVAILABILITY": "Enable SMTP configuration for this inbox",
       "TOGGLE_HELP": "Enabling SMTP will help the user to send email",
       "EDIT": {
