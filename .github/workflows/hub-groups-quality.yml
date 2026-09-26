@@ -1,0 +1,86 @@
+name: HUB WhatsApp Groups Quality
+
+on:
+  push:
+    branches: [develop]
+  pull_request:
+    branches: [develop]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  groups-static:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: yarn
+      - name: Install locked frontend dependencies
+        run: yarn install --frozen-lockfile --ignore-scripts --network-timeout 120000
+      - name: Group management frontend contracts
+        run: |
+          node --test ./scripts/test-group-management.mjs
+          node --experimental-vm-modules --test ./scripts/test-group-client-runtime.mjs
+          node ./scripts/check-workspace-vue.cjs
+          yarn test app/javascript/dashboard/components/workspace/specs/groupManagement.spec.js app/javascript/dashboard/components/workspace/specs/whatsappGroups.spec.js
+
+  groups-runtime:
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: hub_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d hub_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      RAILS_ENV: test
+      NODE_ENV: test
+      FRONTEND_URL: http://localhost:3000
+      SECRET_KEY_BASE: hub-ci-groups-secret-key-base
+      POSTGRES_HOST: 127.0.0.1
+      POSTGRES_PORT: '5432'
+      POSTGRES_DATABASE: hub_test
+      POSTGRES_USERNAME: postgres
+      POSTGRES_PASSWORD: postgres
+      REDIS_URL: redis://127.0.0.1:6379
+      REDIS_PASSWORD: ''
+      ENABLE_ACCOUNT_SIGNUP: 'false'
+      BUNDLE_WITHOUT: development
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3.10'
+          bundler-cache: true
+      - name: Prepare database
+        run: bundle exec rails db:prepare
+      - name: Isolated group contracts
+        run: ruby ./scripts/test-group-isolated-runtime.rb
+      - name: Group backend regression specs
+        run: >-
+          bundle exec rspec
+          spec/services/whatsapp/connect_api_groups_spec.rb
+          spec/requests/whatsapp_groups_spec.rb
+          spec/services/whatsapp/group_management_spec.rb
+          spec/requests/whatsapp_group_management_spec.rb
