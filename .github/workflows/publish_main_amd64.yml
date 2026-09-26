@@ -181,6 +181,13 @@ jobs:
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.x'
+      - name: Refuse rebuilding permanent canonical releases
+        env:
+          VERSION: ${{ needs.plan.outputs.version }}
+        run: node ./scripts/canonical-releases.mjs publish "$VERSION"
       - name: Resolve content-addressed HUB bases
         id: bases
         env:
@@ -193,6 +200,10 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Verify permanent canonical sources and images before publishing
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash ./scripts/verify-canonical-releases.sh
       - name: Wait for immutable HUB bases
         env:
           DEPS_BASE: ${{ steps.bases.outputs.deps_image }}
