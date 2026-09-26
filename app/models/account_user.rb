@@ -38,6 +38,7 @@ class AccountUser < ApplicationRecord
   after_create_commit :notify_creation, :create_notification_setting
   after_destroy :notify_deletion, :remove_user_from_account
   after_save :update_presence_in_redis, if: :saved_change_to_availability?
+  after_commit :invalidate_whatsapp_group_access, on: [:create, :update, :destroy]
 
   validates :user_id, uniqueness: { scope: :account_id }
 
@@ -66,6 +67,12 @@ class AccountUser < ApplicationRecord
   end
 
   private
+
+  def invalidate_whatsapp_group_access
+    return unless destroyed? || previous_changes.key?('id') || previous_changes.key?('role') || previous_changes.key?('custom_role_id')
+    return unless WhatsappGroup.where(account_id: account_id).exists?
+    Whatsapp::Groups::AccessChangedJob.perform_later(account_id, user_id)
+  end
 
   def notify_creation
     Rails.configuration.dispatcher.dispatch(AGENT_ADDED, Time.zone.now, account: account)

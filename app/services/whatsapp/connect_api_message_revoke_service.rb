@@ -25,6 +25,10 @@ class Whatsapp::ConnectApiMessageRevokeService
   def perform!
     raise Error, 'Esta mensagem não pode ser apagada no WhatsApp.' unless self.class.applicable?(@message)
 
+    if @message.conversation.whatsapp_group? && !@channel.groups_enabled?
+      raise Error, 'Grupos de WhatsApp estão desabilitados nesta caixa de entrada.'
+    end
+
     key = provider_message_key
     raise Error, 'Não foi possível identificar a mensagem correspondente no WhatsApp.' if key['remoteJid'].blank?
 
@@ -137,6 +141,8 @@ class Whatsapp::ConnectApiMessageRevokeService
   end
 
   def fallback_remote_jid
+    return @message.conversation.contact_inbox.source_id if @message.conversation.whatsapp_group?
+
     aliases = Array(@message.conversation.contact.additional_attributes.to_h.dig('connect_api', 'aliases')).map(&:to_s)
     direct_alias = aliases.find { |value| value.match?(/@(s\.whatsapp\.net|c\.us)\z/i) }
     return direct_alias if direct_alias.present?

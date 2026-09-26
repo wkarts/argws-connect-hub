@@ -1,3 +1,4 @@
+json.whatsapp_groups_enabled(resource.whatsapp? && resource.channel.groups_enabled?)
 json.id resource.id
 json.avatar_url resource.try(:avatar_url)
 json.channel_id resource.channel_id

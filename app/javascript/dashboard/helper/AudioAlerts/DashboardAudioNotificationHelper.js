@@ -61,7 +61,7 @@ class DashboardAudioNotificationHelper {
       status: 'open',
     });
     const hasUnreadConversation = mineConversation.some(conv => {
-      return conv.unread_count > 0;
+      return conv.unread_count > 0 && !conv.muted;
     });
 
     const shouldPlayAlert = !this.playAlertOnlyWhenHidden || document.hidden;
@@ -119,7 +119,16 @@ class DashboardAudioNotificationHelper {
     return this.audioAlertType === 'all';
   };
 
+  onGroupMessage = data => {
+    if (this.audioAlertType !== 'all') return;
+    if (this.playAlertOnlyWhenHidden && !document.hidden) return;
+    if (!document.hidden && Number(window.HUB?.$route?.query?.groupId) === Number(data.group_id)) return;
+    if (typeof window.playAudioAlert === 'function') window.playAudioAlert();
+    showBadgeOnFavicon();
+  };
+
   onNewMessage = message => {
+    if (message.muted === true || message.conversation?.muted === true) return;
     // If the message is sent by the current user or the
     // correct notification is not enabled, then dismiss the alert
     if (

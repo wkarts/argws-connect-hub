@@ -6,6 +6,7 @@ const state = {
   mineCount: 0,
   unAssignedCount: 0,
   allCount: 0,
+  groupCount: 0,
 };
 
 export const getters = {
@@ -36,8 +37,10 @@ export const mutations = {
       mine_count: mineCount,
       unassigned_count: unAssignedCount,
       all_count: allCount,
+      group_count: groupCount = 0,
     } = {}
   ) {
+    Vue.set($state, 'groupCount', groupCount);
     Vue.set($state, 'mineCount', mineCount);
     Vue.set($state, 'allCount', allCount);
     Vue.set($state, 'unAssignedCount', unAssignedCount);

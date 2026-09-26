@@ -24,7 +24,13 @@ class Whatsapp::IncomingMessageConnectApiReliableService < Whatsapp::IncomingMes
   private
   def find_message_by_source_id(source_id)
     return if source_id.blank?
-    @message = Message.find_by(account_id: inbox.account_id, inbox_id: inbox.id, source_id: source_id.to_s)
+    scope = Message.where(account_id: inbox.account_id, inbox_id: inbox.id, source_id: source_id.to_s)
+    jid = @processed_params&.dig(:messages, 0, :connect_api, :remote_jid).presence || @processed_params&.dig(:contacts, 0, :group_id).presence || @processed_params&.dig(:statuses, 0, :connect_api, :remote_jid).presence || @processed_params&.dig(:statuses, 0, :recipient_id)
+    if jid.to_s.match?(WhatsappGroup::JID_PATTERN)
+      contact_ids = ContactInbox.where(inbox_id: inbox.id, source_id: jid).select(:id)
+      scope = scope.where(conversation_id: inbox.conversations.where(contact_inbox_id: contact_ids).select(:id))
+    end
+    @message = scope.first
   end
   def process_messages
     source_id = @processed_params.dig(:messages, 0, :id).to_s
@@ -145,3 +151,5 @@ class Whatsapp::IncomingMessageConnectApiReliableService < Whatsapp::IncomingMes
     }.merge(attributes))
   end
 end
+
+Whatsapp::IncomingMessageConnectApiReliableService.prepend(Whatsapp::Groups::Incoming)

@@ -1,11 +1,15 @@
+import { readWorkspaceSession, writeWorkspaceSession, restoredApplications } from 'dashboard/helper/workspaceSession.mjs';
 import api from 'dashboard/api/workspaceApps';
 import { reconcileWorkspaceTabs, safeApplicationUrl, workspaceScope } from 'dashboard/helper/workspaceApps.mjs';
 
 export const createState = () => ({
-  scope: '', epoch: 0, accountId: null, apps: [], tabs: [], activeId: null,
+  scope: '', sessionRestored: false, epoch: 0, accountId: null, apps: [], tabs: [], activeId: null,
   contextMenu: null, pendingAction: null,
   launcherOpen: false, loading: false, failed: false, requestId: 0, openRequestId: 0, sequence: 0,
 });
+
+const storage = () => { try { return window.localStorage; } catch (_) { return null; } };
+const persist = state => writeWorkspaceSession(storage(), state);
 
 export const mutations = {
   reset(state, { accountId, userId } = {}) {
@@ -16,11 +20,24 @@ export const mutations = {
   loading(state) { state.loading = true; state.failed = false; state.requestId += 1; },
   failed(state) { state.loading = false; state.failed = true; },
   catalog(state, apps) {
+    // Do not restore until this company/user has received an authorized list.
+    if (!state.sessionRestored) {
+      const snapshot = readWorkspaceSession(storage(), state.scope);
+      const existingIds = new Set(state.tabs.map(tab => tab.id));
+      restoredApplications(snapshot, apps).forEach(app => {
+        if (existingIds.has(app.id)) return;
+        state.sequence += 1;
+        state.tabs.push({ id: app.id, key: `${state.scope}:${app.id}:${state.sequence}`, app });
+      });
+      if (state.activeId === null && state.openRequestId === 0 && state.tabs.some(tab => tab.id === snapshot?.activeId)) state.activeId = snapshot.activeId;
+      state.sessionRestored = true;
+    }
     state.apps = apps;
     state.tabs = reconcileWorkspaceTabs(state.tabs, apps);
     if (!state.tabs.some(tab => tab.id === state.activeId)) state.activeId = null;
     state.loading = false;
     state.failed = false;
+    persist(state);
   },
   context(state, value) {
     state.contextMenu = value && state.tabs.some(tab => tab.id === value.id) ? value : null;
@@ -34,9 +51,10 @@ export const mutations = {
     state.tabs = state.tabs.filter(tab => tab.id === id);
     if (state.activeId !== null) state.activeId = id;
     state.openRequestId += 1;
+    persist(state);
   },
   launcher(state, value) { state.launcherOpen = value; },
-  deactivate(state) { state.contextMenu = null; state.pendingAction = null; state.activeId = null; state.launcherOpen = false; state.openRequestId += 1; },
+  deactivate(state) { state.contextMenu = null; state.pendingAction = null; state.activeId = null; state.launcherOpen = false; state.openRequestId += 1; persist(state); },
   opening(state) { state.openRequestId += 1; state.launcherOpen = false; },
   open(state, app) {
     const previous = state.tabs.find(tab => tab.id === app.id);
@@ -48,11 +66,13 @@ export const mutations = {
       state.tabs.push({ id: app.id, key: `${state.scope}:${app.id}:${state.sequence}`, app });
     }
     state.activeId = app.id;
+    persist(state);
   },
   close(state, id) {
     state.tabs = state.tabs.filter(tab => tab.id !== id);
     if (state.activeId === id) state.activeId = state.tabs.length ? state.tabs[state.tabs.length - 1].id : null;
     state.openRequestId += 1;
+    persist(state);
   },
   reload(state, id) {
     const tab = state.tabs.find(item => item.id === id);

@@ -12,6 +12,7 @@ class Whatsapp::ConnectApiOpeningMessageValidator
     return if campaign_freeform_message?
 
     params = @message.additional_attributes.to_h['template_params']
+    return if @message.conversation.whatsapp_group? && params.blank?
     opening = opening_message?
     return if !opening && params.blank?
 

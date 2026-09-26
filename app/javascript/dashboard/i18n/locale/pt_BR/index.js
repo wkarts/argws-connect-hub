@@ -35,9 +35,13 @@ import general from './general.json';
 import datePicker from './datePicker.json';
 
 import workspaceApps from './workspaceApps.json';
+import whatsappGroups from './whatsappGroups.json';
+import groupManagement from './groupManagement.json';
 
 export default {
   ...workspaceApps,
+  ...whatsappGroups,
+  ...groupManagement,
   ...advancedFilters,
   ...agentBots,
   ...agentMgmt,

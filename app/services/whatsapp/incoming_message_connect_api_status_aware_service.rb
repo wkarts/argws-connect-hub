@@ -61,3 +61,5 @@ class Whatsapp::IncomingMessageConnectApiStatusAwareService < Whatsapp::Incoming
     SUCCESS_STATUS_RANK.fetch(current_status, 0) >= SUCCESS_STATUS_RANK.fetch('delivered')
   end
 end
+
+Whatsapp::IncomingMessageConnectApiStatusAwareService.prepend(Whatsapp::Groups::Incoming)

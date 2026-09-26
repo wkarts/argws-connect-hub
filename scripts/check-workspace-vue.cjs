@@ -4,6 +4,9 @@ const compiler = require('vue-template-compiler');
 const root = 'app/javascript/dashboard/';
 const files = [
   'App.vue', 'components/layout/Sidebar.vue',
+  'components/ChatList.vue', 'components/widgets/ChatTypeTabs.vue', 'routes/dashboard/conversation/ConversationView.vue',
+  'routes/dashboard/settings/inbox/Settings.vue', 'routes/dashboard/settings/inbox/settingsPage/WhatsappGroupSettings.vue',
+  ...fs.readdirSync(`${root}components/whatsappGroups`).filter(name => name.endsWith('.vue')).map(name => `components/whatsappGroups/${name}`),
   'components/layout/sidebarComponents/Primary.vue',
   'components/layout/sidebarComponents/PrimaryNavItem.vue',
   'components/widgets/forms/AvatarUploader.vue',

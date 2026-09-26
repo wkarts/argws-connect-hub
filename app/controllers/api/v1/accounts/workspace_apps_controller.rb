@@ -4,6 +4,7 @@ class Api::V1::Accounts::WorkspaceAppsController < Api::V1::Accounts::BaseContro
   before_action :fetch_app, only: [:show, :update, :destroy, :credential, :forget_credential, :launch, :diagnose]
   before_action :require_interactive_user, only: [:credential, :forget_credential, :launch, :diagnose]
   before_action :disable_caching
+  around_action :record_application_write, only: [:create, :update]
 
   def index
     apps = Current.account.workspace_apps.where(enabled: true).with_attached_icon.ordered
@@ -99,6 +100,16 @@ class Api::V1::Accounts::WorkspaceAppsController < Api::V1::Accounts::BaseContro
   end
 
   private
+
+  def record_application_write
+    context = { component: 'workspace_apps', account_id: Current.account.id, request_id: request.request_id, action: action_name }
+    yield
+    HubDiagnostics::Recorder.emit('workspace.write_finished', context.merge(http_status: response.status, level: response.status >= 400 ? 'error' : 'info'))
+  rescue StandardError => error
+    fields = error.is_a?(ActiveRecord::RecordInvalid) ? error.record.errors.attribute_names.map(&:to_s) : []
+    HubDiagnostics::Recorder.emit('workspace.write_failed', context.merge(level: 'error', exception_class: error.class.name, details: fields))
+    raise
+  end
 
   def require_membership
     render json: { error: 'forbidden' }, status: :forbidden unless Current.account_user && Current.user

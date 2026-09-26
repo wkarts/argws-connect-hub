@@ -56,6 +56,8 @@ class Inbox < ApplicationRecord
   validates :greeting_message, length: { maximum: Limits::GREETING_MESSAGE_MAX_LENGTH }
   validate :ensure_valid_max_assignment_limit
 
+  has_many :whatsapp_groups, dependent: :destroy
+  has_one :whatsapp_group_setting, dependent: :destroy
   belongs_to :account
   belongs_to :portal, optional: true
 

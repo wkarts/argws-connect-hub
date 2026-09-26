@@ -223,7 +223,7 @@ export default {
           :conversation-id="currentChat.id"
         />
         <ConnectApiCallPanel
-          v-if="inbox"
+          v-if="inbox && !currentChat.is_group"
           :conversation-id="currentChat.id"
           :inbox="callInbox"
           :contact="currentContact"

@@ -25,7 +25,7 @@ class SearchService
   end
 
   def filter_conversations
-    @conversations = current_account.conversations.where(inbox_id: accessable_inbox_ids)
+    @conversations = Whatsapp::Groups::Access.filter_conversations(current_account.conversations, current_user, current_account).where(inbox_id: accessable_inbox_ids)
                                     .joins('INNER JOIN contacts ON conversations.contact_id = contacts.id')
                                     .where("cast(conversations.display_id as text) ILIKE :search OR contacts.name ILIKE :search OR contacts.email
                             ILIKE :search OR contacts.phone_number ILIKE :search OR contacts.identifier ILIKE :search", search: "%#{search_query}%")
@@ -35,6 +35,7 @@ class SearchService
 
   def filter_messages
     @messages = current_account.messages.where(inbox_id: accessable_inbox_ids)
+                               .where(conversation_id: Whatsapp::Groups::Access.filter_conversations(current_account.conversations, current_user, current_account).select(:id))
                                .where('messages.content ILIKE :search', search: "%#{search_query}%")
                                .where('created_at >= ?', 3.months.ago)
                                .reorder('created_at DESC')
@@ -42,7 +43,7 @@ class SearchService
   end
 
   def filter_contacts
-    @contacts = current_account.contacts.where(
+    @contacts = Whatsapp::Groups::Access.filter_contacts(current_account.contacts, current_user, current_account).where(
       "name ILIKE :search OR email ILIKE :search OR phone_number
       ILIKE :search OR identifier ILIKE :search", search: "%#{search_query}%"
     ).resolved_contacts.order_on_last_activity_at('desc').limit(10)

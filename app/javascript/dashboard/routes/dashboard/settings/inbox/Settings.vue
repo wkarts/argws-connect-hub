@@ -34,6 +34,7 @@ export default {
     SenderNameExamplePreview,
     MicrosoftReauthorize,
     ConnectApiConfiguration,
+    WhatsappGroupSettings: () => import('./settingsPage/WhatsappGroupSettings.vue'),
   },
   mixins: [inboxMixin],
   setup() {
@@ -127,6 +128,7 @@ export default {
             key: 'connectApiConfiguration',
             name: this.$t('INBOX_MGMT.TABS.CONNECT_API_CONFIGURATION'),
           },
+          { key: 'whatsappGroups', name: this.$t('GROUP_MANAGEMENT.TITLE') },
         ];
       }
 
@@ -801,6 +803,7 @@ export default {
     <div v-if="selectedTabKey === 'botConfiguration'">
       <BotConfiguration :inbox="inbox" />
     </div>
+    <WhatsappGroupSettings v-if="selectedTabKey === 'whatsappGroups'" :inbox="inbox" />
     <div v-if="selectedTabKey === 'connectApiConfiguration'">
       <connect-api-configuration :inbox="inbox" />
     </div>

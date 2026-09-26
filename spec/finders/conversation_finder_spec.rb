@@ -100,7 +100,8 @@ describe ConversationFinder do
                                        mine_count: 2,
                                        assigned_count: 3,
                                        unassigned_count: 1,
-                                       all_count: 4
+                                       all_count: 4,
+                                       group_count: 0
                                      })
       end
     end

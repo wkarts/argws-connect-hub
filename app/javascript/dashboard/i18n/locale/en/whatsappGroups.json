@@ -1,0 +1,8 @@
+{
+  "WHATSAPP_GROUPS": {
+    "ENABLE": "Enable WhatsApp groups",
+    "HELP": "Disabled by default. Enables group messages and the Groups tab for this inbox. Disabling does not delete history.",
+    "ENABLED": "Groups enabled for this inbox.",
+    "DISABLED": "Groups disabled for this inbox."
+  }
+}

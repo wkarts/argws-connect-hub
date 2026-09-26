@@ -2,6 +2,7 @@ class Webhooks::WhatsappEventsJob < ApplicationJob
   queue_as :low
   self.log_arguments = false
   retry_on ActiveRecord::RecordNotFound, wait: 30.seconds, attempts: 5
+  retry_on HubDiagnostics::BindingBusy, wait: 5.seconds, attempts: 24
 
   def perform(params = {})
     channel = find_channel_from_whatsapp_business_payload(params)

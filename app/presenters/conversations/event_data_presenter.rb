@@ -7,6 +7,8 @@ class Conversations::EventDataPresenter < SimpleDelegator
       contact_inbox: contact_inbox,
       id: display_id,
       inbox_id: inbox_id,
+      is_group: whatsapp_group?,
+      whatsapp_group_id: Whatsapp::Groups::Access.group_for(self)&.id,
       messages: push_messages,
       labels: label_list,
       meta: push_meta,

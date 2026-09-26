@@ -151,6 +151,7 @@ class Api::V1::Accounts::ConversationsController < Api::V1::Accounts::BaseContro
   def conversation
     @conversation ||= Current.account.conversations.find_by!(display_id: params[:id])
     authorize @conversation.inbox, :show?
+    Whatsapp::Groups::Access.assert_conversation!(@conversation, Current.user, write: !request.get?)
   end
 
   def inbox
@@ -174,6 +175,10 @@ class Api::V1::Accounts::ConversationsController < Api::V1::Accounts::BaseContro
     # and deprecate the support of passing only source_id as the param
     @contact_inbox ||= ::ContactInbox.find_by!(source_id: params[:source_id])
     authorize @contact_inbox.inbox, :show?
+    if @contact_inbox.source_id.to_s.match?(WhatsappGroup::JID_PATTERN) && @contact_inbox.inbox.whatsapp? && @contact_inbox.inbox.channel.provider == 'connectapi'
+      group = WhatsappGroup.discover!(@contact_inbox.inbox, @contact_inbox.source_id)
+      raise Pundit::NotAuthorizedError unless group.allowed?(Current.user) && group.active? && !group.management?
+    end
   rescue ActiveRecord::RecordNotUnique
     render json: { error: 'source_id should be unique' }, status: :unprocessable_entity
   end

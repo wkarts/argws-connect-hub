@@ -9,6 +9,12 @@ const collect = dir => fs.readdirSync(dir, { withFileTypes: true }).flatMap(entr
   return entry.isDirectory() ? collect(file) : [file];
 });
 const files = [
+  `${root}/api/whatsappGroups.js`, `${root}/helper/whatsappGroups.mjs`, `${root}/helper/actionCable.js`,
+  `${root}/helper/AudioAlerts/DashboardAudioNotificationHelper.js`, `${root}/components/ChatList.vue`,
+  `${root}/routes/dashboard/conversation/ConversationView.vue`, `${root}/routes/dashboard/settings/inbox/Settings.vue`,
+  `${root}/routes/dashboard/settings/inbox/settingsPage/WhatsappGroupSettings.vue`,
+  `${root}/store/modules/conversations/index.js`, `${root}/store/modules/notifications/mutations.js`,
+  ...collect(`${root}/components/whatsappGroups`),
   'public/workspace-navigation-bridge.js', `${root}/helper/workspacePresentation.mjs`, `${root}/helper/workspaceNavigation.mjs`,
   `${root}/App.vue`, `${root}/api/workspaceApps.js`, `${root}/helper/workspaceApps.mjs`,
   `${root}/store/index.js`, `${root}/store/modules/workspaceApps.js`,

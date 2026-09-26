@@ -13,7 +13,9 @@ class InboxPolicy < ApplicationPolicy
     def resolve
       return scope if account_user&.administrator?
 
-      scope.where(id: user.assigned_inboxes.where(account_id: account.id).select(:id))
+      # Resolve from the explicit policy context, including background jobs.
+      # User#assigned_inboxes depends on Current.account from an HTTP request.
+      scope.where(id: user.inboxes.where(account_id: account.id).select(:id))
     end
   end
 

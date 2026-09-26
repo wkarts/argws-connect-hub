@@ -32,6 +32,8 @@ Rails.application.routes.draw do
   get '/api', to: 'api#index'
   namespace :api, defaults: { format: 'json' } do
     namespace :v1 do
+      get 'group_files/:account_id/:group_id/:domain/:message_id/:attachment_id/*filename',
+          to: 'group_files#show', format: false
       # ----------------------------------
       # start of account scoped api routes
       resources :accounts, only: [:create, :show, :update] do
@@ -183,6 +185,22 @@ Rails.application.routes.draw do
             post :set_agent_bot, on: :member
             delete :avatar, on: :member
           end
+          resources :whatsapp_groups, only: [:index, :show] do
+            get :legacy_messages, on: :member
+            patch :preference, on: :member
+            resources :messages, only: [:index, :show, :create, :destroy], controller: 'whatsapp_group_messages' do
+              post :cancel, on: :member
+            end
+          end
+          resources :inboxes, only: [] do
+            resource :whatsapp_group_settings, only: [:show, :update] do
+              post :sync
+              patch :bulk_update
+              patch 'groups/:group_id', action: :update_group
+              post 'groups/:group_id/replay', action: :replay
+            end
+          end
+
           resources :inbox_members, only: [:create, :show], param: :inbox_id do
             collection do
               delete :destroy

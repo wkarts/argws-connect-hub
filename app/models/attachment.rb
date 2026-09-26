@@ -52,6 +52,7 @@ class Attachment < ApplicationRecord
 
   # NOTE: the URl returned does a 301 redirect to the actual file
   def file_url
+    return protected_group_file_url if protected_group_file_url.present?
     file.attached? ? url_for(file) : ''
   end
 
@@ -62,6 +63,7 @@ class Attachment < ApplicationRecord
   end
 
   def thumb_url
+    return "#{protected_group_file_url}?thumb=1" if protected_group_file_url.present?
     if file.attached? && file.representable?
       url_for(file.representation(resize_to_fill: [250, nil]))
     else
@@ -70,6 +72,13 @@ class Attachment < ApplicationRecord
   end
 
   private
+
+  def protected_group_file_url
+    return unless file.attached?
+    group = Whatsapp::Groups::Access.group_for(message.conversation)
+    return unless group
+    "#{ENV.fetch('FRONTEND_URL', '').delete_suffix('/')}/api/v1/group_files/#{account_id}/#{group.id}/conversation/#{message_id}/#{id}/#{ERB::Util.url_encode(file.filename.to_s)}"
+  end
 
   def file_metadata
     metadata = {
