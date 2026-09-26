@@ -77,6 +77,15 @@ Rails.application.routes.draw do
           resources :custom_roles, only: [:index, :create, :show, :update, :destroy]
           resources :campaigns, only: [:index, :create, :show, :update, :destroy]
           resources :dashboard_apps, only: [:index, :show, :create, :update, :destroy]
+          resources :workspace_apps, only: [:index, :show, :create, :update, :destroy] do
+            get :manage, on: :collection
+            member do
+              get :credential
+              delete :credential, action: :forget_credential
+              post :launch
+              post :diagnose
+            end
+          end
           namespace :channels do
             resource :twilio_channel, only: [:create]
           end
@@ -120,6 +129,8 @@ Rails.application.routes.draw do
               get :attachments
             end
           end
+
+          resource :link_preview, only: [:show]
 
           resources :search, only: [:index] do
             collection do
@@ -508,10 +519,26 @@ Rails.application.routes.draw do
       resources :platform_apps, only: [:index, :new, :create, :show, :edit, :update]
       resource :instance_status, only: [:show]
 
+      resource :diagnostics, only: [:show], controller: 'diagnostics' do
+        get :download
+        post :start_capture
+        post :stop_capture
+        post :replay_status
+      end
+      resource :connect_api_binding, only: [:show, :create], controller: 'connect_api_bindings' do
+        post :preview
+        post :recover
+      end
+
+      resource :connect_api_reconciliation, only: [:show, :create], controller: 'connect_api_reconciliations' do
+        post :import_all
+      end
+
       resource :connect_api, only: [:show], controller: 'connect_api' do
         post :instance_action
         post :migrate_provider
         post :update_voip_limit
+        post :verify_realtime
       end
 
       resource :settings, only: [:show] do

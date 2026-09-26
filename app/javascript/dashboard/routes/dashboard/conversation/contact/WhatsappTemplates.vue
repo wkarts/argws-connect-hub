@@ -11,6 +11,10 @@ export default {
       type: Number,
       default: undefined,
     },
+    variables: {
+      type: Object,
+      default: () => ({}),
+    },
   },
   data() {
     return {
@@ -50,6 +54,7 @@ export default {
     <TemplateParser
       v-else
       :template="selectedWaTemplate"
+      :variables="variables"
       @resetTemplate="onResetTemplate"
       @sendMessage="onSendMessage"
     />

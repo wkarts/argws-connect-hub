@@ -6,6 +6,8 @@ import keyboardEventListenerMixins from 'shared/mixins/keyboardEventListenerMixi
 
 import CannedResponse from './CannedResponse.vue';
 import ReplyToMessage from './ReplyToMessage.vue';
+import LinkPreviewCard from './LinkPreviewCard.vue';
+import LinkPreviewAPI from 'dashboard/api/linkPreview';
 import ResizableTextArea from 'shared/components/ResizableTextArea.vue';
 import AttachmentPreview from 'dashboard/components/widgets/AttachmentsPreview.vue';
 import ReplyTopPanel from 'dashboard/components/widgets/HubWriter/ReplyTopPanel.vue';
@@ -23,6 +25,7 @@ import {
   getMessageVariables,
   getUndefinedVariablesInMessage,
   replaceVariablesInMessage,
+  resolveTemplateVariables,
 } from '@hub/utils';
 import WhatsappTemplates from './WhatsappTemplates/Modal.vue';
 import { MESSAGE_MAX_LENGTH } from 'shared/helpers/MessageTypeHelper';
@@ -47,6 +50,7 @@ export default {
     EmojiInput,
     CannedResponse,
     ReplyToMessage,
+    LinkPreviewCard,
     ResizableTextArea,
     AttachmentPreview,
     ReplyTopPanel,
@@ -108,6 +112,14 @@ export default {
       showVariablesMenu: false,
       newConversationModalActive: false,
       showArticleSearchPopover: false,
+      linkPreview: null,
+      linkPreviewToken: '',
+      linkPreviewLoading: false,
+      linkPreviewUrl: '',
+      linkPreviewAttemptedUrl: '',
+      linkPreviewDismissedUrl: '',
+      linkPreviewTimer: null,
+      linkPreviewRequestId: 0,
     };
   },
   computed: {
@@ -130,6 +142,15 @@ export default {
         !this.isPrivate &&
         this.inboxHasFeature(INBOX_FEATURES.REPLY_TO) &&
         !this.is360DialogWhatsAppChannel
+      );
+    },
+    canPreviewLinks() {
+      return this.isAWhatsAppChannel && !this.isPrivate && !this.hasAttachments;
+    },
+    showLinkPreview() {
+      return (
+        this.canPreviewLinks &&
+        (this.linkPreviewLoading || !!this.linkPreview)
       );
     },
     showRichContentEditor() {
@@ -397,11 +418,14 @@ export default {
     },
     conversationIdByRoute(conversationId, oldConversationId) {
       if (conversationId !== oldConversationId) {
+        this.resetLinkPreview();
         this.setToDraft(oldConversationId, this.replyType);
         this.getFromDraft();
       }
     },
     message(updatedMessage) {
+      this.scheduleLinkPreview(updatedMessage);
+
       // Check if the message starts with a slash.
       const bodyWithoutSignature = removeSignature(
         updatedMessage,
@@ -431,6 +455,7 @@ export default {
 
   mounted() {
     this.getFromDraft();
+    this.scheduleLinkPreview(this.message);
     // Don't use the keyboard listener mixin here as the events here are supposed to be
     // working even if input/textarea is focussed.
     document.addEventListener('paste', this.onPaste);
@@ -467,6 +492,8 @@ export default {
     );
   },
   beforeDestroy() {
+    if (this.linkPreviewTimer) clearTimeout(this.linkPreviewTimer);
+    this.linkPreviewRequestId += 1;
     this.$emitter.off(
       BUS_EVENTS.NEW_CONVERSATION_MODAL,
       this.onNewConversationModalActive
@@ -720,9 +747,27 @@ export default {
       }
     },
     async onSendWhatsAppReply(messagePayload) {
+      const resolved = resolveTemplateVariables({
+        message: messagePayload.message,
+        templateParams: messagePayload.templateParams,
+        variables: this.messageVariables,
+      });
+
+      if (resolved.unresolvedVariables.length) {
+        useAlert(
+          this.$t('CONVERSATION.REPLYBOX.UNDEFINED_VARIABLES.MESSAGE', {
+            undefinedVariablesCount: resolved.unresolvedVariables.length,
+            undefinedVariables: resolved.unresolvedVariables.join(', '),
+          })
+        );
+        return;
+      }
+
       this.sendMessage({
         conversationId: this.currentChat.id,
         ...messagePayload,
+        message: resolved.message,
+        templateParams: resolved.templateParams,
       });
       this.hideWhatsappTemplatesModal();
     },
@@ -890,6 +935,125 @@ export default {
     },
     removeAttachment(attachments) {
       this.attachedFiles = attachments;
+      this.scheduleLinkPreview(this.message);
+    },
+    extractPreviewUrl(value) {
+      const match = value
+        ?.toString()
+        .match(/https?:\/\/[^\s<>{}\[\]"']+/i);
+      if (!match) return '';
+
+      return match[0].replace(/[.,!?;:]+$/, '').replace(/\)+$/, '');
+    },
+    scheduleLinkPreview(value) {
+      if (this.linkPreviewTimer) clearTimeout(this.linkPreviewTimer);
+
+      if (!this.isAWhatsAppChannel || this.isPrivate || this.hasAttachments) {
+        this.resetLinkPreview();
+        return;
+      }
+
+      const url = this.extractPreviewUrl(value);
+      if (!url) {
+        this.resetLinkPreview();
+        return;
+      }
+
+      if (url !== this.linkPreviewDismissedUrl) {
+        this.linkPreviewDismissedUrl = '';
+      }
+
+      if (url === this.linkPreviewDismissedUrl) {
+        this.linkPreview = null;
+        this.linkPreviewToken = '';
+        this.linkPreviewLoading = false;
+        return;
+      }
+
+      if (
+        url === this.linkPreviewUrl &&
+        (this.linkPreview || this.linkPreviewLoading || this.linkPreviewAttemptedUrl === url)
+      ) {
+        return;
+      }
+
+      if (url !== this.linkPreviewUrl) {
+        this.linkPreviewAttemptedUrl = '';
+      }
+      this.linkPreviewUrl = url;
+      this.linkPreview = null;
+      this.linkPreviewToken = '';
+      this.linkPreviewLoading = false;
+      const requestId = ++this.linkPreviewRequestId;
+
+      this.linkPreviewTimer = setTimeout(
+        () => this.loadLinkPreview(url, requestId),
+        550
+      );
+    },
+    async loadLinkPreview(url, requestId) {
+      if (requestId !== this.linkPreviewRequestId) return;
+
+      this.linkPreviewAttemptedUrl = url;
+      this.linkPreviewLoading = true;
+      try {
+        const response = await LinkPreviewAPI.get(url);
+        if (
+          requestId === this.linkPreviewRequestId &&
+          url === this.linkPreviewUrl
+        ) {
+          this.linkPreview = response?.data?.preview || null;
+          this.linkPreviewToken = response?.data?.preview_token || '';
+        }
+      } catch (error) {
+        if (requestId === this.linkPreviewRequestId) {
+          this.linkPreview = null;
+          this.linkPreviewToken = '';
+        }
+      } finally {
+        if (requestId === this.linkPreviewRequestId) {
+          this.linkPreviewLoading = false;
+        }
+      }
+    },
+    dismissLinkPreview() {
+      this.linkPreviewDismissedUrl = this.linkPreviewUrl;
+      this.linkPreview = null;
+      this.linkPreviewToken = '';
+      this.linkPreviewLoading = false;
+      this.linkPreviewRequestId += 1;
+    },
+    resetLinkPreview() {
+      if (this.linkPreviewTimer) clearTimeout(this.linkPreviewTimer);
+      this.linkPreviewTimer = null;
+      this.linkPreview = null;
+      this.linkPreviewToken = '';
+      this.linkPreviewLoading = false;
+      this.linkPreviewUrl = '';
+      this.linkPreviewAttemptedUrl = '';
+      this.linkPreviewDismissedUrl = '';
+      this.linkPreviewRequestId += 1;
+    },
+    setLinkPreviewInPayload(payload) {
+      if (
+        !this.canPreviewLinks ||
+        !this.linkPreview?.url ||
+        !this.linkPreviewToken
+      ) {
+        return payload;
+      }
+
+      return {
+        ...payload,
+        contentAttributes: {
+          ...payload.contentAttributes,
+          link_preview_token: this.linkPreviewToken,
+        },
+        content_attributes: {
+          ...(payload.content_attributes || {}),
+          link_preview: this.linkPreview,
+        },
+      };
     },
     setReplyToInPayload(payload) {
       if (this.inReplyTo?.id) {
@@ -934,6 +1098,7 @@ export default {
         };
 
         messagePayload = this.setReplyToInPayload(messagePayload);
+        messagePayload = this.setLinkPreviewInPayload(messagePayload);
 
         multipleMessagePayload.push(messagePayload);
       }
@@ -948,6 +1113,7 @@ export default {
         sender: this.sender,
       };
       messagePayload = this.setReplyToInPayload(messagePayload);
+      messagePayload = this.setLinkPreviewInPayload(messagePayload);
 
       if (this.attachedFiles && this.attachedFiles.length) {
         messagePayload.files = [];
@@ -1088,6 +1254,13 @@ export default {
         :message="inReplyTo"
         @dismiss="resetReplyToMessage"
       />
+      <LinkPreviewCard
+        v-if="showLinkPreview"
+        :preview="linkPreview"
+        :loading="linkPreviewLoading"
+        dismissible
+        @dismiss="dismissLinkPreview"
+      />
       <CannedResponse
         v-if="showMentions && hasSlashCommand"
         v-on-clickaway="hideMentions"
@@ -1196,6 +1369,7 @@ export default {
     <WhatsappTemplates
       :inbox-id="inbox.id"
       :show="showWhatsAppTemplatesModal"
+      :variables="messageVariables"
       @close="hideWhatsappTemplatesModal"
       @onSend="onSendWhatsAppReply"
       @cancel="hideWhatsappTemplatesModal"

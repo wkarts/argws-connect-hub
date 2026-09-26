@@ -6,6 +6,9 @@ class SuperAdmin::ConnectApiController < SuperAdmin::ApplicationController
 
   def show
     @overview = registry.overview
+    @binding_channel_ids = Channel::Whatsapp.where(provider: 'connectapi').includes(:inbox).each_with_object({}) do |channel, mapping|
+      mapping[channel.inbox.id] = channel.id if channel.inbox
+    end
   end
 
   def instance_action
@@ -42,6 +45,26 @@ class SuperAdmin::ConnectApiController < SuperAdmin::ApplicationController
                        "Dry-run concluído para #{instance_name} → #{target_provider}: #{compact_result(result)}"
                      else
                        "Migração solicitada para #{instance_name} → #{target_provider}: #{compact_result(result)}"
+                     end
+  rescue ConnectApi::Error => e
+    flash[:error] = e.message
+  ensure
+    redirect_to super_admin_connect_api_path
+  end
+
+  def verify_realtime
+    instance_name = required_instance_name
+    ensure_hub_managed!(instance_name)
+    channel = registry.managed_channel(instance_name)
+
+    result = Whatsapp::ConnectApiRealtimeWebhookService.new(channel: channel).ensure!
+    flash[:notice] = case result
+                     when :ok
+                       "Tempo real validado para #{instance_name}. O webhook já estava correto."
+                     when :repaired
+                       "Tempo real reparado para #{instance_name}. O webhook da Connect|API foi regravado."
+                     else
+                       "Não foi possível validar o tempo real de #{instance_name}. Consulte Diagnóstico e logs."
                      end
   rescue ConnectApi::Error => e
     flash[:error] = e.message

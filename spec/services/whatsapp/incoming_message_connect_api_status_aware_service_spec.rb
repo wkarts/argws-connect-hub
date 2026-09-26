@@ -37,4 +37,105 @@ describe Whatsapp::IncomingMessageConnectApiStatusAwareService do
     service.send(:update_message_with_status, message, { status: 'read' }.with_indifferent_access)
     expect(message.reload.status).to eq('read')
   end
+
+  it 'marks an outgoing message as deleted when revoke comes from the smartphone' do
+    message = create(
+      :message,
+      inbox: inbox,
+      account: inbox.account,
+      message_type: :outgoing,
+      source_id: 'PHONE-DELETE-1',
+      content: 'Mensagem enviada',
+      content_attributes: { 'link_preview' => { 'url' => 'https://example.com' } }
+    )
+
+    service.send(
+      :update_message_with_status,
+      message,
+      { status: 'deleted', timestamp: Time.current.to_i }.with_indifferent_access
+    )
+
+    message.reload
+    expect(message.deleted).to be(true)
+    expect(message.content).to eq("⛔#{I18n.t('conversations.messages.deleted')}")
+    expect(message.content_attributes['deleted_for_everyone']).to be(true)
+    expect(message.content_attributes['deleted_source']).to eq('whatsapp_remote')
+    expect(message.content_attributes['deleted_at']).to be_present
+    expect(message.content_attributes['link_preview']).to eq('url' => 'https://example.com')
+  end
+
+  it 'marks an incoming message as deleted when the contact revokes it for everyone' do
+    message = create(
+      :message,
+      inbox: inbox,
+      account: inbox.account,
+      message_type: :incoming,
+      source_id: 'CONTACT-DELETE-1',
+      content: 'Mensagem recebida'
+    )
+
+    service.send(
+      :update_message_with_status,
+      message,
+      { status: 'deleted', timestamp: Time.current.to_i }.with_indifferent_access
+    )
+
+    message.reload
+    expect(message.deleted).to be(true)
+    expect(message.content_attributes['deleted_for_everyone']).to be(true)
+    expect(message.content_attributes['deleted_source']).to eq('whatsapp_remote')
+  end
+
+  it 'keeps remote deletion idempotent' do
+    message = create(
+      :message,
+      inbox: inbox,
+      account: inbox.account,
+      message_type: :incoming,
+      source_id: 'CONTACT-DELETE-2',
+      content: 'Mensagem recebida',
+      content_attributes: { deleted: true, deleted_at: 1.minute.ago.utc.iso8601 }
+    )
+
+    expect(message).not_to receive(:update!)
+    service.send(
+      :update_message_with_status,
+      message,
+      { status: 'deleted', timestamp: Time.current.to_i }.with_indifferent_access
+    )
+  end
+
+  it 'processes a Meta-compatible deleted status end-to-end' do
+    message = create(
+      :message,
+      inbox: inbox,
+      account: inbox.account,
+      message_type: :incoming,
+      source_id: 'REMOTE-DELETE-E2E',
+      content: 'Mensagem original'
+    )
+    timestamp = Time.current.to_i
+    params = {
+      entry: [{
+        changes: [{
+          value: {
+            statuses: [{
+              id: 'REMOTE-DELETE-E2E',
+              status: 'deleted',
+              timestamp: timestamp.to_s
+            }]
+          }
+        }]
+      }]
+    }.with_indifferent_access
+
+    described_class.new(inbox: inbox, params: params).perform
+
+    message.reload
+    expect(message.deleted).to be(true)
+    expect(message.content_attributes['deleted_for_everyone']).to be(true)
+    expect(message.content_attributes['deleted_source']).to eq('whatsapp_remote')
+    expect(Time.iso8601(message.content_attributes['deleted_at']).to_i).to eq(timestamp)
+  end
+
 end

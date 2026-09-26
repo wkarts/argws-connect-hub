@@ -55,14 +55,33 @@ class Whatsapp::Providers::ConnectApiService < Whatsapp::Providers::WhatsappClou
 
   def send_local_template(message, phone_number, template)
     params = message.additional_attributes.to_h['template_params']
+    diagnostic_attributes = diagnostic_message_attributes(message).merge(
+      component: 'connectapi_template',
+      template_name: template['name'],
+      template_version: template['version'],
+      parameter_count: params.to_h.fetch('processed_params', {}).to_h.length,
+      instance_name: whatsapp_channel.provider_config.to_h['instance_name'].to_s.presence,
+      direction: 'outbound'
+    ).compact
+    emit_diagnostic('template.send_started', diagnostic_attributes)
+
     local = ConnectApi::LocalTemplateMessage.new(template, params)
     local.validate_content!(message.content)
+    started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
     response = HTTParty.post(
       "#{phone_id_path}/messages",
       headers: api_headers,
       body: { messaging_product: 'whatsapp', to: phone_number, type: 'template', template: local.payload }.to_json,
       timeout: request_timeout,
       follow_redirects: false
+    )
+    emit_diagnostic(
+      'template.http_response',
+      diagnostic_attributes.merge(
+        http_status: response.code,
+        success: response.success?,
+        duration_ms: ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - started) * 1000).round(2)
+      )
     )
     unless response.success?
       raise ConnectApi::LocalTemplateMessage::Error,
@@ -85,35 +104,53 @@ class Whatsapp::Providers::ConnectApiService < Whatsapp::Providers::WhatsappClou
         }
       )
     )
+    emit_diagnostic('template.send_finished', diagnostic_attributes.merge(source_id: id, success: true))
     id
   rescue ConnectApi::LocalTemplateMessage::Error => e
+    emit_diagnostic(
+      'template.validation_failed',
+      (diagnostic_attributes || {}).merge(level: 'warn', reason: 'template_validation_or_delivery_rejected')
+    )
     message.update!(status: :failed, external_error: e.message)
     nil
   rescue StandardError => e
+    emit_diagnostic_error(
+      'template.send_failed',
+      e,
+      (diagnostic_attributes || {}).merge(reason: 'unexpected_error')
+    )
     Rails.logger.warn("[HUB Connect|API] template delivery interrupted: #{e.class}")
     message.update!(status: :failed, external_error: 'Envio interrompido. Verifique a entrega antes de reenviar o modelo.')
     nil
   end
 
   def send_native_text_message(phone_number, message)
+    endpoint = 'sendText'
+    body = {
+      number: normalize_phone(phone_number),
+      text: format_content(message)
+    }
+    quoted = native_quoted_message(message)
+    body[:quoted] = quoted if quoted.present?
+    body[:linkPreview] = true if message_has_http_url?(message)
+
+    started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
     response = HTTParty.post(
-      native_endpoint('sendText'),
+      native_endpoint(endpoint),
       headers: native_headers,
-      body: {
-        number: normalize_phone(phone_number),
-        text: format_content(message)
-      }.to_json,
+      body: body.to_json,
       timeout: request_timeout
     )
 
-    process_native_response(message, response)
+    process_native_response(message, response, endpoint: endpoint, started: started)
   rescue StandardError => e
-    process_native_exception(message, e)
+    process_native_exception(message, e, endpoint: endpoint)
   end
 
   def send_native_attachment_message(phone_number, message)
     attachment = message.attachments.first
     body, endpoint, media_key = native_attachment_payload(phone_number, message, attachment)
+    started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
 
     response = post_native_attachment(endpoint, body)
     if !response.success? && attachment_file_available?(attachment)
@@ -125,14 +162,16 @@ class Whatsapp::Providers::ConnectApiService < Whatsapp::Providers::WhatsappClou
       response = post_native_attachment(endpoint, body)
     end
 
-    process_native_response(message, response)
+    process_native_response(message, response, endpoint: endpoint, started: started)
   rescue StandardError => e
-    process_native_exception(message, e)
+    process_native_exception(message, e, endpoint: endpoint)
   end
 
   def native_attachment_payload(phone_number, message, attachment)
     download_url = attachment.download_url
     body = { number: normalize_phone(phone_number) }
+    quoted = native_quoted_message(message)
+    body[:quoted] = quoted if quoted.present?
 
     if attachment.file_type == 'audio'
       body[:audio] = download_url
@@ -151,6 +190,60 @@ class Whatsapp::Providers::ConnectApiService < Whatsapp::Providers::WhatsappClou
     [body, 'sendMedia', :media]
   end
 
+  def message_has_http_url?(message)
+    message.content.to_s.match?(%r{https?://[^\s<>{}\[\]"']+}i)
+  end
+
+  def native_quoted_message(message)
+    source_id = message.respond_to?(:in_reply_to_external_id) ? message.in_reply_to_external_id.to_s.presence : nil
+    in_reply_to = message.respond_to?(:in_reply_to) ? message.in_reply_to.to_s.presence : nil
+    if source_id.blank? && in_reply_to.present?
+      referenced = message.conversation.messages.find_by(id: in_reply_to)
+      source_id = referenced&.source_id.to_s.presence
+    end
+    return if source_id.blank?
+
+    native = native_message_by_source_id(source_id)
+    return unless native.is_a?(Hash)
+
+    native = native.deep_stringify_keys
+    key = native['key'].to_h.deep_stringify_keys
+    content = native['message'].to_h.deep_stringify_keys
+    return if key['id'].to_s.blank? || content.blank?
+
+    { key: key, message: content }
+  rescue StandardError => e
+    Rails.logger.warn(
+      "[HUB Connect|API] reply quote lookup skipped source_id=#{source_id}: #{e.class}: #{e.message}"
+    )
+    nil
+  end
+
+  def native_message_by_source_id(source_id)
+    response = HTTParty.post(
+      "#{connect_api_base_url}/chat/findMessages/#{CGI.escape(instance_name)}",
+      headers: native_headers,
+      body: {
+        where: { key: { id: source_id.to_s } },
+        page: 1,
+        offset: 1
+      }.to_json,
+      timeout: [request_timeout, 15].min
+    )
+    return unless response.success?
+
+    data = response.parsed_response
+    data = data.deep_stringify_keys if data.respond_to?(:deep_stringify_keys)
+    records = if data.is_a?(Array)
+                data
+              elsif data.is_a?(Hash)
+                data.dig('messages', 'records') || data['records'] || data['data'] || []
+              else
+                []
+              end
+    Array(records).first
+  end
+
   def post_native_attachment(endpoint, body)
     HTTParty.post(
       native_endpoint(endpoint),
@@ -164,26 +257,79 @@ class Whatsapp::Providers::ConnectApiService < Whatsapp::Providers::WhatsappClou
     attachment.respond_to?(:file) && attachment.file.respond_to?(:attached?) && attachment.file.attached?
   end
 
-  def process_native_response(message, response)
+  def process_native_response(message, response, endpoint:, started:)
+    http_status = response.code if response.respond_to?(:code)
+    message_id = response.success? ? extract_message_id(response.parsed_response) : nil
+    attributes = diagnostic_message_attributes(message).merge(
+      http_status: http_status,
+      endpoint: endpoint,
+      instance_name: instance_name,
+      provider: whatsapp_channel.provider_config.to_h['connect_api_provider'],
+      direction: 'outbound',
+      success: response.success?,
+      source_id: message_id,
+      duration_ms: ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - started) * 1000).round(2)
+    ).compact
+
+    emit_diagnostic('send.http_response', attributes)
+
     if response.success?
-      message_id = extract_message_id(response.parsed_response)
       return message_id if message_id.present?
 
+      emit_diagnostic(
+        'send.response_without_id',
+        attributes.merge(level: 'warn', reason: 'provider_message_id_missing')
+      )
       Rails.logger.warn('[HUB Connect|API] send succeeded without a message id')
       return nil
     end
 
     error = response_error(response)
+    emit_diagnostic('send.failed', attributes.merge(level: 'error', reason: 'http_error'))
     Rails.logger.error("[HUB Connect|API] send failed: #{error}")
     message.update!(status: :failed, external_error: error)
     nil
   end
 
-  def process_native_exception(message, error)
+  def process_native_exception(message, error, endpoint: nil)
+    emit_diagnostic_error(
+      'send.transport_failed',
+      error,
+      diagnostic_message_attributes(message).merge(
+        endpoint: endpoint,
+        instance_name: instance_name,
+        provider: whatsapp_channel.provider_config.to_h['connect_api_provider'],
+        direction: 'outbound'
+      ).compact
+    )
     safe_error = "#{error.class}: #{error.message}".slice(0, 1000)
     Rails.logger.error("[HUB Connect|API] send exception: #{safe_error}")
     message.update!(status: :failed, external_error: safe_error)
     nil
+  rescue StandardError
+    nil
+  end
+
+  def diagnostic_message_attributes(message)
+    return {} unless defined?(::HubDiagnostics::Recorder)
+
+    ::HubDiagnostics::Recorder.message_attributes(message)
+  rescue StandardError
+    {}
+  end
+
+  def emit_diagnostic(event, attributes = {})
+    return unless defined?(::HubDiagnostics::Recorder)
+
+    ::HubDiagnostics::Recorder.emit(event, attributes)
+  rescue StandardError
+    nil
+  end
+
+  def emit_diagnostic_error(event, error, attributes = {})
+    return unless defined?(::HubDiagnostics::Recorder)
+
+    ::HubDiagnostics::Recorder.error(event, error, attributes)
   rescue StandardError
     nil
   end
@@ -216,7 +362,7 @@ class Whatsapp::Providers::ConnectApiService < Whatsapp::Providers::WhatsappClou
 
   def native_headers
     {
-      'apikey' => installation_token,
+      'apikey' => whatsapp_channel.provider_config.to_h['connect_api_binding_mode'] == 'existing' ? (instance_token || raise('Instance token required')) : installation_token,
       'Content-Type' => 'application/json'
     }
   end

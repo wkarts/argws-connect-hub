@@ -5,6 +5,7 @@ import { useKeyboardEvents } from 'dashboard/composables/useKeyboardEvents';
 import { useRoute, useRouter } from 'dashboard/composables/route';
 
 import PrimarySidebar from './sidebarComponents/Primary.vue';
+import WorkspaceLauncher from 'dashboard/components/workspace/WorkspaceLauncher.vue';
 import SecondarySidebar from './sidebarComponents/Secondary.vue';
 import { routesWithPermissions } from '../../routes';
 import {
@@ -15,6 +16,7 @@ import {
 export default {
   components: {
     PrimarySidebar,
+    WorkspaceLauncher,
     SecondarySidebar,
   },
   props: {
@@ -214,7 +216,7 @@ export default {
 </script>
 
 <template>
-  <aside class="flex h-full">
+  <aside class="flex h-full relative">
     <PrimarySidebar
       :logo-source="globalConfig.logoThumbnail"
       :installation-name="globalConfig.installationName"
@@ -226,6 +228,7 @@ export default {
       @openKeyShortcutModal="toggleKeyShortcutModal"
       @openNotificationPanel="openNotificationPanel"
     />
+    <WorkspaceLauncher v-if="$store.state.workspaceApps.launcherOpen" />
     <SecondarySidebar
       v-if="showSecondarySidebar"
       :class="sidebarClassName"

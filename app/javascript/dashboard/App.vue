@@ -17,6 +17,7 @@ import {
   verifyServiceWorkerExistence,
 } from './helper/pushHelper';
 import ReconnectService from 'dashboard/helper/ReconnectService';
+import WorkspaceHost from './components/workspace/WorkspaceHost.vue';
 
 export default {
   name: 'App',
@@ -30,6 +31,7 @@ export default {
     HubSnackbarBox,
     UpgradeBanner,
     PendingEmailVerificationBanner,
+    WorkspaceHost,
   },
   data() {
     return {
@@ -116,27 +118,30 @@ export default {
 </script>
 
 <template>
-  <div
-    v-if="!authUIFlags.isFetching && !accountUIFlags.isFetchingItem"
-    id="app"
-    class="flex-grow-0 w-full h-full min-h-0 app-wrapper"
-    :class="{ 'app-rtl--wrapper': isRTL }"
-    :dir="isRTL ? 'rtl' : 'ltr'"
-  >
-    <UpdateBanner :latest-hub-version="latestHubVersion" />
-    <template v-if="currentAccountId">
-      <PendingEmailVerificationBanner v-if="hideOnOnboardingView" />
-      <PaymentPendingBanner v-if="hideOnOnboardingView" />
-      <UpgradeBanner />
-    </template>
-    <transition name="fade" mode="out-in">
-      <router-view />
-    </transition>
-    <AddAccountModal :show="showAddAccountModal" :has-accounts="hasAccounts" />
-    <HubSnackbarBox />
-    <NetworkNotification />
+  <div class="h-full w-full min-h-0">
+    <div
+      v-if="!authUIFlags.isFetching && !accountUIFlags.isFetchingItem"
+      id="app"
+      class="flex-grow-0 w-full h-full min-h-0 app-wrapper"
+      :class="{ 'app-rtl--wrapper': isRTL }"
+      :dir="isRTL ? 'rtl' : 'ltr'"
+    >
+      <UpdateBanner :latest-hub-version="latestHubVersion" />
+      <template v-if="currentAccountId">
+        <PendingEmailVerificationBanner v-if="hideOnOnboardingView" />
+        <PaymentPendingBanner v-if="hideOnOnboardingView" />
+        <UpgradeBanner />
+      </template>
+      <transition name="fade" mode="out-in">
+        <router-view />
+      </transition>
+      <AddAccountModal :show="showAddAccountModal" :has-accounts="hasAccounts" />
+      <HubSnackbarBox />
+      <NetworkNotification />
+    </div>
+    <LoadingState v-else />
+    <WorkspaceHost :available="!authUIFlags.isFetching && !accountUIFlags.isFetchingItem" />
   </div>
-  <LoadingState v-else />
 </template>
 
 <style lang="scss">

@@ -6,6 +6,7 @@ import AgentDetails from './AgentDetails.vue';
 import NotificationBell from './NotificationBell.vue';
 import hubConstants from 'dashboard/constants/globals';
 import { frontendURL } from 'dashboard/helper/URLHelper';
+import WorkspaceSidebar from 'dashboard/components/workspace/WorkspaceSidebar.vue';
 
 export default {
   components: {
@@ -14,6 +15,7 @@ export default {
     OptionsMenu,
     AgentDetails,
     NotificationBell,
+    WorkspaceSidebar,
   },
   props: {
     isACustomBrandedInstance: {
@@ -48,6 +50,7 @@ export default {
     };
   },
   computed: {
+    workspaceActive() { return !!this.$store.state.workspaceApps.activeId; },
     sidebarLogoSource() {
       return this.isACustomBrandedInstance
         ? this.logoSource
@@ -74,25 +77,31 @@ export default {
 
 <template>
   <div
+    data-workspace-primary
     class="flex flex-col justify-between w-16 h-full bg-white border-r dark:bg-slate-900 border-slate-50 dark:border-slate-800/50 rtl:border-l rtl:border-r-0"
   >
-    <div class="flex flex-col items-center">
-      <Logo
-        :source="sidebarLogoSource"
-        :name="installationName"
-        :account-id="accountId"
-        class="m-4 mb-10"
-      />
-      <PrimaryNavItem
-        v-for="menuItem in menuItems"
-        :key="menuItem.toState"
-        :icon="menuItem.icon"
-        :name="menuItem.label"
-        :to="menuItem.toState"
-        :is-child-menu-active="menuItem.key === activeMenuItem"
-      />
+    <div class="flex flex-col items-center flex-1 min-h-0">
+      <div class="flex flex-col items-center flex-shrink-0">
+        <Logo
+          :source="sidebarLogoSource"
+          :name="installationName"
+          :account-id="accountId"
+          class="m-4 mb-10"
+        />
+        <PrimaryNavItem
+          v-for="menuItem in menuItems"
+          :key="menuItem.toState"
+          :icon="menuItem.icon"
+          :name="menuItem.label"
+          :to="menuItem.toState"
+          :is-child-menu-active="menuItem.key === activeMenuItem"
+          :suppress-active="workspaceActive"
+          @click.native="$store.commit('workspaceApps/deactivate')"
+        />
+      </div>
+      <WorkspaceSidebar />
     </div>
-    <div class="flex flex-col items-center justify-end pb-6">
+    <div class="flex flex-col items-center justify-end flex-shrink-0 pb-6">
       <PrimaryNavItem
         v-if="!isACustomBrandedInstance"
         icon="book-open-globe"

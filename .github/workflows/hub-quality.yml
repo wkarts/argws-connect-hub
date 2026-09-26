@@ -32,6 +32,27 @@ jobs:
           node --test ./scripts/test-connect-api-local-templates.mjs
           node --test ./scripts/test-campaign-channel-ui.mjs
           node --test ./scripts/test-connect-api-call-media-recovery.mjs
+          node --test ./scripts/test-message-actions-ui.mjs
+          node --test ./scripts/test-workspace-apps.mjs ./scripts/test-workspace-presentation.mjs
+          node --test ./scripts/test-canonical-releases.mjs
+          ruby ./scripts/test-workspace-diagnostics.rb
+          node --experimental-vm-modules --test ./scripts/test-workspace-state.mjs
+          node --experimental-vm-modules ./scripts/check-workspace-javascript.mjs
+      - name: Validate append-only canonical release registry
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          node ./scripts/canonical-releases.mjs validate
+          if [[ -n "$BASE_SHA" ]]; then
+            git fetch --no-tags --depth=1 origin "$BASE_SHA"
+            if git cat-file -e "$BASE_SHA:config/canonical-releases.json" 2>/dev/null; then
+              previous="$(mktemp)"
+              git show "$BASE_SHA:config/canonical-releases.json" > "$previous"
+              node ./scripts/canonical-releases.mjs validate "$previous"
+              rm -f "$previous"
+            fi
+          fi
       - name: Enterprise runtime contracts
         run: ruby ./scripts/check-enterprise-contracts.rb
 
@@ -101,21 +122,41 @@ jobs:
       - name: Connect API WhatsApp regression specs
         run: >-
           bundle exec rspec
+          spec/requests/connect_api_main_compatible_realtime_spec.rb
+          spec/jobs/webhooks/connect_api_main_compatible_events_job_spec.rb
+          spec/jobs/send_reply_job_spec.rb
+          spec/jobs/conversations/forward_message_job_spec.rb
           spec/services/whatsapp/incoming_message_connect_api_service_spec.rb
           spec/services/whatsapp/incoming_message_connect_api_status_aware_service_spec.rb
           spec/services/whatsapp/incoming_connect_api_call_service_spec.rb
           spec/services/whatsapp/connect_api_call_recovery_spec.rb
           spec/services/whatsapp/providers/connect_api_service_spec.rb
           spec/services/whatsapp/providers/connect_api_local_templates_spec.rb
+          spec/services/whatsapp/connect_api_template_liquid_variables_spec.rb
+          spec/services/whatsapp/connect_api_message_revoke_service_spec.rb
           spec/services/connect_api/client_spec.rb
           spec/services/connect_api/instance_namespace_spec.rb
           spec/jobs/channels/whatsapp/connect_api_profile_picture_job_spec.rb
           spec/jobs/channels/whatsapp/connect_api_media_sync_job_spec.rb
+          spec/jobs/channels/whatsapp/connect_api_receipt_watch_job_spec.rb
+          spec/models/concerns/conversation_mute_helpers_spec.rb
+          spec/services/whatsapp/connect_api_historical_reconciliation_service_spec.rb
+          spec/controllers/super_admin/connect_api_reconciliations_controller_spec.rb
+          spec/requests/contact_profile_extensions_spec.rb
           spec/jobs/channels/whatsapp/delete_connect_api_instance_job_spec.rb
           spec/services/whatsapp/connect_api_template_sync_service_spec.rb
           spec/services/whatsapp/connect_api_opening_message_validator_spec.rb
           spec/services/whatsapp/send_on_whatsapp_service_spec.rb
           spec/controllers/api/v1/accounts/connect_api_templates_controller_spec.rb
+          spec/requests/connect_api_message_actions_spec.rb
+          spec/controllers/super_admin/diagnostics_controller_spec.rb
+          spec/services/hub_diagnostics/export_summary_spec.rb
+          spec/services/hub_diagnostics/capture_session_spec.rb
+          spec/services/hub_diagnostics/recorder_spec.rb
+          spec/lib/hub_diagnostics/request_trace_spec.rb
+          spec/services/hub_diagnostics/webhook_router_spec.rb
+          spec/services/whatsapp/connect_api_realtime_webhook_service_spec.rb
+          spec/finders/message_finder_spec.rb
       - name: Two-factor authentication regression specs
         run: >-
           bundle exec rspec
@@ -123,3 +164,26 @@ jobs:
           spec/requests/frontend_two_factor_policy_spec.rb
           spec/requests/account_two_factor_policy_spec.rb
           spec/services/two_factor/totp_spec.rb
+
+      - name: Company applications and credential isolation specs
+        run: >-
+          bundle exec rspec
+          spec/models/workspace_app_spec.rb
+          spec/models/workspace_app_credential_spec.rb
+          spec/requests/workspace_apps_spec.rb
+          spec/requests/workspace_diagnostics_spec.rb
+
+  workspace-ui:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: yarn
+      - name: Install locked frontend dependencies
+        run: yarn install --frozen-lockfile --ignore-scripts --network-timeout 120000
+      - name: Compile affected Vue templates
+        run: node ./scripts/check-workspace-vue.cjs
+      - name: Persistent frames and authentication regression tests
+        run: yarn test app/javascript/dashboard/components/workspace/specs

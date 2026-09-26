@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "current": "1.1.8",
+  "releases": [
+    {
+      "version": "1.1.8",
+      "git_tag": "v1.1.8",
+      "git_tag_object": "115e0f5d985fa05851ea6915d7e98ceb398ce6ce",
+      "git_commit": "580e870343960f9702c2e681ead1c76b9715deee",
+      "image": "ghcr.io/wkarts/argws-connect-hub",
+      "image_digest": "sha256:dd0aa7fe967b9e6ff9ad9aeb33b092932cd10f2287fde9b7e798f6863bf61dac",
+      "release_id": 388604100
+    }
+  ]
+}

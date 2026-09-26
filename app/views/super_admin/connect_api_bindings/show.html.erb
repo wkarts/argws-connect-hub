@@ -1,0 +1,22 @@
+<% content_for(:title) { 'Vincular instância existente' } %>
+<header class="main-content__header hub-ops hub-ops-header"><div><h1 class="hub-ops-title">Vincular instância existente</h1><p class="hub-ops-subtitle">Troque a instância associada à caixa sem recriar a caixa, apagar conversas ou excluir a sessão anterior.</p></div><%= link_to 'Voltar à Connect|API', super_admin_connect_api_path, class: 'button' %></header>
+<section class="main-content__body hub-ops">
+  <% unless ENV['HUB_EXISTING_INSTANCE_BINDING_ENABLED'] == 'true' %><div class="hub-alert hub-alert-warning">Vinculação desabilitada até a homologação. Ative <code>HUB_EXISTING_INSTANCE_BINDING_ENABLED=true</code> para liberar a operação.</div><% end %>
+  <% if @error.present? %><div class="hub-alert hub-alert-danger"><%= @error %></div><% end %>
+  <div class="hub-alert hub-alert-warning">A instância deve usar o mesmo número WhatsApp da caixa. Mensagens em processamento bloqueiam a troca. Se o webhook atual atender outro ambiente, substituí-lo interromperá a entrega de novos eventos naquele destino.</div>
+  <% if @channels.empty? %><div class="hub-card">Não há caixa Connect|API disponível para vinculação.</div><% else %>
+  <form action="<%= @preview ? super_admin_connect_api_binding_path : preview_super_admin_connect_api_binding_path %>" method="post" class="hub-card">
+    <%= hidden_field_tag :authenticity_token, form_authenticity_token %>
+    <% if @preview %><%= hidden_field_tag :proof, @proof %><%= hidden_field_tag :channel_id, @channel.id %><% end %>
+    <div class="hub-form-grid"><div><label for="binding_channel">Caixa de entrada</label><select name="channel_id" id="binding_channel" required <%= 'disabled' if @preview %>><% @channels.each do |channel| %><option value="<%= channel.id %>" <%= 'selected' if @channel&.id == channel.id %>>#<%= channel.inbox&.id %> · <%= channel.inbox&.name %> · <%= channel.account&.name %></option><% end %></select></div>
+      <div><label for="binding_instance">Instância existente na Connect|API</label><input name="instance_name" id="binding_instance" list="hub_instance_names" value="<%= @instance_name %>" maxlength="160" autocomplete="off" required <%= 'readonly' if @preview %> /><datalist id="hub_instance_names"><% Array(@instance_names).each do |name| %><option value="<%= name %>"></option><% end %></datalist><small>Selecione uma sugestão ou informe o nome exato.</small></div>
+      <div><label for="instance_api_key"><%= @preview ? 'Informe novamente a chave para confirmar' : 'Chave de API da instância' %></label><input name="instance_api_key" id="instance_api_key" type="password" maxlength="4096" autocomplete="new-password" required /><small>A chave não é preenchida de volta na página nem incluída no diagnóstico.</small></div>
+    </div>
+    <% if @preview %>
+      <h2>Validação concluída</h2><dl class="hub-summary"><dt>Instância</dt><dd><%= @preview['instance_name'] %></dd><dt>Número confirmado</dt><dd><%= @preview['phone'] %></dd><dt>Integração</dt><dd><%= @preview['provider'] %></dd><dt>Conexão</dt><dd><%= @preview['state'].presence || 'Sem estado informado' %></dd><dt>Webhook atual</dt><dd><%= @preview['webhook_display'].presence || 'Não configurado' %></dd><dt>Histórico do HUB</dt><dd>Preservado. O cache de templates será invalidado.  sincronize o catálogo da nova instância antes de utilizar modelos.</dd></dl>
+      <% if @preview['requires_takeover'] %><label class="hub-check"><input type="checkbox" name="allow_takeover" value="1" required /><span>Autorizo substituir o webhook que atende outro endereço. Estou ciente de que m destino anterior deixará de receber estes eventos.</span></label><% end %>
+      <div class="hub-alert">Somente o webhook Meta de mensageria da instância selecionada será configurado. Webhooks nativos de chamadas e outros consumidores nao serao sobrescritos. A sessão antiga será preservada.</div>
+      <div class="hub-ops-toolbar"><button type="submit" class="hub-primary" data-hub-confirm="Aplicar a nova vinculação? A caixa e seu histórico serão preservados. A conclusão aparecerá no painel de diagnóstico.">Confirmar vinculação</button><%= link_to 'Cancelar', super_admin_connect_api_path, class: 'button' %></div>
+    <% else %><button type="submit" class="hub-primary">Validar instância e chave</button><% end %>
+  </form><% end %>
+</section>

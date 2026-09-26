@@ -89,8 +89,10 @@ class ConversationApi extends ApiClient {
     });
   }
 
-  mute(conversationId) {
-    return axios.post(`${this.url}/${conversationId}/mute`);
+  mute(conversationId, durationSeconds = null) {
+    return axios.post(`${this.url}/${conversationId}/mute`, {
+      duration_seconds: durationSeconds,
+    });
   }
 
   unmute(conversationId) {

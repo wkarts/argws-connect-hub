@@ -11,11 +11,35 @@ class Webhooks::WhatsappController < ActionController::API
       return head :accepted
     end
 
+    record_connect_api_webhook
     Webhooks::WhatsappEventsJob.perform_later(params.to_unsafe_hash)
     head :ok
   end
 
   private
+
+  def record_connect_api_webhook
+    channel = find_connect_api_channel
+    return unless channel
+
+    summary = HubDiagnostics::WebhookRouter.payload_summary(params)
+    HubDiagnostics::Recorder.emit(
+      'webhook.received',
+      summary.merge(
+        component: 'connectapi_ingestion',
+        account_id: channel.account_id,
+        inbox_id: channel.inbox&.id,
+        channel_id: channel.id,
+        instance_name: channel.provider_config.to_h['instance_name']
+      )
+    )
+  rescue StandardError => error
+    HubDiagnostics::Recorder.error(
+      'webhook.diagnostic_failed',
+      error,
+      component: 'connectapi_ingestion'
+    )
+  end
 
   def connect_api_call_payload?
     params[:event].to_s.casecmp('call').zero? && params[:data].present?

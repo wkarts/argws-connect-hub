@@ -26,6 +26,9 @@ describe Whatsapp::IncomingMessageConnectApiService do
     allow(GlobalConfigService).to receive(:load).with('CONNECT_API_BASE_URL', anything).and_return('https://connect.example')
     allow(GlobalConfigService).to receive(:load).with('CONNECT_API_AUTH_TOKEN', anything).and_return('global-key')
     allow(GlobalConfigService).to receive(:load).with('CONNECT_API_REQUEST_TIMEOUT', anything).and_return(60)
+    allow(HTTParty).to receive(:post).and_return(
+      double(success?: true, parsed_response: { 'messages' => { 'records' => [] } })
+    )
   end
 
   def webhook(message_id:, from:, body: nil, profile_name: 'Cliente WhatsApp', profile_picture: nil, from_me: false, source: nil,
@@ -170,6 +173,51 @@ describe Whatsapp::IncomingMessageConnectApiService do
     expect(message.sender).to be_nil
     expect(message.content_attributes['connect_api_external_outgoing']).to be(true)
     expect(message.content_attributes['connect_api_source']).to eq('android')
+  end
+
+  it 'associates an incoming WhatsApp reply with the original HUB message' do
+    contact_inbox = create(:contact_inbox, inbox: whatsapp_channel.inbox, source_id: peer_phone)
+    conversation = create(:conversation, inbox: whatsapp_channel.inbox, contact_inbox: contact_inbox)
+    original = create(
+      :message,
+      account: whatsapp_channel.account,
+      inbox: whatsapp_channel.inbox,
+      conversation: conversation,
+      message_type: :outgoing,
+      source_id: 'ORIGINAL-OUT-1',
+      content: 'Mensagem que será respondida'
+    )
+
+    native_response = double(
+      success?: true,
+      parsed_response: {
+        'messages' => {
+          'records' => [{
+            'key' => {
+              'id' => 'CLIENT-REPLY-1',
+              'fromMe' => false,
+              'remoteJid' => "#{peer_phone}@s.whatsapp.net"
+            },
+            'message' => {
+              'extendedTextMessage' => {
+                'text' => 'Respondendo',
+                'contextInfo' => { 'stanzaId' => 'ORIGINAL-OUT-1' }
+              }
+            }
+          }]
+        }
+      }
+    )
+    allow(HTTParty).to receive(:post).and_return(native_response)
+
+    described_class.new(
+      inbox: whatsapp_channel.inbox,
+      params: webhook(message_id: 'CLIENT-REPLY-1', from: peer_phone, body: 'Respondendo')
+    ).perform
+
+    reply = conversation.reload.messages.find_by(source_id: 'CLIENT-REPLY-1')
+    expect(reply).to be_present
+    expect(reply.content_attributes['in_reply_to'].to_i).to eq(original.id)
   end
 
   it 'marks Connect API generated external replies as bot-originated' do

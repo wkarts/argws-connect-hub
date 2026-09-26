@@ -1,10 +1,32 @@
 class Webhooks::WhatsappEventsJob < ApplicationJob
   queue_as :low
+  self.log_arguments = false
   retry_on ActiveRecord::RecordNotFound, wait: 30.seconds, attempts: 5
 
   def perform(params = {})
     channel = find_channel_from_whatsapp_business_payload(params)
-    return if channel_is_inactive?(channel)
+    if channel_is_inactive?(channel)
+      HubDiagnostics::Recorder.emit(
+        'webhook.skipped',
+        level: 'warn',
+        component: 'connectapi_ingestion',
+        channel_id: channel&.id,
+        reason: 'channel_missing_or_inactive'
+      )
+      return
+    end
+
+    connect_api = channel.provider == 'connectapi'
+    if connect_api
+      HubDiagnostics::Recorder.emit(
+        'webhook.processing_started',
+        component: 'connectapi_ingestion',
+        account_id: channel.account_id,
+        inbox_id: channel.inbox&.id,
+        channel_id: channel.id,
+        instance_name: channel.provider_config.to_h['instance_name']
+      )
+    end
 
     case channel.provider
     when 'whatsapp_cloud'
@@ -14,6 +36,25 @@ class Webhooks::WhatsappEventsJob < ApplicationJob
     else
       Whatsapp::IncomingMessageService.new(inbox: channel.inbox, params: params).perform
     end
+
+    if connect_api
+      HubDiagnostics::Recorder.emit(
+        'webhook.processing_completed',
+        component: 'connectapi_ingestion',
+        account_id: channel.account_id,
+        inbox_id: channel.inbox&.id,
+        channel_id: channel.id,
+        instance_name: channel.provider_config.to_h['instance_name']
+      )
+    end
+  rescue StandardError => error
+    HubDiagnostics::Recorder.error(
+      'webhook.processing_failed',
+      error,
+      component: 'connectapi_ingestion',
+      channel_id: channel&.id
+    )
+    raise
   end
 
   private

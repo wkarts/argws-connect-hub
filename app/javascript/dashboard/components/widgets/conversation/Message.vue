@@ -9,6 +9,7 @@ import BubbleLocation from './bubble/Location.vue';
 import BubbleMailHead from './bubble/MailHead.vue';
 import BubbleReplyTo from './bubble/ReplyTo.vue';
 import BubbleText from './bubble/Text.vue';
+import LinkPreviewCard from './LinkPreviewCard.vue';
 import CallTimelineCard from './CallTimelineCard.vue';
 import ContextMenu from 'dashboard/modules/conversations/components/MessageContextMenu.vue';
 import InstagramStory from './bubble/InstagramStory.vue';
@@ -36,6 +37,7 @@ export default {
     BubbleMailHead,
     BubbleReplyTo,
     BubbleText,
+    LinkPreviewCard,
     CallTimelineCard,
     ContextMenu,
     InstagramStory,
@@ -211,6 +213,9 @@ export default {
     },
     callTimelineData() {
       return this.contentAttributes.connect_api_call || null;
+    },
+    linkPreviewData() {
+      return this.contentAttributes.link_preview || null;
     },
     isCallTimelineMessage() {
       return Boolean(this.callTimelineData?.call_id);
@@ -520,6 +525,11 @@ export default {
           :message="message"
           :is-email="isEmailContentType"
           :display-quoted-button="displayQuotedButton"
+        />
+        <LinkPreviewCard
+          v-if="linkPreviewData"
+          :preview="linkPreviewData"
+          compact
         />
         <BubbleIntegration
           :message-id="data.id"

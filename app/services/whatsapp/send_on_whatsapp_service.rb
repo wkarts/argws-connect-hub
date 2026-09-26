@@ -6,7 +6,7 @@ class Whatsapp::SendOnWhatsappService < Base::SendOnChannelService
   end
 
   def perform_reply
-    return if message.message_type == :outgoing && message.source_id&.is_present? # is message send by own
+    return if message.outgoing? && message.source_id.present? # is message send by own
 
     Whatsapp::ConnectApiOpeningMessageValidator.new(message).validate!
 
@@ -31,7 +31,10 @@ class Whatsapp::SendOnWhatsappService < Base::SendOnChannelService
                                          lang_code: lang_code,
                                          parameters: processed_parameters
                                        })
-    message.update!(source_id: message_id) if message_id.present?
+    if message_id.present?
+      message.update!(source_id: message_id)
+      schedule_connect_api_receipt_watch
+    end
   end
 
   # rubocop:disable Metrics/CyclomaticComplexity
@@ -90,7 +93,28 @@ class Whatsapp::SendOnWhatsappService < Base::SendOnChannelService
                      message.conversation.contact_inbox.source_id
                    end
     message_id = channel.send_message(phone_number, message)
-    message.update!(source_id: message_id) if message_id.present?
+    if message_id.present?
+      message.update!(source_id: message_id)
+      schedule_connect_api_receipt_watch
+    end
+  end
+
+  def schedule_connect_api_receipt_watch
+    return unless channel.provider == 'connectapi'
+
+    Channels::Whatsapp::ConnectApiReceiptWatchJob
+      .set(wait: Channels::Whatsapp::ConnectApiReceiptWatchJob::CHECK_DELAYS.first.seconds)
+      .perform_later(message.id, 0)
+
+    HubDiagnostics::Recorder.emit(
+      'receipt.watch_started',
+      HubDiagnostics::Recorder.message_attributes(message).merge(
+        component: 'connectapi_receipt',
+        channel_id: message.inbox.channel.id
+      )
+    )
+  rescue StandardError => e
+    Rails.logger.warn("[HUB Connect|API] receipt watcher scheduling failed: #{e.class}: #{e.message}")
   end
 
   def campaign_freeform_message?

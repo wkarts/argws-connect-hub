@@ -13,13 +13,22 @@ class Api::V1::Accounts::Conversations::MessagesController < Api::V1::Accounts::
 
   def destroy
     return head :bad_request unless message.can_delete_message?
-  
+
+    revoked_for_everyone = revoke_connect_api_message_if_needed!
+
     ActiveRecord::Base.transaction do
-      original_content = message.content
-      new_content = "⛔#{I18n.t('conversations.messages.deleted')}\n#{original_content}"
-      message.update!(content: new_content, content_attributes: { deleted: true })
+      message.update!(
+        content: "⛔#{I18n.t('conversations.messages.deleted')}",
+        content_attributes: {
+          deleted: true,
+          deleted_for_everyone: revoked_for_everyone,
+          deleted_at: Time.current.utc.iso8601
+        }.compact
+      )
       message.attachments.destroy_all
     end
+  rescue Whatsapp::ConnectApiMessageRevokeService::Error => error
+    render json: { error: error.message }, status: :unprocessable_entity
   end
 
   def retry
@@ -50,16 +59,56 @@ class Api::V1::Accounts::Conversations::MessagesController < Api::V1::Accounts::
   end
 
   def forward
-    ::Conversations::ForwardMessageJob.perform_later(forward_message_params)
-    head :ok
-    rescue StandardError => e
-      render e
+    contacts = forward_contact_ids
+    return render json: { error: 'Selecione pelo menos um destinatário.' }, status: :unprocessable_entity if contacts.empty?
+    return render json: { error: 'Um dos destinatários não pertence a esta conta.' }, status: :unprocessable_entity unless valid_forward_contacts?(contacts)
+
+    if muted_forward_contacts(contacts).any?
+      return render json: {
+        error: 'Contatos silenciados não podem receber encaminhamentos. Remova o silenciamento antes de encaminhar.'
+      }, status: :unprocessable_entity
+    end
+
+    operation_id = SecureRandom.uuid
+    payload = forward_message_params.merge(
+      contacts: contacts,
+      operation_id: operation_id
+    )
+
+    if contacts.one?
+      result = ::Conversations::ForwardMessageJob.perform_now(payload).first
+      return render json: {
+        status: 'forwarded',
+        destination_count: 1,
+        operation_id: operation_id,
+        destination: result
+      }
+    end
+
+    job = ::Conversations::ForwardMessageJob.perform_later(payload)
+    render json: {
+      status: 'queued',
+      destination_count: contacts.length,
+      operation_id: operation_id,
+      job_id: job.job_id
+    }, status: :accepted
+  rescue ActiveRecord::RecordNotFound
+    render json: { error: 'Um dos destinatários não pertence a esta conta.' }, status: :unprocessable_entity
+  rescue StandardError => error
+    Rails.logger.error("[HUB forward] #{error.class}: #{error.message}")
+    render json: { error: 'Não foi possível encaminhar a mensagem. Tente novamente.' }, status: :unprocessable_entity
   end
 
   private
 
   def message
     @message ||= @conversation.messages.find(permitted_params[:id])
+  end
+
+  def revoke_connect_api_message_if_needed!
+    return false unless Whatsapp::ConnectApiMessageRevokeService.applicable?(message)
+
+    Whatsapp::ConnectApiMessageRevokeService.new(message: message).perform!
   end
 
   def message_finder
@@ -74,12 +123,33 @@ class Api::V1::Accounts::Conversations::MessagesController < Api::V1::Accounts::
     message.translations.present? && message.translations[permitted_params[:target_language]].present?
   end
 
+  def forward_contact_ids
+    Array(params[:contacts]).map(&:to_i).select(&:positive?).uniq
+  end
+
+  def valid_forward_contacts?(contact_ids)
+    Current.account.contacts.where(id: contact_ids).count == contact_ids.length
+  end
+
+  def muted_forward_contacts(contact_ids)
+    Current.account.contacts.where(id: contact_ids).select do |contact|
+      mute = contact.additional_attributes.to_h.deep_stringify_keys['hub_mute'].to_h
+      next true if mute.blank? && contact.blocked?
+      next false if mute.blank?
+      next false unless ActiveModel::Type::Boolean.new.cast(mute.fetch('muted', true))
+
+      muted_until = mute['muted_until'].to_s.presence
+      muted_until.blank? || Time.iso8601(muted_until).future?
+    rescue ArgumentError
+      false
+    end
+  end
+
   def forward_message_params
     {
       user_id: Current.user.id,
       account_id: Current.account.id,
-      message_id: message.id,
-      contacts: params[:contacts]
+      message_id: message.id
     }
   end
 end

@@ -18,6 +18,12 @@ export default {
       const { company = {} } = this.contact;
       return company;
     },
+    formattedDateOfBirth() {
+      const value = this.contact.date_of_birth;
+      if (!value) return '';
+      const [year, month, day] = value.split('-');
+      return year && month && day ? `${day}/${month}/${year}` : value;
+    },
     customAttributes() {
       const { custom_attributes: customAttributes = {} } = this.contact;
       return customAttributes;
@@ -69,6 +75,13 @@ export default {
       :value="contact.phone_number"
       show-edit
       @update="onPhoneUpdate"
+    />
+    <Attribute
+      v-if="formattedDateOfBirth"
+      :label="$t('CONTACT_PANEL.DATE_OF_BIRTH')"
+      icon="calendar"
+      emoji="🎂"
+      :value="formattedDateOfBirth"
     />
     <Attribute
       v-if="additionalAttributes.location"

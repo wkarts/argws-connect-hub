@@ -41,12 +41,14 @@ export default {
     <label>
       <span v-if="label">{{ label }}</span>
     </label>
-    <hub-thumbnail
-      v-if="src"
-      size="80px"
-      :src="src"
-      :username="usernameAvatar"
-    />
+    <slot name="preview">
+      <hub-thumbnail
+        v-if="src"
+        size="80px"
+        :src="src"
+        :username="usernameAvatar"
+      />
+    </slot>
     <div v-if="src && deleteAvatar" class="avatar-delete-btn">
       <hub-button
         color-scheme="alert"

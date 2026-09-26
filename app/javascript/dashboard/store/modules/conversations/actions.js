@@ -316,13 +316,10 @@ const actions = {
     { commit },
     { conversationId, messageId }
   ) {
-    try {
-      const { data } = await MessageApi.delete(conversationId, messageId);
-      commit(types.ADD_MESSAGE, data);
-      commit(types.DELETE_CONVERSATION_ATTACHMENTS, data);
-    } catch (error) {
-      throw new Error(error);
-    }
+    const { data } = await MessageApi.delete(conversationId, messageId);
+    commit(types.ADD_MESSAGE, data);
+    commit(types.DELETE_CONVERSATION_ATTACHMENTS, data);
+    return data;
   },
 
   addConversation({ commit, state, dispatch, rootState }, conversation) {
@@ -405,12 +402,21 @@ const actions = {
     commit(types.SET_ACTIVE_INBOX, inboxId);
   },
 
-  muteConversation: async ({ commit }, conversationId) => {
+  muteConversation: async ({ commit }, payload) => {
+    const conversationId =
+      typeof payload === 'object' ? payload.conversationId : payload;
+    const durationSeconds =
+      typeof payload === 'object' ? payload.durationSeconds : null;
+
     try {
-      await ConversationApi.mute(conversationId);
+      const response = await ConversationApi.mute(
+        conversationId,
+        durationSeconds
+      );
       commit(types.MUTE_CONVERSATION);
+      return response.data;
     } catch (error) {
-      //
+      throw error;
     }
   },
 
@@ -419,7 +425,7 @@ const actions = {
       await ConversationApi.unmute(conversationId);
       commit(types.UNMUTE_CONVERSATION);
     } catch (error) {
-      //
+      throw error;
     }
   },
 

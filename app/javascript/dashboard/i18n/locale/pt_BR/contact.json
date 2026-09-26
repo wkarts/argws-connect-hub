@@ -39,10 +39,10 @@
     },
     "MERGE_CONTACT": "Mesclar contatos",
     "CONTACT_ACTIONS": "Ações de contatos",
-    "MUTE_CONTACT": "Bloquear Contato",
-    "UNMUTE_CONTACT": "Desbloquear Contato",
-    "MUTED_SUCCESS": "Esta conversa está silenciada por 6 horas",
-    "UNMUTED_SUCCESS": "Essa conversa está reativada",
+    "MUTE_CONTACT": "Silenciar conversa",
+    "UNMUTE_CONTACT": "Remover silenciamento",
+    "MUTED_SUCCESS": "Conversa silenciada com sucesso.",
+    "UNMUTED_SUCCESS": "Silenciamento removido com sucesso.",
     "SEND_TRANSCRIPT": "Enviar Transcrição",
     "EDIT_LABEL": "Alterar",
     "SIDEBAR_SECTIONS": {
@@ -50,7 +50,8 @@
       "CONTACT_LABELS": "Etiquetas de contato",
       "PREVIOUS_CONVERSATIONS": "Conversas anteriores",
       "NO_RECORDS_FOUND": "No attributes found"
-    }
+    },
+    "DATE_OF_BIRTH": "Data de nascimento"
   },
   "EDIT_CONTACT": {
     "BUTTON_LABEL": "Alterar Contato",
@@ -117,7 +118,8 @@
       "SUBMIT": "Enviar",
       "CANCEL": "Cancelar",
       "AVATAR": {
-        "LABEL": "Avatar do Contato"
+        "LABEL": "Avatar do Contato",
+        "PREVIEW_HELP": "Clique na foto para ampliar."
       },
       "NAME": {
         "PLACEHOLDER": "Insira o nome completo do contato",
@@ -177,6 +179,10 @@
           "PLACEHOLDER": "Digite o nome de usuário do Github",
           "LABEL": "Github"
         }
+      },
+      "DATE_OF_BIRTH": {
+        "LABEL": "Data de nascimento",
+        "PLACEHOLDER": "Informe a data de nascimento"
       }
     },
     "DELETE_AVATAR": {
@@ -233,8 +239,8 @@
     "FILTER_CONTACTS_DELETE": "Excluir filtro",
     "FILTER_CONTACTS_EDIT": "Editar segmento",
     "LIST": {
-      "LOADING_MESSAGE": "Carregando contatos...",
       "404": "Nenhum contato corresponde à sua pesquisa 🔍",
+      "LOADING_MESSAGE": "Carregando contatos...",
       "NO_CONTACTS": "Não há contatos disponíveis",
       "TABLE_HEADER": {
         "NAME": "Nome",

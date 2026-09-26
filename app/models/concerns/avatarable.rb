@@ -16,6 +16,15 @@ module Avatarable
     ''
   end
 
+  def avatar_full_url
+    # Fullscreen preview must use the original file downloaded from the provider.
+    # A second ActiveStorage representation would re-encode the image and can
+    # visibly reduce WhatsApp profile-picture quality.
+    return url_for(avatar) if avatar.attached?
+
+    ''
+  end
+
   def fetch_avatar_from_gravatar
     return unless saved_changes.key?(:email)
     return if email.blank?

@@ -26,6 +26,7 @@ import {
   filterDuplicateSourceMessages,
   getReadMessages,
   getUnreadMessages,
+  sortMessagesChronologically,
 } from 'dashboard/helper/conversationHelper';
 
 // constants
@@ -149,9 +150,11 @@ export default {
     getMessages() {
       const messages = this.currentChat.messages || [];
       if (this.isAWhatsAppChannel) {
-        return filterDuplicateSourceMessages(messages);
+        return sortMessagesChronologically(
+          filterDuplicateSourceMessages(messages)
+        );
       }
-      return messages;
+      return sortMessagesChronologically(messages);
     },
     readMessages() {
       return getReadMessages(

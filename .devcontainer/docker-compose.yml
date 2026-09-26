@@ -15,6 +15,12 @@ services:
         HUB_DEVCONTAINER_IMAGE: ${HUB_DEVCONTAINER_IMAGE:-ghcr.io/wkarts/argws-connect-hub:develop}
     volumes:
       - ..:/workspace:cached
+      - ../volumes/devcontainer/diagnostics:/workspace/log/hub_diagnostics
+    environment:
+      HUB_DIAGNOSTICS_ENABLED: ${HUB_DIAGNOSTICS_ENABLED:-true}
+      HUB_DIAGNOSTICS_DIR: /workspace/log/hub_diagnostics
+      HUB_CONNECT_RELIABILITY_ENABLED: ${HUB_CONNECT_RELIABILITY_ENABLED:-true}
+      HUB_EXISTING_INSTANCE_BINDING_ENABLED: ${HUB_EXISTING_INSTANCE_BINDING_ENABLED:-true}
     command: sleep infinity
     network_mode: service:db
 
