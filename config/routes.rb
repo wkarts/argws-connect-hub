@@ -183,6 +183,7 @@ Rails.application.routes.draw do
             get :response_sources, on: :member
             get :agent_bot, on: :member
             post :set_agent_bot, on: :member
+            post :test_email_connection, on: :member
             delete :avatar, on: :member
           end
           resources :whatsapp_groups, only: [:index, :show] do
