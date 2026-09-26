@@ -89,6 +89,14 @@
     "SELECTED_REPLY": "Respondendo a {name}",
     "UNAVAILABLE": "Grupo indisponível ou acesso revogado.",
     "OPEN_TICKET": "Abrir atendimento",
-    "HISTORY_NOTE": "Mensagens anteriores permanecem no histórico correspondente ao tratamento original."
+    "HISTORY_NOTE": "Mensagens anteriores permanecem no histórico correspondente ao tratamento original.",
+    "PARTICIPANT": "Participante",
+    "KIND_IMAGE": "Imagem",
+    "KIND_AUDIO": "Áudio",
+    "KIND_VIDEO": "Vídeo",
+    "KIND_DOCUMENT": "Documento",
+    "KIND_STICKER": "Figurinha",
+    "KIND_LOCATION": "Localização",
+    "KIND_CONTACTS": "Contato"
   }
 }
