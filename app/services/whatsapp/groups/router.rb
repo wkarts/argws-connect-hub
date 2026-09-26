@@ -59,7 +59,13 @@ module Whatsapp::Groups
                            .where(conversation_id: group.conversations.select(:id)).first
           if created
             register!(group, created, 'conversation')
-            group.update_columns(last_activity_at: [group.last_activity_at || created.created_at, created.created_at].max, updated_at: Time.current)
+            group.update_columns(
+              last_activity_at: [group.last_activity_at || created.created_at, created.created_at].max,
+              last_message_preview: created.content.to_s.strip.first(512).presence,
+              last_sender_name: created.outgoing? ? I18n.t('conversations.you', default: 'Você') : created.sender&.name.to_s.first(256).presence,
+              last_message_kind: created.attachments.present? ? created.attachments.first.file_type.to_s : 'text',
+              updated_at: Time.current
+            )
             BroadcastJob.perform_later(group.id, nil, nil, [], false)
           end
           result
