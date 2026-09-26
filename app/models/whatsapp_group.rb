@@ -1,6 +1,7 @@
 require 'digest'
 
 class WhatsappGroup < ApplicationRecord
+  include Avatarable
   JID_PATTERN = /\A\d+(?:-\d+)?@g\.us\z/
   CONFIG_FIELDS = %w[selected treatment access_mode allowed_user_ids].freeze
   belongs_to :account
