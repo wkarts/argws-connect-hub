@@ -13,12 +13,15 @@ module Whatsapp::Groups
       session = user.tokens.to_h[client].to_h
       expiry = [session['expiry'].to_i, 30.minutes.from_now.to_i].min
       return unless expiry > Time.current.to_i
-      existing = controller.cookies.encrypted[COOKIE]
+      # Controller#cookies is private. Use the request's public cookie jar
+      # without changing the controller's visibility or authentication guards.
+      cookies = controller.request.cookie_jar
+      existing = cookies.encrypted[COOKIE]
       if existing.is_a?(Hash)
         saved = existing.with_indifferent_access
         return if saved[:user_id] == user.id && saved[:client] == client && saved[:expiry].to_i > 5.minutes.from_now.to_i
       end
-      controller.cookies.encrypted[COOKIE] = {
+      cookies.encrypted[COOKIE] = {
         value: { user_id: user.id, client: client, expiry: expiry },
         httponly: true, secure: controller.request.ssl?, same_site: :strict,
         path: PATH, expires: Time.at(expiry)

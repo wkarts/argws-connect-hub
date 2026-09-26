@@ -45,4 +45,62 @@ RSpec.describe 'WhatsApp group inbox configuration', type: :request do
     get "#{base}/conversations/meta", headers: agent.create_new_auth_token, as: :json
     expect(response.parsed_body.dig('meta', 'group_count')).to eq(0)
   end
+
+  it 'issues a narrowly scoped secure media cookie without breaking authenticated inbox requests' do
+    https!
+    get "#{base}/inboxes/#{channel.inbox.id}", headers: admin.create_new_auth_token, as: :json
+    expect(response).to have_http_status(:ok)
+    cookie = Array(response.headers['Set-Cookie']).join("\n")
+    expect(cookie).to include('hub_group_media_session=')
+    expect(cookie.downcase).to include('path=/api/v1/group_files', 'httponly', 'secure', 'samesite=strict')
+  end
+
+  it 'does not issue the media cookie to an unauthenticated request' do
+    get "#{base}/inboxes/#{channel.inbox.id}", as: :json
+    expect(response).to have_http_status(:unauthorized)
+    expect(response.headers['Set-Cookie'].to_s).not_to include('hub_group_media_session=')
+  end
+
+  context 'group access from jobs without an HTTP account context' do
+    let!(:group_record) do
+      WhatsappGroup.create!(account: account, inbox: channel.inbox, jid: '120363123456789@g.us',
+                            name: 'Grupo', treatment: 'conversation', selected: true)
+    end
+
+    after { Current.reset }
+
+    it 'uses native inbox membership with no Current.account and leaves the context untouched' do
+      create(:inbox_member, inbox: channel.inbox, user: agent)
+      Current.reset
+      expect(Whatsapp::Groups::Access.scope(agent, account).pluck(:id)).to eq([group_record.id])
+      expect(Current.account).to be_nil
+      group_record.update!(access_mode: 'selected', allowed_user_ids: [admin.id])
+      expect(Whatsapp::Groups::Access.scope(agent, account)).to be_empty
+      expect(Whatsapp::Groups::Access.scope(admin, account).pluck(:id)).to eq([group_record.id])
+      expect(Current.account).to be_nil
+    end
+
+    it 'uses the explicit account instead of an unrelated ambient administrator context' do
+      create(:inbox_member, inbox: channel.inbox, user: agent)
+      other_account = create(:account)
+      other_membership = create(:account_user, account: other_account, user: agent, role: :administrator)
+      other_inbox = create(:inbox, account: other_account)
+      Current.account = other_account
+      Current.account_user = other_membership
+      Current.user = agent
+      expect(Whatsapp::Groups::Access.scope(agent, account).pluck(:id)).to eq([group_record.id])
+      policy = InboxPolicy::Scope.new({ user: agent, account: account, account_user: account.account_users.find_by!(user: agent) }, account.inboxes)
+      expect(policy.resolve.pluck(:id)).not_to include(other_inbox.id)
+      expect(Current.account).to eq(other_account)
+      expect(Current.account_user).to eq(other_membership)
+      expect(Current.user).to eq(agent)
+    end
+
+    it 'still denies an agent without inbox membership and a user from another account' do
+      Current.reset
+      expect(Whatsapp::Groups::Access.scope(agent, account)).to be_empty
+      stranger = create(:user, account: create(:account), role: :administrator)
+      expect(Whatsapp::Groups::Access.scope(stranger, account)).to be_empty
+    end
+  end
 end

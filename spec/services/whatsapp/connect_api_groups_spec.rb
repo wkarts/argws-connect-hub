@@ -9,6 +9,7 @@ RSpec.describe 'Connect API WhatsApp groups' do
                               'phone_number_id' => '5575999992222', 'ignore_group_messages' => false })
   end
   let(:receiver) { Whatsapp::IncomingMessageConnectApiReliableService }
+  let(:group_sender) { create(:user, account: channel.account, role: :administrator) }
 
   before do
     allow(GlobalConfigService).to receive(:load).and_call_original
@@ -109,18 +110,28 @@ RSpec.describe 'Connect API WhatsApp groups' do
   it 'sends group text to the exact JID and blocks queued replies after disabling groups' do
     ingest
     conversation = channel.inbox.messages.last.conversation
-    message = create(:message, account: channel.account, inbox: channel.inbox, conversation: conversation, message_type: :outgoing, content: 'Resposta')
+    message = create(:message, account: channel.account, inbox: channel.inbox, conversation: conversation, sender: group_sender, message_type: :outgoing, content: 'Resposta')
     stub_request(:post, 'https://connect.example.test/message/sendText/group-fixture')
       .with { |request| JSON.parse(request.body)['number'] == group_jid }
       .to_return(status: 200, body: { key: { id: 'GROUP-OUT' } }.to_json, headers: { 'Content-Type' => 'application/json' })
     Whatsapp::SendOnWhatsappService.new(message: message).perform
     expect(message.reload.source_id).to eq('GROUP-OUT')
     channel.update_column(:provider_config, channel.provider_config.merge('ignore_group_messages' => true))
-    next_message = create(:message, account: channel.account, inbox: channel.inbox, conversation: Conversation.find(conversation.id), message_type: :outgoing, content: 'Não enviar')
+    next_message = create(:message, account: channel.account, inbox: channel.inbox, conversation: Conversation.find(conversation.id), sender: group_sender, message_type: :outgoing, content: 'Não enviar')
     Whatsapp::SendOnWhatsappService.new(message: next_message).perform
     expect(next_message.reload).to be_failed
     expect(next_message.source_id).to be_nil
     expect(conversation.reload.can_reply?).to be false
+  end
+
+  it 'still rejects a sender without access instead of weakening the group validation' do
+    ingest
+    conversation = channel.inbox.messages.last.conversation
+    outsider = create(:user, account: channel.account, role: :agent)
+    message = build(:message, account: channel.account, inbox: channel.inbox, conversation: conversation,
+                             sender: outsider, message_type: :outgoing, content: 'Não autorizado')
+    expect(message).not_to be_valid
+    expect(message.errors[:sender]).to include('sem acesso ao grupo')
   end
 
   it 'preserves the exact group JID in attachment payloads' do
@@ -135,7 +146,7 @@ RSpec.describe 'Connect API WhatsApp groups' do
   it 'uses the group JID, never a participant alias, as revoke fallback' do
     ingest
     conversation = channel.inbox.messages.last.conversation
-    message = create(:message, account: channel.account, inbox: channel.inbox, conversation: conversation, message_type: :outgoing, source_id: 'REVOKE-GROUP')
+    message = create(:message, account: channel.account, inbox: channel.inbox, conversation: conversation, sender: group_sender, message_type: :outgoing, source_id: 'REVOKE-GROUP')
     client = instance_double(ConnectApi::Client)
     allow(client).to receive(:request).with(:post, '/chat/findMessages/group-fixture', anything).and_return([])
     expect(client).to receive(:request).with(:delete, '/chat/deleteMessageForEveryone/group-fixture', body: { id: 'REVOKE-GROUP', fromMe: true, remoteJid: group_jid }, timeout: 20)
