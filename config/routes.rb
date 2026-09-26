@@ -192,7 +192,7 @@ Rails.application.routes.draw do
               post :cancel, on: :member
             end
           end
-          scope 'inboxes/:inbox_id' do
+          resources :inboxes, only: [] do
             resource :whatsapp_group_settings, only: [:show, :update] do
               post :sync
               patch :bulk_update

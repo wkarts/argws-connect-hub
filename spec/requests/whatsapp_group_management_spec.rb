@@ -23,6 +23,22 @@ RSpec.describe 'Group inbox administration and operational authorization', type:
     create(:inbox_member, inbox: channel.inbox, user: agent)
   end
 
+  it 'routes every administrative action through the account and inbox IDs used by the settings tab' do
+    [
+      [:get, settings_path, 'show'],
+      [:patch, settings_path, 'update'],
+      [:post, "#{settings_path}/sync", 'sync'],
+      [:patch, "#{settings_path}/bulk_update", 'bulk_update'],
+      [:patch, "#{settings_path}/groups/123", 'update_group'],
+      [:post, "#{settings_path}/groups/123/replay", 'replay']
+    ].each do |method, path, action|
+      recognized = Rails.application.routes.recognize_path(path, method: method)
+      expect(recognized).to include(controller: 'api/v1/accounts/whatsapp_group_settings', action: action,
+                                    account_id: account.id.to_s, inbox_id: channel.inbox.id.to_s)
+      expect(recognized[:group_id]).to eq('123') if path.include?('/groups/123')
+    end
+  end
+
   it 'uses native administrator permission for reading and writing configuration' do
     join_agent
     get settings_path, headers: agent.create_new_auth_token, as: :json
