@@ -99,7 +99,14 @@ module Whatsapp::Groups
           historical: historical, policy_version: group.policy_version)
         register!(group, record, 'management')
         subject = value.dig(:contacts, 0, :group_subject).presence || context[:group_subject].presence
-        updates = { last_activity_at: [group.last_activity_at || timestamp, timestamp].max }
+        preview = content.to_s.strip.presence
+        preview ||= kind == 'text' ? nil : I18n.t("GROUP_MANAGEMENT.KIND_#{kind.upcase}", default: kind.to_s.humanize)
+        updates = {
+          last_activity_at: [group.last_activity_at || timestamp, timestamp].max,
+          last_message_preview: preview.to_s.first(512).presence,
+          last_sender_name: outgoing ? I18n.t('conversations.you', default: 'Você') : sender_name.to_s.first(256).presence,
+          last_message_kind: kind
+        }
         updates[:name] = subject.to_s.strip.first(256) if subject.present?
         group.update_columns(updates.merge(updated_at: Time.current)) # Metadata is not a policy edit.
       end
