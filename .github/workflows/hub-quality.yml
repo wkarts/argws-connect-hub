@@ -34,9 +34,25 @@ jobs:
           node --test ./scripts/test-connect-api-call-media-recovery.mjs
           node --test ./scripts/test-message-actions-ui.mjs
           node --test ./scripts/test-workspace-apps.mjs ./scripts/test-workspace-presentation.mjs
+          node --test ./scripts/test-canonical-releases.mjs
           ruby ./scripts/test-workspace-diagnostics.rb
           node --experimental-vm-modules --test ./scripts/test-workspace-state.mjs
           node --experimental-vm-modules ./scripts/check-workspace-javascript.mjs
+      - name: Validate append-only canonical release registry
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          node ./scripts/canonical-releases.mjs validate
+          if [[ -n "$BASE_SHA" ]]; then
+            git fetch --no-tags --depth=1 origin "$BASE_SHA"
+            if git cat-file -e "$BASE_SHA:config/canonical-releases.json" 2>/dev/null; then
+              previous="$(mktemp)"
+              git show "$BASE_SHA:config/canonical-releases.json" > "$previous"
+              node ./scripts/canonical-releases.mjs validate "$previous"
+              rm -f "$previous"
+            fi
+          fi
       - name: Enterprise runtime contracts
         run: ruby ./scripts/check-enterprise-contracts.rb
 
