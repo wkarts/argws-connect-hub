@@ -18,6 +18,15 @@ module Whatsapp::Groups
         }
       end
 
+      if message.outgoing?
+        return {
+          name: I18n.t('conversations.you', default: 'Você'),
+          avatar_url: '',
+          jid: nil,
+          own: true
+        }
+      end
+
       contact = @contacts[message.sender_jid.to_s]
       name = contact&.name.to_s.strip.presence || meaningful_sender_name(message.sender_name) || fallback_name(message)
 
